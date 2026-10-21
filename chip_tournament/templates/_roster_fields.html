@@ -16,22 +16,35 @@
 <script>
 (function () {
   var brackets = {{ t.settings.chip_brackets|tojson }}, cap = {{ cap|tojson }};
+  // On the roster page: a partner swap counts as registering again, so the lower cap applies.
+  var original = {{ (original_names or none)|tojson }}, swapCap = {{ (swap_cap or cap)|tojson }};
   var inputs = document.querySelectorAll("input.skill"), out = document.getElementById("skill-check");
+  var names = document.querySelectorAll("input[name^=player_name_]");
+  function norm(v) { return v.trim().toLowerCase().split(/\s+/).join(" "); }
+  function isSwap() {
+    if (!original) return false;
+    var now = Array.prototype.map.call(names, function (el) { return norm(el.value); }).sort();
+    return now.join("|") !== original.slice().sort().join("|");
+  }
   function update() {
     var total = 0, filled = 0;
     inputs.forEach(function (el) { if (el.value) { total += parseInt(el.value, 10) || 0; filled++; } });
     if (filled < inputs.length) { out.textContent = ""; out.className = "skill-check"; return; }
     var chips = null;
     for (var i = 0; i < brackets.length; i++) { if (total <= brackets[i][0]) { chips = brackets[i][1]; break; } }
-    if (total > cap) {
-      out.textContent = "Combined skill " + total + " is over the limit of " + cap + ". You need a different partner.";
+    var swap = isSwap(), limit = swap ? swapCap : cap;
+    if (total > limit) {
+      out.textContent = swap
+        ? "Partner swap: this counts as registering again, so combined skill can't be over " + limit + ". With the new partner it's " + total + "."
+        : "Combined skill " + total + " is over the limit of " + limit + ". You need a different partner.";
       out.className = "skill-check bad";
     } else {
-      out.textContent = "Combined skill " + total + " → starts with " + chips + " chips.";
+      out.textContent = (swap ? "Partner swap (limit " + limit + "). " : "") + "Combined skill " + total + " → starts with " + chips + " chips.";
       out.className = "skill-check good";
     }
   }
   inputs.forEach(function (el) { el.addEventListener("input", update); });
+  names.forEach(function (el) { el.addEventListener("input", update); });
   update();
 })();
 </script>

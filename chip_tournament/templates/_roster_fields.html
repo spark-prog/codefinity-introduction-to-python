@@ -7,8 +7,13 @@
     <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if locked %}readonly{% endif %}></label>
     <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" step="1" required
       value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
+    {% if hide_phones and p and p.phone %}
+    <label>Cell for text alerts <span class="muted">(on file: ending in {{ p.phone|last4 }})</span>
+      <input name="player_phone_{{ i }}" type="tel" placeholder="Leave blank to keep the number on file" value=""></label>
+    {% else %}
     <label>Cell for text alerts{% if i %} (optional){% endif %}
       <input name="player_phone_{{ i }}" type="tel" placeholder="(555) 123-4567" value="{{ p.phone if p else '' }}" {% if not i %}required{% endif %}></label>
+    {% endif %}
   </fieldset>
   {% endfor %}
 </div>

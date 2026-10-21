@@ -750,10 +750,13 @@ class Tournament:
         self._say(f"Director moved {team.name} to the front of the line.")
         self._advance()
 
-    def score(self, match_id: str, side: str, delta: int) -> Match:
+    def score(self, match_id: str, side: str, delta: int, by: str | None = None) -> Match:
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("Only a match at a table can be scored.")
+        if by:  # entered by a player from their team page
+            name = self.name_of(m.team_a if side == "a" else m.team_b)
+            self._say(f"{by} entered {'+1' if delta > 0 else '-1'} for {name} on table {m.table}.")
         stamp = now()
         for s_ in ("a", "b"):  # a scored game means both teams are at the table
             if not getattr(m, "arrived_" + s_):

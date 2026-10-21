@@ -1,15 +1,7 @@
 {% extends "base.html" %}
+{% block head %}{% if match and match.status == CALLED %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
 {% block content %}
 <h1>{{ team.name }}</h1>
-<div class="stats">
-  <div class="stat"><span class="label">Status</span><span class="value small">{{ team.status.replace("_", " ") }}</span></div>
-  <div class="stat"><span class="label">Chips</span><span class="value">{{ team.chips }}</span></div>
-  <div class="stat"><span class="label">Combined skill</span><span class="value">{{ team.combined_skill }}</span></div>
-  <div class="stat"><span class="label">Record</span><span class="value">{{ team.wins }}-{{ team.losses }}</span></div>
-  <div class="stat highlight"><span class="label">{% if team.status == ACTIVE %}Cash-in value now{% else %}Paid out{% endif %}</span>
-    <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
-</div>
-
 {% set spot = t.waitlist_position(team) %}
 {% if spot %}<div class="banner">{{ team.name }} is <b>#{{ spot }} on the waiting list</b>. We'll text you if a spot in the field opens.</div>{% endif %}
 {% if match %}
@@ -19,6 +11,42 @@
     {% set m = match %}{% include "_match_clock.html" %}
   {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}
   </div>
+  {% if match.status == CALLED %}
+  {% set mine = "a" if match.team_a == team.id else "b" %}
+  <section class="card table-play">
+    <h2>Table {{ match.table }} · race to {{ t.settings.race_to }}</h2>
+    {% if not is_team %}
+      <form method="post" action="{{ url_for('team_login', team_id=team.id) }}" class="form narrow">
+        <p>Enter your team PIN to check in and keep score.</p>
+        <label>Team PIN <input name="pin" inputmode="numeric" maxlength="4" required></label>
+        <button class="button">Continue</button>
+      </form>
+    {% elif not match["arrived_" ~ mine] %}
+      <form method="post" action="{{ url_for('team_arrived', team_id=team.id) }}">
+        <button class="button big arrive">We're at the table</button>
+      </form>
+    {% endif %}
+    {% for side, tid, sc in (("a", match.team_a, match.score_a), ("b", match.team_b, match.score_b)) %}
+    <div class="play-row">
+      <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% endif %}
+        <br>{% if match["arrived_" ~ side] %}<span class="arrived">✓ at the table</span>{% else %}<span class="muted">not checked in</span>{% endif %}</span>
+      {% if is_team %}
+      <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
+        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
+        <button class="button secondary score-btn" {% if not sc %}disabled{% endif %}>−</button></form>
+      {% endif %}
+      <b class="score big-score">{{ sc }}</b>
+      {% if is_team %}
+      <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline"
+            {% if sc + 1 >= t.settings.race_to %}onsubmit="return confirm('This is the winning game: {{ t.name_of(tid)|e }} wins the match. Correct?')"{% endif %}>
+        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
+        <button class="button score-btn">+</button></form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if is_team %}<p class="muted">Either team can keep score. Tap + each time a team wins a game. The match ends automatically when a team reaches {{ t.settings.race_to }}.</p>{% endif %}
+  </section>
+  {% endif %}
 {% elif team.status == ACTIVE %}
   <p class="muted">Waiting in line for the next free table.</p>
 {% endif %}
@@ -28,9 +56,18 @@
 {% endif %}
 {% if team.status == ACTIVE and t.cash_in_open %}<div class="banner">Cash-in is open. See the desk to cash in for {{ t.payout_for(team)|money }}, or keep playing.</div>{% endif %}
 
+<div class="stats">
+  <div class="stat"><span class="label">Status</span><span class="value small">{{ team.status.replace("_", " ") }}</span></div>
+  <div class="stat"><span class="label">Chips</span><span class="value">{{ team.chips }}</span></div>
+  <div class="stat"><span class="label">Combined skill</span><span class="value">{{ team.combined_skill }}</span></div>
+  <div class="stat"><span class="label">Record</span><span class="value">{{ team.wins }}-{{ team.losses }}</span></div>
+  <div class="stat highlight"><span class="label">{% if team.status == ACTIVE %}Cash-in value now{% else %}Paid out{% endif %}</span>
+    <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
+</div>
+
 <section class="card">
   <h2>Roster</h2>
-  <ul>{% for p in team.players %}<li>{{ p.name }} — skill {{ p.skill }}{% if can_edit and p.phone %} · {{ p.phone }}{% endif %}</li>{% endfor %}</ul>
+  <ul>{% for p in team.players %}<li>{{ p.name }} — skill {{ p.skill }}</li>{% endfor %}</ul>
   {% if team.status == "registered" %}
     {% set chips = t.chips_preview(team) %}
     {% if chips %}<p>Combined skill {{ team.combined_skill }} → starts with <b>{{ chips }} chips</b>.</p>

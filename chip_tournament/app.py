@@ -74,17 +74,26 @@ def parse_chip_brackets(text: str) -> list[list[int]]:
     return sorted(brackets)
 
 
-def players_from_form(form) -> list[Player]:
+def last4(phone: str) -> str:
+    digits = "".join(c for c in phone or "" if c.isdigit())
+    return digits[-4:]
+
+
+def players_from_form(form, keep_phones_of=None) -> list[Player]:
+    """Partners from the form. With keep_phones_of (a team), a blank cell box keeps
+    the number on file for that partner, since teams don't get to see the numbers."""
     players = []
     for i in range(TEAM_SIZE):
         skill = form.get(f"player_skill_{i}", "").strip()
         if skill and not skill.isdigit():
             raise TournamentError(f"Skill level '{skill}' must be a whole number.")
-        players.append(Player(
-            name=form.get(f"player_name_{i}", "").strip(),
-            phone=form.get(f"player_phone_{i}", "").strip(),
-            skill=int(skill or 0),
-        ))
+        name = form.get(f"player_name_{i}", "").strip()
+        phone = form.get(f"player_phone_{i}", "").strip()
+        if not phone and keep_phones_of is not None and i < len(keep_phones_of.players):
+            old = keep_phones_of.players[i]
+            if " ".join(old.name.lower().split()) == " ".join(name.lower().split()):
+                phone = old.phone
+        players.append(Player(name=name, phone=phone, skill=int(skill or 0)))
     return players
 
 
@@ -116,6 +125,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["money"] = money
     app.jinja_env.filters["urlquote"] = quote_plus
     app.jinja_env.filters["clock"] = clock
+    app.jinja_env.filters["last4"] = last4
 
     @app.context_processor
     def globals_():
@@ -233,8 +243,51 @@ def create_app(data_dir: str | None = None) -> Flask:
         history = [m for m in t.matches if team_id in (m.team_a, m.team_b) and m.status == DONE]
         return render_template(
             "team.html", t=t, team=team, match=t.current_match_for(team_id), history=history,
-            can_edit=session.get(f"team_{team_id}") or session.get("admin"),
+            is_team=bool(session.get(f"team_{team_id}") or session.get("admin")),
         )
+
+    def team_match(team_id):
+        """The signed-in team's match on a table, and which side it is."""
+        if not (session.get(f"team_{team_id}") or session.get("admin")):
+            raise TournamentError("Enter your team PIN first.")
+        t = store.load()
+        m = t.current_match_for(team_id)
+        if m is None or m.status != CALLED:
+            raise TournamentError("Your team isn't on a table right now.")
+        return m, "a" if m.team_a == team_id else "b"
+
+    @app.post("/team/<team_id>/login")
+    def team_login(team_id):
+        team = store.load().teams.get(team_id) or abort(404)
+        if secrets.compare_digest(request.form.get("pin", "").strip(), team.pin):
+            session[f"team_{team_id}"] = True
+        else:
+            flash("That PIN doesn't match.", "error")
+        return redirect(url_for("team_page", team_id=team_id))
+
+    @app.post("/team/<team_id>/arrived")
+    def team_arrived(team_id):
+        try:
+            m, side = team_match(team_id)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        else:
+            act("Check in (team)", lambda t: t.check_in(m.id, side), "Checked in. Good luck!")
+        return redirect(url_for("team_page", team_id=team_id))
+
+    @app.post("/team/<team_id>/score")
+    def team_score(team_id):
+        side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
+        if side not in ("a", "b") or delta not in (1, -1):
+            abort(400)
+        try:
+            m, _ = team_match(team_id)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        else:
+            name = store.load().name_of(team_id)
+            act("Score (team)", lambda t: t.score(m.id, side, delta, by=name))
+        return redirect(url_for("team_page", team_id=team_id))
 
     @app.route("/team/<team_id>/roster", methods=["GET", "POST"])
     def roster(team_id):
@@ -251,7 +304,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             f = request.form
             if act(
                 "Update roster",
-                lambda t: t.update_roster(team_id, players_from_form(f), name=f.get("name")),
+                lambda t: t.update_roster(team_id, players_from_form(f, None if session.get("admin") else t.teams[team_id]),
+                                          name=f.get("name")),
                 "Roster saved.",
             ):
                 return redirect(url_for("team_page", team_id=team_id))

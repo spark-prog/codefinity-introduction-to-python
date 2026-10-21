@@ -28,7 +28,7 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 | `/` | everyone | Tournament details, venue and map link, how it works, pot, chip value, tables in play, winners/losers lists, standings |
 | `/board` | TV at the venue | Same live info; refreshes every 15 seconds |
 | `/register` | teams | Register a team of two partners: names, skill levels, cell numbers. Shows the combined skill and starting chips as you type. Gives (and texts) a 4-digit team PIN |
-| `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results |
+| `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results. With its PIN, the team checks in at its table and keeps score here |
 | `/team/<id>/roster` | a team (with PIN) | Update partners, skill levels (before the start), team name and cell numbers |
 | `/admin/import` | director | Import teams from a CSV file, such as Google Form responses (before the start) |
 | `/guide` | director | Step-by-step guide for tournament night (printable) |
@@ -51,13 +51,13 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
    **Field cap and waiting list.** The director sets the field cap (the most teams) in Settings. Once the field is full, new registrations go on a **waiting list** in order, and each team is texted its place. When a team in the field is removed before the start, or the director raises the cap, the next waiting team moves into the field and gets a text. Waiting-list teams don't play or pay into the pot unless they get a spot. A cap of 0 means no limit, and the cap can't be set below the number of teams already in the field.
 2. **Pairing is rolling.** At the start every team goes on the winners list in random order. A team joining a list is compared with the top team on it, then the second, and so on, and is paired with the first one it **hasn't played yet**. Pairs go into a **Teams waiting on a table** queue, and free tables take pairs fewest rounds played first.
    - **No rematches unless it's the only option:** a team that has played everyone waiting on its list holds for the next arrival, even if a table is free. A rematch happens only when both teams have played everyone still in, or when nothing is playing or queued that could bring a new opponent. Forfeits don't count as having played. The table-call text reads: "New match: Table 3: Sharks with combined skill 9 currently holding 4 chips VS Rail Riders with combined skill 8 currently holding 3 chips. Good Luck!"
-3. **Check-in at the table.** Each team on the scorekeeping card has an **Arrived** button. When both teams have checked in, the match start time is set **2 minutes after the second arrival**, and both teams get a text with the start time. The card, the board and the team's page show the start time with a live countdown.
+3. **Check-in at the table.** Teams check themselves in: on its own team page (after entering its PIN once), a team that has been called sees a **We're at the table** button. A team can only check itself in. The director's card also has an **Arrived** button for each team. When both teams have checked in, the match start time is set **2 minutes after the second arrival**, and both teams get a text with the start time. The card, the board and the team's page show the start time with a live countdown.
    - A team that hasn't checked in **5 minutes** after being called starts a **15-minute grace period**. It gets a text saying when it will forfeit, and its card turns red.
    - If it still hasn't checked in when the grace period ends, it **forfeits**: it loses the match and gives a chip back, and the opponent wins. If **neither** team checks in, both forfeit a chip and both go to the losers list.
    - A background timer checks every 15 seconds, so grace texts and forfeits happen on time even if no one is looking at the screen. The director page reloads itself when a deadline passes, and an automatic forfeit can be reversed with **Undo**.
    - Entering a score counts as both teams being at the table, so a match being played can't be forfeited by mistake.
    - The 2 / 5 / 15 minutes can be changed in Settings.
-4. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
+4. **Scoring.** Teams keep score on their team pages: either team at the table can tap `+`/`−` for either side, the winning game asks for confirmation, and every score a team enters is written to the activity log (so the director can check it and Undo). The director can also score from the card. Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
 5. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
 6. **Catch-up and Call next.** A team 2 or more matches behind the leader (late entry, an opponent cashing in) is tagged *catching up* and moves to the top of its list. If nobody else is waiting on its list, it plays the top team of the other list. The director can press **Call next** on a queued pair to send it to the next free table. Pressing it on a team still on a list pairs that team right away (a new opponent if one is waiting anywhere, otherwise a rematch). The 2-match gap is a setting.
    - **Long matches:** each match card shows how long it has been playing. It turns amber after the expected length (15 min) and red 20 minutes after the start, and a "Running long" banner lists those tables. Both times are settings.
@@ -94,6 +94,10 @@ On the director page (before the start), click **Import teams from a spreadsheet
 3. Check the preview, which shows every row's result before anything is saved: added (with its chips), waiting list, or skipped and why.
 
 Rows are added top to bottom (sign-up order), so the earliest teams get the field spots and the rest fill the waiting list in order. Every row goes through the normal registration rules. Teams already registered are skipped, so importing an updated sheet again only adds the new sign-ups. You can choose whether each imported team gets its PIN by text.
+
+## Privacy
+
+Phone numbers appear only on director pages. On a team's roster page the cell boxes are blank and show just the last 4 digits; leaving a box blank keeps the number on file.
 
 ## Chip tracking
 

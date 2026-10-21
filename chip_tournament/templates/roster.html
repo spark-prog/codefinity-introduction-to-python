@@ -21,6 +21,7 @@
     {% set cap = t.max_skill %}
     {% set swap_cap = t.settings.registration_cap %}
     {% set original_names = t._names(team.players)|list %}
+    {% set hide_phones = not is_admin %}
     {% include "_roster_fields.html" %}
     <button class="button">Save roster</button>
     <a href="{{ url_for('team_page', team_id=team.id) }}">Cancel</a>

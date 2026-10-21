@@ -223,3 +223,62 @@ def test_call_next_button(client):
     assert b"is first in line" in page
     t = store.load()
     assert t.queue_order(t.winners_list)[0] == last
+
+
+def start_two_teams(client):
+    register(client, "Sharks"); register(client, "Rails")
+    store = client.application.config["store"]
+    admin = client.application.test_client()
+    admin.post("/admin/login", data={"password": "secret"})
+    admin.post("/admin/settings", data={"name": "X", "race_to": "2", "tables": "1", "entry_fee": "20",
+                                        "added_money": "0", "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2",
+                                        "registration_cap": "10", "field_cap": "0"})
+    admin.post("/admin/start")
+    t = store.load()
+    return store, admin, t.open_matches()[0], {x.name: x for x in t.teams.values()}
+
+
+def test_team_checks_in_and_keeps_score(client):
+    store, admin, m, teams = start_two_teams(client)
+    sharks = teams["Sharks"]
+    side = "a" if m.team_a == sharks.id else "b"
+    other = "b" if side == "a" else "a"
+    player = client.application.test_client()  # a phone that hasn't entered the PIN
+    page = player.get(f"/team/{sharks.id}").data
+    assert b"Enter your team PIN" in page and b"We&#39;re at the table" not in page
+    page = player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"}, follow_redirects=True).data
+    assert b"Enter your team PIN first" in page and store.load().match(m.id).score_a + store.load().match(m.id).score_b == 0
+
+    player.post(f"/team/{sharks.id}/login", data={"pin": sharks.pin})
+    assert "We're at the table" in player.get(f"/team/{sharks.id}").data.decode()
+    player.post(f"/team/{sharks.id}/arrived")
+    mm = store.load().match(m.id)
+    assert getattr(mm, "arrived_" + side) and not getattr(mm, "arrived_" + other)  # only checks in itself
+
+    player.post(f"/team/{sharks.id}/score", data={"side": other, "delta": "1"})  # either side can be scored
+    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})
+    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})  # race to 2: Sharks win
+    done = store.load().match(m.id)
+    assert done.status == "done" and done.winner == sharks.id
+    assert any("Sharks entered +1" in line for line in store.load().log)
+
+
+def test_phone_numbers_stay_on_the_director_side(client):
+    register(client, "Sharks")  # partner 1 cell 5551234567
+    store = client.application.config["store"]
+    team = next(iter(store.load().teams.values()))
+    player = client.application.test_client()
+    player.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    assert b"5551234567" not in player.get(f"/team/{team.id}").data
+    roster = player.get(f"/team/{team.id}/roster").data
+    assert b"5551234567" not in roster and b"ending in 4567" in roster
+    # Saving with the box left blank keeps the number on file.
+    player.post(f"/team/{team.id}/roster", data={"name": "Sharks", "player_name_0": "Ann", "player_skill_0": "5",
+                                                 "player_phone_0": "", "player_name_1": "Bob", "player_skill_1": "5"})
+    assert store.load().teams[team.id].players[0].phone == "5551234567"
+    for page in ("/", "/board", "/register"):
+        assert b"5551234567" not in player.get(page).data
+    admin = client.application.test_client()
+    admin.post("/admin/login", data={"password": "secret"})
+    assert b"5551234567" in admin.get("/admin").data
+    assert b"5551234567" in admin.get(f"/team/{team.id}/roster").data

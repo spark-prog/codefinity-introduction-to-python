@@ -63,12 +63,12 @@
 <table class="grid">
   <thead><tr><th>When</th><th>What you do</th><th>What the app does</th></tr></thead>
   <tbody>
-    <tr><td>A team reaches its table</td><td>Tap <b>Arrived</b> for that team.</td><td>Shows a ✓ and the time.</td></tr>
+    <tr><td>A team reaches its table</td><td>Nothing. The team taps <b>We're at the table</b> on its own team page (after entering its PIN). If a team can't, tap <b>Arrived</b> for it.</td><td>Shows a ✓ and the time.</td></tr>
     <tr><td>Both teams are there</td><td>Nothing.</td><td>Sets the start time {{ s.warmup_minutes }} min later and texts both teams.</td></tr>
     <tr><td>A team isn't there {{ s.checkin_minutes }} min after being called</td><td>Nothing (the Arrived button turns red).</td><td>Starts a {{ s.grace_minutes }}-minute grace period and texts the team its forfeit time.</td></tr>
-    <tr><td>The team arrives during grace</td><td>Tap <b>Arrived</b>.</td><td>Cancels the forfeit. The start is {{ s.warmup_minutes }} min later.</td></tr>
+    <tr><td>The team arrives during grace</td><td>Nothing if it checks in itself; otherwise tap <b>Arrived</b>.</td><td>Cancels the forfeit. The start is {{ s.warmup_minutes }} min later.</td></tr>
     <tr><td>Grace runs out</td><td>Nothing.</td><td>Records a forfeit: the no-show gives a chip back and the opponent wins. If neither team showed, both give a chip back and go to the losers list.</td></tr>
-    <tr><td>Each game is won</td><td>Tap <b>+</b> for that team (<b>−</b> fixes a slip).</td><td>Entering a score also counts both teams as checked in.</td></tr>
+    <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Entering a score also counts both teams as checked in.</td></tr>
     <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
 </table>

@@ -1,21 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Update roster — {{ team.name }}</h1>
-{% if not allowed %}
-  <form method="post" class="card form narrow">
-    <p>Enter the 4-digit team PIN you were given (and texted) when you registered.</p>
+<div class="split">
+  <header>
+    <p class="eyebrow">Roster</p>
+    <h1>{{ team.name }}</h1>
+    {% if not allowed %}
+      <p class="lede">Enter the 4-digit team PIN you were given (and texted) when you registered.</p>
+    {% else %}
+      {% set locked = team.status not in ("registered", "waitlisted") %}
+      {% if locked %}
+      <p class="lede">The tournament has started, so partners and skill levels are locked. You can still change the team name and cell numbers.</p>
+      {% else %}
+      <p class="lede">If a partner's skill level has gone up since registration, update it here. With the same two partners, your combined skill can go up to {{ t.max_skill }}.</p>
+      <div class="stack" style="margin-top: 32px">
+        <p><b>Swapping partners</b> counts as registering again, so the new pair's combined skill can't be over {{ t.settings.registration_cap }}. You keep your spot{% if team.status == "waitlisted" %} on the waiting list{% else %} in the field{% endif %}.</p>
+        {% include "_chip_table.html" %}
+      </div>
+      {% endif %}
+    {% endif %}
+  </header>
+  {% if not allowed %}
+  <form method="post" class="card form">
     <label>Team PIN <input name="pin" inputmode="numeric" maxlength="4" required autofocus></label>
-    <button class="button">Continue</button>
+    <button class="button big block">Continue</button>
   </form>
-{% else %}
-  {% set locked = team.status not in ("registered", "waitlisted") %}
-  {% if locked %}
-  <p class="banner">The tournament has started, so partners and skill levels are locked. You can still change the team name and cell numbers.</p>
   {% else %}
-  <p>If a partner's skill level has gone up since registration, update it here. With the same two partners, your combined skill can go up to {{ t.max_skill }}.</p>
-  <p><b>Swapping partners</b> counts as registering again, so the new pair's combined skill can't be over {{ t.settings.registration_cap }}. You keep your spot{% if team.status == "waitlisted" %} on the waiting list{% else %} in the field{% endif %}.</p>
-  {% include "_chip_table.html" %}
-  {% endif %}
   <form method="post" class="card form">
     {% set v = team %}
     {% set cap = t.max_skill %}
@@ -23,8 +32,11 @@
     {% set original_names = t._names(team.players)|list %}
     {% set hide_phones = not is_admin %}
     {% include "_roster_fields.html" %}
-    <button class="button">Save roster</button>
-    <a href="{{ url_for('team_page', team_id=team.id) }}">Cancel</a>
+    <div class="button-row">
+      <button class="button big">Save roster</button>
+      <a class="button big secondary" href="{{ url_for('team_page', team_id=team.id) }}">Cancel</a>
+    </div>
   </form>
-{% endif %}
+  {% endif %}
+</div>
 {% endblock %}

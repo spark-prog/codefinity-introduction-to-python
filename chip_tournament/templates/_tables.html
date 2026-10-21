@@ -1,18 +1,22 @@
 {% set called = t.matches|selectattr("status", "equalto", CALLED)|list %}
-<section>
-  <h2>Now playing</h2>
-  {% if called %}
-  <div class="tables">
-    {% for m in called %}
-    <div class="table-card">
-      <div class="table-no">Table {{ m.table }}</div>
-      <div class="vs"><span>{{ t.name_of(m.team_a) }}</span><b>{{ m.score_a }}</b></div>
-      <div class="vs"><span>{{ t.name_of(m.team_b) }}</span><b>{{ m.score_b }}</b></div>
-      <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · match #{{ m.round }}</div>
-      {% include "_match_clock.html" %}
+<div class="split">
+  <div>
+    <h3>Now playing</h3>
+    {% if called %}
+    <div class="tables">
+      {% for m in called %}
+      <div class="table-card">
+        <div class="table-no">Table {{ m.table }}</div>
+        <div class="vs"><span>{{ t.name_of(m.team_a) }}</span><b>{{ m.score_a }}</b></div>
+        <div class="vs"><span>{{ t.name_of(m.team_b) }}</span><b>{{ m.score_b }}</b></div>
+        <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · match #{{ m.round }}</div>
+        {% include "_match_clock.html" %}
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
+    {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
   </div>
-  {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
-  {% if t.status == RUNNING %}{% include "_queue.html" %}{% include "_lists.html" %}{% endif %}
-</section>
+  {% if t.status == RUNNING %}
+  <div class="card">{% include "_queue.html" %}{% include "_lists.html" %}</div>
+  {% endif %}
+</div>

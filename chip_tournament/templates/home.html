@@ -1,30 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
 {% set s = t.settings %}
-<section class="hero">
-  <h1>{{ s.name }}</h1>
-  <p class="when">{{ s.date or "Date TBA" }}{% if s.start_time %} · starts {{ s.start_time }}{% endif %}</p>
-  {% if s.checkin_by %}<p class="checkin-note">Check in at the tournament desk by <b>{{ s.checkin_by }}</b>. Teams not checked in may lose their spot to the waiting list.</p>{% endif %}
-  {% if s.venue or s.address %}
-  <p class="where"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}
-    · <a href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}</p>
-  {% endif %}
-  <ul class="facts">
-    <li>Entry: <b>{{ s.entry_fee_cents|money }}</b> per team{% if s.added_money_cents %} · <b>{{ s.added_money_cents|money }}</b> added{% endif %}</li>
-    <li>Race to <b>{{ s.race_to }}</b></li>
-    {% if s.field_cap %}<li>Field: <b>{{ t.field_teams|length }} of {{ s.field_cap }}</b> spots filled{% if t.waitlist %} · {{ t.waitlist|length }} on the waiting list{% endif %}</li>{% endif %}
-    <li>Teams of {{ TEAM_SIZE }}. Starting chips by combined skill level: {% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
-      <br><span class="muted">Combined skill can't be over {{ s.registration_cap }} at registration. It can go up to {{ t.max_skill }} by tournament time; {{ t.max_skill + 1 }} or more needs a new partner.</span></li>
-    {% if s.cash_in_time %}<li>Cash-in opens: <b>{{ s.cash_in_time }}</b></li>{% endif %}
-    {% if s.last_call_time %}<li>Last call: <b>{{ s.last_call_time }}</b></li>{% endif %}
-  </ul>
-  {% if s.details %}<div class="details">{{ s.details }}</div>{% endif %}
-  {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}<a class="button" href="{{ url_for('register') }}">Register a team</a>{% endif %}
-</section>
+<header class="page-head split center">
+  <div class="hero-copy">
+    <p class="eyebrow">{{ s.date or "Date TBA" }}{% if s.start_time %} · {{ s.start_time }}{% endif %}</p>
+    <h1>{{ s.name }}</h1>
+    {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
+    <div class="button-row actions-row">
+      {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}<a class="button big" href="{{ url_for('register') }}">Register a team</a>{% endif %}
+      {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <p class="eyebrow">Event details</p>
+    <ul class="facts">
+      <li><span class="k">Entry</span><span class="v">{{ s.entry_fee_cents|money }} per team{% if s.added_money_cents %} · {{ s.added_money_cents|money }} added{% endif %}</span></li>
+      <li><span class="k">Format</span><span class="v">Teams of {{ TEAM_SIZE }} · race to {{ s.race_to }}</span></li>
+      {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} <span class="muted">at the tournament desk. Teams not checked in may lose their spot to the waiting list.</span></span></li>{% endif %}
+      {% if s.field_cap %}<li><span class="k">Field</span><span class="v">{{ t.field_teams|length }} of {{ s.field_cap }} spots filled{% if t.waitlist %} · {{ t.waitlist|length }} on the waiting list{% endif %}</span></li>{% endif %}
+      {% if s.cash_in_time %}<li><span class="k">Cash-in</span><span class="v">Opens {{ s.cash_in_time }}</span></li>{% endif %}
+      {% if s.last_call_time %}<li><span class="k">Last call</span><span class="v">{{ s.last_call_time }}</span></li>{% endif %}
+      <li><span class="k">Starting chips</span><span class="v">{% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
+        <br><span class="muted">By combined skill level. Combined skill can't be over {{ s.registration_cap }} at registration. It can go up to {{ t.max_skill }} by tournament time; {{ t.max_skill + 1 }} or more needs a new partner.</span></span></li>
+    </ul>
+  </div>
+</header>
 
-<details class="howto">
-  <summary>How a chip tournament works</summary>
-  <ul>
+{% if t.status != SETUP %}
+<section>
+  <div class="section-head"><h2>Live</h2></div>
+  {% include "_stats.html" %}
+  {% include "_tables.html" %}
+</section>
+{% endif %}
+
+<section>{% include "_standings.html" %}</section>
+
+<section class="card howto-card">
+  <div class="split">
+    <div>
+      <p class="eyebrow">The format</p>
+      <h2>How a chip tournament works</h2>
+      {% if s.details %}<p class="details lede">{{ s.details }}</p>{% endif %}
+    </div>
+    <div></div>
+  </div>
+  <ul class="howto-list two-col">
     <li>Every team starts with chips based on its partners' combined skill level.</li>
     <li>The first matches are a random draw. Each match is a race to {{ s.race_to }}.</li>
     <li>Win and you keep your chips and go to the bottom of the <b>winners list</b>. Lose and you give one chip back to the main table and go to the bottom of the <b>losers list</b>.</li>
@@ -34,8 +55,5 @@
     <li>Once cash-in opens you can cash in your chips or keep playing.</li>
     <li>At last call, your next match is your last. When it's over you're cashed in automatically. If you're on a table when last call happens, finish that match first, then play one more.</li>
   </ul>
-</details>
-
-{% if t.status != SETUP %}{% include "_stats.html" %}{% include "_tables.html" %}{% endif %}
-{% include "_standings.html" %}
+</section>
 {% endblock %}

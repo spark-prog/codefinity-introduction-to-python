@@ -1,23 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Register a team</h1>
-{% if t.status == FINISHED %}
-  <p>This tournament is over.</p>
-{% elif t.entries_locked or t.last_call %}
-  <p class="banner">Registration is closed: the tournament is under way and the field is set.</p>
-{% else %}
-  {% if t.status == RUNNING %}<div class="banner">The tournament has started. Late entries pay {{ t.settings.entry_fee_cents|money }} and join the winners list.</div>{% endif %}
-  {% if t.settings.checkin_by %}<p class="checkin-note">On tournament day, check in at the desk by <b>{{ t.settings.checkin_by }}</b> or your spot may go to the waiting list.</p>{% endif %}
-  <p>Entry fee: <b>{{ t.settings.entry_fee_cents|money }}</b> per team, paid at the desk.
-     Teams are {{ TEAM_SIZE }} partners, and their <b>combined skill level can't be over {{ t.settings.registration_cap }}</b> to register.</p>
-  {% if t.field_full %}<div class="banner">The field is full ({{ t.settings.field_cap }} teams). You can still register to join the waiting list{% if t.waitlist %} — {{ t.waitlist|length }} team(s) ahead of you{% endif %}. Teams move into the field in order if a spot opens.</div>
-  {% elif t.settings.field_cap %}<p>{{ t.settings.field_cap - t.field_teams|length }} of {{ t.settings.field_cap }} spots left.</p>{% endif %}
-  {% include "_chip_table.html" %}
+{% set s = t.settings %}
+<div class="split">
+  <header>
+    <p class="eyebrow">{{ s.name }}</p>
+    <h1>Register a team</h1>
+    {% if t.status == FINISHED %}
+      <p class="lede">This tournament is over.</p>
+    {% elif t.entries_locked or t.last_call %}
+      <p class="lede">Registration is closed: the tournament is under way and the field is set.</p>
+    {% else %}
+      <p class="lede">Teams are {{ TEAM_SIZE }} partners. Entry is <b>{{ s.entry_fee_cents|money }}</b> per team, paid at the desk.</p>
+      <div class="stack" style="margin-top: 32px">
+        {% if t.status == RUNNING %}<div class="banner">The tournament has started. Late entries pay {{ s.entry_fee_cents|money }} and join the winners list.</div>{% endif %}
+        {% if s.checkin_by %}<p class="checkin-note">On tournament day, check in at the desk by <b>{{ s.checkin_by }}</b> or your spot may go to the waiting list.</p>{% endif %}
+        {% if t.field_full %}<div class="banner">The field is full ({{ s.field_cap }} teams). You can still register to join the waiting list{% if t.waitlist %} — {{ t.waitlist|length }} team(s) ahead of you{% endif %}. Teams move into the field in order if a spot opens.</div>
+        {% elif s.field_cap %}<p><b>{{ s.field_cap - t.field_teams|length }} of {{ s.field_cap }}</b> spots left.</p>{% endif %}
+        <div>
+          <h3>Starting chips</h3>
+          <p>Your partners' <b>combined skill level can't be over {{ s.registration_cap }}</b> to register.</p>
+          {% include "_chip_table.html" %}
+        </div>
+      </div>
+    {% endif %}
+  </header>
+  {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}
   <form method="post" class="card form">
     {% set v = {"name": form.get("name", ""), "players": players} %}
-    {% set cap = t.settings.registration_cap %}
+    {% set cap = s.registration_cap %}
     {% include "_roster_fields.html" %}
-    <button class="button">Register</button>
+    <button class="button big block">Register</button>
   </form>
-{% endif %}
+  {% endif %}
+</div>
 {% endblock %}

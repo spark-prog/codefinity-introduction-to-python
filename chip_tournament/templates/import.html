@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Import teams — {{ t.settings.name }}{% endblock %}
 {% block content %}
-<h1>Import teams</h1>
-<p><a href="{{ url_for('admin') }}">← Back to the director page</a></p>
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Director · Google Form or spreadsheet</p>
+    <h1>Import teams</h1>
+  </div>
+  <div class="button-row" style="justify-content: flex-end"><a class="button secondary" href="{{ url_for('admin') }}">← Back to the director page</a></div>
+</header>
 
 {% if done %}
   <h2>Import results</h2>
-  {% include "_import_rows.html" %}
-  <p><a class="button" href="{{ url_for('admin') }}#teams">See the teams</a>
-     <a href="{{ url_for('admin_import') }}">Import another file</a></p>
+  <div class="table-wrap">{% include "_import_rows.html" %}</div>
+  <div class="button-row actions-row"><a class="button" href="{{ url_for('admin') }}#teams">See the teams</a>
+     <a class="button secondary" href="{{ url_for('admin_import') }}">Import another file</a></div>
 
 {% elif headers %}
   <form method="post" class="card form">
@@ -35,7 +40,7 @@
     {% set skipped = rows|length - added - waitlisted %}
     <p><b>{{ added }}</b> team(s) will be added to the field{% if waitlisted %}, <b>{{ waitlisted }}</b> onto the waiting list{% endif %}{% if skipped %}, and <b class="warn">{{ skipped }} skipped</b> (fix those in the sheet and import again, or register them by hand){% endif %}.
       Rows are added top to bottom, so the earliest sign-ups get the field spots.{% if not t.settings.field_cap %} <span class="warn">No field cap is set yet; set it in Settings first if you have one.</span>{% endif %}</p>
-    {% include "_import_rows.html" %}
+    <div class="table-wrap">{% include "_import_rows.html" %}</div>
     <label class="checkbox"><input type="checkbox" name="send_texts" value="1" checked> Text each team its registration and roster PIN</label>
     <button class="button" name="step" value="import" {% if not added and not waitlisted %}disabled{% endif %}
       onclick="return confirm('Import {{ added + waitlisted }} team(s)?')">Import {{ added + waitlisted }} team(s)</button>

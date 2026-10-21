@@ -11,8 +11,8 @@
     <label>Cell for text alerts <span class="muted">(on file: ending in {{ p.phone|last4 }})</span>
       <input name="player_phone_{{ i }}" type="tel" placeholder="Leave blank to keep the number on file" value=""></label>
     {% else %}
-    <label>Cell for text alerts{% if i %} (optional){% endif %}
-      <input name="player_phone_{{ i }}" type="tel" placeholder="(555) 123-4567" value="{{ p.phone if p else '' }}" {% if not i %}required{% endif %}></label>
+    <label>Cell for text alerts
+      <input name="player_phone_{{ i }}" type="tel" placeholder="{{ 'Optional' if i else '(555) 123-4567' }}" value="{{ p.phone if p else '' }}" {% if not i %}required{% endif %}></label>
     {% endif %}
   </fieldset>
   {% endfor %}

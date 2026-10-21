@@ -322,7 +322,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 nxt = request.args.get("next", "")
                 return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("admin"))
             flash("Wrong password.", "error")
-        return render_template("login.html", default_password=admin_password == "admin")
+        return render_template("login.html", t=store.load(), default_password=admin_password == "admin")
 
     @app.post("/admin/logout")
     def admin_logout():

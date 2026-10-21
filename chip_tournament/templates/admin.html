@@ -226,8 +226,25 @@
 </section>
 
 {% set money_locked = t.entries_locked or t.status == FINISHED %}
-<section class="card">
+<section class="card" id="settings">
   <h2>Tournament details & settings</h2>
+  <div class="settings-group" style="margin-top: 8px">Background photo</div>
+  <div class="photo-row">
+    <div class="photo-preview" style="background-image: url('{{ background_url }}')"></div>
+    <div>
+      <p>Shown faded behind every page. {% if has_custom_background %}You're using your own photo.{% else %}You're using the default billiard room; upload a photo of your venue to replace it.{% endif %}
+        <span class="muted">A wide (landscape) JPG or PNG works best, up to 10 MB.</span></p>
+      <form method="post" action="{{ url_for('admin_background') }}" enctype="multipart/form-data" class="form button-row">
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required style="max-width: 320px; margin: 0">
+        <button class="button">Upload photo</button>
+      </form>
+      {% if has_custom_background %}
+      <form method="post" action="{{ url_for('admin_background') }}" style="margin-top: 12px">
+        <input type="hidden" name="reset" value="1"><button class="button small secondary">Use the default photo</button></form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="settings-group" style="margin-top: 32px">Clock</div>
   <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
     If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
     Check-in, grace and start times all use this clock.</p>

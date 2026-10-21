@@ -297,6 +297,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.date, s.start_time = f.get("date", ""), f.get("start_time", "")
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.cash_in_time, s.last_call_time = f.get("cash_in_time", ""), f.get("last_call_time", "")
+            s.sms_name = f.get("sms_name", s.sms_name).strip()
+            s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

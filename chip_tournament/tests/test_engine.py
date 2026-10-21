@@ -497,3 +497,14 @@ def test_double_forfeit_chips_count_as_returned():
     t.check_clock(at=base + timedelta(minutes=20))
     assert t.chips_returned == 2
     assert t.chips_in_play + t.chips_returned == t.total_chips_issued
+
+
+def test_texts_carry_sender_name_and_questions_phone():
+    t = Tournament()
+    t.settings.sms_name = "First Coast APA"
+    t.settings.contact_phone = "904-528-7657"
+    t.register_team("Sharks", partners(8))
+    body = t.outbox[-1].body
+    assert body.startswith("First Coast APA: Sharks is registered")
+    assert "Reply STOP to opt out." in body
+    assert body.endswith("Questions? Call/text 904-528-7657")

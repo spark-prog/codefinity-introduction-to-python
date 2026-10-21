@@ -161,6 +161,8 @@ class Settings:
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     cash_in_time: str = ""
     last_call_time: str = ""
+    sms_name: str = ""  # starts every text, e.g. "First Coast APA"
+    contact_phone: str = ""  # ends every text: "Questions? Call/text ..."
 
 
 @dataclass
@@ -286,6 +288,10 @@ class Tournament:
         self.log.append(f"{now()}  {text}")
 
     def _text_team(self, team: Team, body: str) -> None:
+        if self.settings.sms_name:
+            body = f"{self.settings.sms_name}: {body}"
+        if self.settings.contact_phone:
+            body = f"{body} Questions? Call/text {self.settings.contact_phone}"
         for number in team.phones:
             self.outbox.append(Message(to=number, body=body, team_id=team.id))
 
@@ -389,14 +395,14 @@ class Tournament:
             self._text_team(
                 team,
                 f"{self.settings.name} is full. {team.name} is #{spot} on the waiting list; we'll text you "
-                f"if a spot opens. Your team PIN for roster changes is {team.pin}.",
+                f"if a spot opens. Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.",
             )
             return team
         self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
         self._text_team(
             team,
             f"{team.name} is registered for {self.settings.name}. "
-            f"Your team PIN for roster changes is {team.pin}.",
+            f"Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.",
         )
         if self.status == RUNNING:
             self._join_running(team)

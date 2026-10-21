@@ -163,6 +163,8 @@
     <label>Grace period before a no-show forfeits (min) <input name="grace_minutes" type="number" min="0" value="{{ s.grace_minutes }}"></label>
     <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
+    <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
+    <label>Questions phone (ends every text) <input name="contact_phone" value="{{ s.contact_phone }}" placeholder="904-528-7657"></label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
     <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
     <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>

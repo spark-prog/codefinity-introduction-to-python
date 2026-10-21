@@ -12,7 +12,7 @@
   </fieldset>
   {% endfor %}
 </div>
-<p class="muted sms-consent">By entering a cell number, you agree to receive text alerts from {{ t.settings.name }} about this
+<p class="muted sms-consent">By entering a cell number, you agree to receive text alerts from {{ t.settings.sms_name or t.settings.name }} about this
   tournament (registration, table calls, results, cash-in and last call). Message frequency varies; message and data rates may apply.
   Reply STOP to opt out or HELP for help.</p>
 <p class="skill-check" id="skill-check"></p>

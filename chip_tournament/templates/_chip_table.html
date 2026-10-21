@@ -1,0 +1,8 @@
+<table class="grid chip-table">
+  <thead><tr><th>Combined skill level</th><th>Starting chips</th></tr></thead>
+  <tbody>
+    {% for label, chips in t.bracket_labels() %}<tr><td>{{ label }}</td><td>{{ chips }}</td></tr>{% endfor %}
+    <tr><td>{{ t.max_skill + 1 }} or more</td><td>Need a new partner</td></tr>
+  </tbody>
+</table>
+<p class="muted">Combined skill can't be over {{ t.settings.registration_cap }} at registration. It can go up to {{ t.max_skill }} by the time the tournament starts.</p>

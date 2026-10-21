@@ -21,14 +21,24 @@ Run the tests with `python -m pytest`.
 |---|---|---|
 | `/` | everyone | Tournament details, venue and map link, how it works, pot, chip value, tables in play, winners/losers lists, standings |
 | `/board` | TV at the venue | Same live info; refreshes every 15 seconds |
-| `/register` | captains | Register a team: name, captain, cell, players, skill level. Gives (and texts) a 4-digit team PIN |
+| `/register` | teams | Register a team of two partners: names, skill levels, cell numbers. Shows the combined skill and starting chips as you type. Gives (and texts) a 4-digit team PIN |
 | `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results |
-| `/team/<id>/roster` | a team (with PIN) | Update team name, captain, cell numbers and players |
+| `/team/<id>/roster` | a team (with PIN) | Update partners, skill levels (before the start), team name and cell numbers |
 | `/admin` | director | Settings, start, scoring, cash-in, last call, chip adjustments, texts, undo, chip ledger and activity log |
 
 ## How the rules work in the app
 
-1. **Starting chips.** Each skill level maps to a chip count in Settings (default `1=5, 2=4, 3=3, 4=2, 5=1`). Change it to match your league.
+1. **Teams and starting chips.** A team is two partners. Their skill levels are added together, and the combined skill sets the starting chips:
+
+   | Combined skill level | Starting chips |
+   |---|---|
+   | 6 or less | 5 |
+   | 7–8 | 4 |
+   | 9–10 | 3 |
+   | 11 | 2 |
+   | 12 or more | needs a new partner |
+
+   Combined skill can't be over **10 at registration**. If a partner's skill goes up afterward, the team updates it on its roster page, up to **11**. A team over 11 can't be saved, and the tournament won't start until every team is 11 or less. Partners and skill levels lock once the tournament starts. The director can change the brackets and the registration cap in Settings until the start.
 2. **Round 1** is a random draw. Matches go to free tables in order. If there are more matches than tables, the rest wait and get called automatically as tables free up.
 3. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
 4. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
@@ -43,7 +53,8 @@ Run the tests with `python -m pytest`.
 - **Odd number of teams on a list:** the leftover winner plays the leftover loser (a "cross" match). If only one team is left over, it gets a bye and keeps its chips.
 - **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent waits for the next round.
 - **Late entries** (after the start) pay the entry fee, get chips for their skill level and join the bottom of the winners list.
-- **Entry fee, added money and chip counts** lock when the tournament starts. Only the director can change a team's skill level, and only before the start.
+- **Entry fee, added money, chip brackets and the registration cap** lock when the tournament starts.
+- **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Combined skill 10 → 11"). The 10 cap applies only to new registrations, so a team that swaps partners after registering can go up to 11.
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons, so no team gets cashed out by surprise mid-match.
 
 ## Chip tracking

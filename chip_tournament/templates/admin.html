@@ -8,7 +8,7 @@
 <section class="card controls">
   {% if t.status == SETUP %}
     <p>{{ t.teams|length }} team(s) registered. Starting will collect {{ s.entry_fee_cents|money }} × {{ t.teams|length }}
-      {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by skill level, and randomly draw round 1.</p>
+      {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw round 1.</p>
     <form method="post" action="{{ url_for('admin_start') }}" onsubmit="return confirm('Start the tournament and draw round 1?')">
       <button class="button big">Start tournament</button></form>
   {% elif t.status == RUNNING %}
@@ -64,19 +64,17 @@
 <section id="teams">
   <h2>Teams & chips</h2>
   <table class="grid">
-    <thead><tr><th>Team</th><th>Captain / cell</th><th>Skill</th><th>Chips</th><th>Status</th><th>Value / paid</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Status</th><th>Value / paid</th><th>Actions</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}">
-      <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }} · {{ team.players|length }} players</span></td>
-      <td>{{ team.captain }}<br><span class="muted">{{ team.phone }}</span></td>
-      <td>
+      <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }}</span></td>
+      <td>{% for p in team.players %}{{ p.name }} ({{ p.skill }}){% if p.phone %} <span class="muted">{{ p.phone }}</span>{% endif %}<br>{% endfor %}</td>
+      <td>{{ team.combined_skill }}
         {% if t.status == SETUP %}
-        <form method="post" action="{{ url_for('admin_skill', team_id=team.id) }}" class="inline">
-          <select name="skill_level" onchange="this.form.submit()">
-            {% for lvl in s.skill_chips %}<option value="{{ lvl }}" {% if lvl == team.skill_level %}selected{% endif %}>{{ lvl }}</option>{% endfor %}
-          </select></form>
-        {% else %}{{ team.skill_level }}{% endif %}
+          {% set c = t.chips_preview(team) %}
+          <br>{% if c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
+        {% endif %}
       </td>
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
       <td>{{ team.status.replace("_", " ") }}</td>
@@ -142,8 +140,11 @@
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
     <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
-    <label class="wide">Starting chips by skill level — one per line, <code>skill = chips</code>
-      <textarea name="skill_chips" rows="5" {% if t.status != SETUP %}disabled{% endif %}>{{ skill_text }}</textarea></label>
+    <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>
+      (e.g. <code>8 = 4</code> means 7–8 starts with 4 chips). Anything above the last line needs a new partner.
+      <textarea name="chip_brackets" rows="5" {% if t.status != SETUP %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
+    <label>Registration cap (highest combined skill to register)
+      <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if t.status != SETUP %}disabled{% endif %}></label>
     {% if t.status != SETUP %}<p class="muted wide">Entry fee, added money and chip counts are locked once the tournament starts.</p>{% endif %}
     <button class="button">Save settings</button>
   </form>

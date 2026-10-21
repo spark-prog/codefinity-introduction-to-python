@@ -103,3 +103,12 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--card); bo
   .topbar a { margin-left: 10px; }
   table.grid { display: block; overflow-x: auto; }
 }
+
+.partners { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.partner { border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px 8px; margin: 0; }
+.partner legend { font-weight: 700; padding: 0 4px; }
+.skill-check { font-weight: 600; min-height: 1.2em; }
+.skill-check.good { color: var(--felt); }
+.skill-check.bad, .warn { color: var(--danger); font-weight: 600; }
+.chip-table { max-width: 360px; margin-top: 8px; }
+@media (max-width: 640px) { .partners { grid-template-columns: 1fr; } }

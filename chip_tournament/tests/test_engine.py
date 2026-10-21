@@ -8,20 +8,27 @@ from chips.engine import (
     CASHED_OUT,
     ELIMINATED,
     FINISHED,
+    Player,
     Tournament,
     TournamentError,
 )
 
 
+def partners(combined, phone="5550000000"):
+    """Two partners whose skill levels add up to `combined`."""
+    return [Player("A", phone, combined // 2), Player("B", "", combined - combined // 2)]
+
+
 def make(n_teams=4, skills=None, tables=None, fee=2000):
+    """Teams with the given combined skill levels (default 10 = 3 chips)."""
     t = Tournament()
     t.settings.entry_fee_cents = fee
     t.settings.race_to = 2
     if tables:
         t.settings.tables = tables
-    skills = skills or ["3"] * n_teams
+    skills = skills or [10] * n_teams
     for i, skill in enumerate(skills):
-        t.register_team(f"Team {i}", skill, f"Captain {i}", f"555000000{i}")
+        t.register_team(f"Team {i}", partners(skill, f"555000000{i}"))
     return t
 
 
@@ -33,13 +40,75 @@ def called(t):
     return [m for m in t.matches if m.status == CALLED]
 
 
-def test_starting_chips_follow_skill_level():
-    t = make(skills=["1", "3", "5"])
+@pytest.mark.parametrize("combined, chips", [(4, 5), (6, 5), (7, 4), (8, 4), (9, 3), (10, 3), (11, 2)])
+def test_starting_chips_follow_combined_skill(combined, chips):
+    assert Tournament().chips_for_skill(combined) == chips
+
+
+def test_combined_skill_of_12_needs_a_new_partner():
+    with pytest.raises(TournamentError, match="new partner"):
+        Tournament().chips_for_skill(12)
+
+
+def test_starting_chips_and_pot():
+    t = make(skills=[6, 8, 10])
     t.start(random.Random(1))
     chips = sorted(team.chips for team in t.teams.values())
-    assert chips == [1, 3, 5]
+    assert chips == [3, 4, 5]
     assert t.pot_cents == 3 * 2000
-    assert t.chip_value_cents == pytest.approx(6000 / 9)
+    assert t.chip_value_cents == pytest.approx(6000 / 12)
+
+
+def test_registration_cap_is_10():
+    t = Tournament()
+    t.register_team("Ten", partners(10))
+    with pytest.raises(TournamentError, match="registration cap of 10"):
+        t.register_team("Eleven", partners(11))
+
+
+def test_team_needs_two_named_partners_with_skill_and_a_phone():
+    t = Tournament()
+    with pytest.raises(TournamentError):
+        t.register_team("Solo", [Player("A", "555", 3)])
+    with pytest.raises(TournamentError):
+        t.register_team("No skill", [Player("A", "555", 3), Player("B", "", 0)])
+    with pytest.raises(TournamentError):
+        t.register_team("No phone", [Player("A", "", 3), Player("B", "", 3)])
+
+
+def test_skill_can_rise_to_11_before_the_start_but_not_12():
+    t = make(skills=[10, 10])
+    team = next(iter(t.teams.values()))
+    t.update_roster(team.id, partners(11))
+    assert team.combined_skill == 11
+    with pytest.raises(TournamentError, match="new partner"):
+        t.update_roster(team.id, partners(12))
+    assert team.combined_skill == 11  # rejected change left the roster alone
+    t.start(random.Random(1))
+    assert team.chips == 2
+
+
+def test_partners_and_skill_lock_at_the_start():
+    t = make(skills=[8, 8])
+    t.start(random.Random(1))
+    team = next(iter(t.teams.values()))
+    with pytest.raises(TournamentError, match="locked"):
+        t.update_roster(team.id, partners(6))
+    # Phone numbers and the team name can still change.
+    new = [Player(p.name, "5559999999", p.skill) for p in team.players]
+    t.update_roster(team.id, new, name="Renamed")
+    assert team.name == "Renamed" and team.phones == ["5559999999"]
+
+
+def test_start_blocked_when_a_team_is_over_the_top_bracket():
+    t = make(skills=[10, 10])
+    t.settings.chip_brackets = [[6, 5], [8, 4], [9, 3]]
+    with pytest.raises(TournamentError, match="need a new partner"):
+        t.start(random.Random(1))
+
+
+def test_bracket_labels():
+    assert Tournament().bracket_labels() == [("6 or less", 5), ("7–8", 4), ("9–10", 3), ("11", 2)]
 
 
 def test_round_one_pairs_everyone_and_calls_tables():
@@ -105,9 +174,13 @@ def test_odd_field_gives_a_bye():
 
 
 def test_team_out_of_chips_is_eliminated_and_removed_from_rotation():
-    t = make(skills=["5", "1"])  # 1 chip vs 5 chips
+    t = make(skills=[6, 10])
+    weak = list(t.teams.values())[1]
+    t.update_roster(weak.id, partners(11))  # 2 chips vs 5 chips
     t.start(random.Random(8))
-    weak = next(team for team in t.teams.values() if team.chips == 1)
+    m = called(t)[0]
+    t.record_result(m.id, m.team_a if m.team_b == weak.id else m.team_b)
+    assert weak.chips == 1 and weak.status == ACTIVE
     m = called(t)[0]
     t.record_result(m.id, m.team_a if m.team_b == weak.id else m.team_b)
     assert weak.status == ELIMINATED
@@ -158,7 +231,7 @@ def test_cannot_cash_in_mid_match():
 
 
 def test_last_call_pays_out_entire_pot_exactly():
-    t = make(n_teams=7, skills=["1", "2", "3", "4", "5", "3", "2"], fee=1500)
+    t = make(n_teams=7, skills=[4, 6, 7, 8, 9, 10, 5], fee=1500)
     t.settings.added_money_cents = 1000
     t.start(random.Random(12))
     for _ in range(6):
@@ -176,7 +249,7 @@ def test_last_call_pays_out_entire_pot_exactly():
 
 def test_full_tournament_runs_to_a_single_winner():
     rng = random.Random(13)
-    t = make(n_teams=9, skills=[rng.choice("12345") for _ in range(9)])
+    t = make(n_teams=9, skills=[rng.choice([5, 6, 7, 8, 9, 10]) for _ in range(9)])
     t.start(rng)
     for _ in range(500):
         if t.status == FINISHED:
@@ -208,7 +281,7 @@ def test_adjust_chips_to_zero_eliminates():
 def test_late_registration_joins_winners_list():
     t = make(n_teams=4)
     t.start(random.Random(15))
-    late = t.register_team("Latecomers", "2", "Cap", "5551112222")
+    late = t.register_team("Latecomers", partners(8, "5551112222"))
     assert late.status == ACTIVE and late.chips == 4
     assert late.id in t.winners_list
     assert t.pot_cents == 5 * 2000

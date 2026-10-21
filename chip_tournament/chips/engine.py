@@ -5,7 +5,10 @@ their own. Money is always kept in whole cents (int) to avoid rounding drift.
 
 How the format works
 --------------------
-* Each team starts with a number of chips based on its skill level.
+* A team is two partners. Their combined skill level sets the team's starting
+  chips (e.g. 6 or less = 5 chips, 7-8 = 4, 9-10 = 3, 11 = 2). Combined skill
+  is capped at registration (10), may rise to the top bracket (11) by the
+  start, and a team above that needs a new partner.
 * Round 1: teams are paired at random and called to a table.
 * A match is a race to N games. The winner keeps its chips and goes to the
   bottom of the WINNERS list. The loser gives one chip back to the main table
@@ -44,7 +47,10 @@ SETUP = "setup"
 RUNNING = "running"
 FINISHED = "finished"
 
-DEFAULT_SKILL_CHIPS = {"1": 5, "2": 4, "3": 3, "4": 2, "5": 1}
+# [highest combined skill level, starting chips], lowest bracket first.
+DEFAULT_CHIP_BRACKETS = [[6, 5], [8, 4], [10, 3], [11, 2]]
+DEFAULT_REGISTRATION_CAP = 10
+TEAM_SIZE = 2
 
 
 class TournamentError(Exception):
@@ -63,15 +69,13 @@ def money(cents: float) -> str:
 class Player:
     name: str
     phone: str = ""
+    skill: int = 0
 
 
 @dataclass
 class Team:
     id: str
     name: str
-    skill_level: str
-    captain: str
-    phone: str
     players: list[Player] = field(default_factory=list)
     pin: str = ""
     chips: int = 0
@@ -85,10 +89,18 @@ class Team:
     @property
     def phones(self) -> list[str]:
         seen = []
-        for number in [self.phone] + [p.phone for p in self.players]:
+        for number in [p.phone for p in self.players]:
             if number and number not in seen:
                 seen.append(number)
         return seen
+
+    @property
+    def combined_skill(self) -> int:
+        return sum(p.skill for p in self.players)
+
+    @property
+    def partners(self) -> str:
+        return " & ".join(p.name for p in self.players)
 
 
 @dataclass
@@ -119,7 +131,8 @@ class Settings:
     entry_fee_cents: int = 2000
     added_money_cents: int = 0
     race_to: int = 3
-    skill_chips: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_SKILL_CHIPS))
+    chip_brackets: list[list[int]] = field(default_factory=lambda: [list(b) for b in DEFAULT_CHIP_BRACKETS])
+    registration_cap: int = DEFAULT_REGISTRATION_CAP
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     cash_in_time: str = ""
     last_call_time: str = ""
@@ -258,20 +271,52 @@ class Tournament:
 
     # ------------------------------------------------------------- registration
 
-    def chips_for_skill(self, skill_level: str) -> int:
-        try:
-            return int(self.settings.skill_chips[str(skill_level)])
-        except KeyError:
-            raise TournamentError(f"No chip count is set for skill level {skill_level}.") from None
+    @property
+    def max_skill(self) -> int:
+        """The highest combined skill level that can play."""
+        return max(top for top, _ in self.settings.chip_brackets)
 
-    def register_team(
-        self,
-        name: str,
-        skill_level: str,
-        captain: str,
-        phone: str,
-        players: list[Player] | None = None,
-    ) -> Team:
+    def chips_for_skill(self, combined_skill: int) -> int:
+        for top, chips in sorted(self.settings.chip_brackets):
+            if combined_skill <= top:
+                return chips
+        raise TournamentError(
+            f"Combined skill level {combined_skill} is over {self.max_skill}. This team needs a new partner."
+        )
+
+    def chips_preview(self, team: Team) -> int | None:
+        """Starting chips for a team, or None if its combined skill is too high."""
+        try:
+            return self.chips_for_skill(team.combined_skill)
+        except TournamentError:
+            return None
+
+    def bracket_labels(self) -> list[tuple[str, int]]:
+        """[("6 or less", 5), ("7–8", 4), ...] for showing the chip table."""
+        labels, low = [], None
+        for top, chips in sorted(self.settings.chip_brackets):
+            if low is None:
+                label = f"{top} or less"
+            elif low == top:
+                label = str(top)
+            else:
+                label = f"{low}–{top}"
+            labels.append((label, chips))
+            low = top + 1
+        return labels
+
+    def _check_players(self, players: list[Player]) -> None:
+        if len(players) != TEAM_SIZE:
+            raise TournamentError(f"A team needs exactly {TEAM_SIZE} partners.")
+        for p in players:
+            if not p.name.strip():
+                raise TournamentError("Enter both partners' names.")
+            if p.skill < 1:
+                raise TournamentError(f"Enter a skill level for {p.name}.")
+        if not any(p.phone for p in players):
+            raise TournamentError("Enter at least one cell number for text alerts.")
+
+    def register_team(self, name: str, players: list[Player]) -> Team:
         name = name.strip()
         if not name:
             raise TournamentError("Team name is required.")
@@ -279,19 +324,23 @@ class Tournament:
             raise TournamentError(f"A team named '{name}' is already registered.")
         if self.status == FINISHED:
             raise TournamentError("This tournament is over.")
-        self.chips_for_skill(skill_level)  # validates the skill level
+        self._check_players(players)
+        combined = sum(p.skill for p in players)
+        if combined > self.settings.registration_cap:
+            raise TournamentError(
+                f"Combined skill level {combined} is over the registration cap of "
+                f"{self.settings.registration_cap}. Register with a different partner."
+            )
+        self.chips_for_skill(combined)
 
         team = Team(
             id=uuid.uuid4().hex[:8],
             name=name,
-            skill_level=str(skill_level),
-            captain=captain.strip(),
-            phone=phone.strip(),
-            players=players or [],
+            players=players,
             pin=f"{secrets.randbelow(10000):04d}",
         )
         self.teams[team.id] = team
-        self._say(f"Registered {team.name} (skill {team.skill_level}).")
+        self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
         self._text_team(
             team,
             f"{team.name} is registered for {self.settings.name}. "
@@ -312,34 +361,31 @@ class Tournament:
         self.pot_cents += fee
         self.total_collected_cents += fee
         team.status = ACTIVE
-        team.starting_chips = self.chips_for_skill(team.skill_level)
-        self._chip_change(team, team.starting_chips, f"Starting chips (skill {team.skill_level})")
+        team.starting_chips = self.chips_for_skill(team.combined_skill)
+        self._chip_change(team, team.starting_chips, f"Starting chips (combined skill {team.combined_skill})")
 
-    def update_roster(
-        self,
-        team_id: str,
-        captain: str,
-        phone: str,
-        players: list[Player],
-        name: str | None = None,
-    ) -> Team:
+    def update_roster(self, team_id: str, players: list[Player], name: str | None = None) -> Team:
+        """Change partners, phones or skill levels.
+
+        Skill levels can rise after registration (up to the top chip bracket)
+        but are locked once the team has been given its chips.
+        """
         team = self.team(team_id)
+        self._check_players(players)
+        old_skill, new_skill = team.combined_skill, sum(p.skill for p in players)
+        if team.status != REGISTERED and [(p.name, p.skill) for p in players] != [
+            (p.name, p.skill) for p in team.players
+        ]:
+            raise TournamentError("Partners and skill levels are locked once the tournament starts.")
+        self.chips_for_skill(new_skill)
         if name is not None and name.strip() and name.strip() != team.name:
             if any(t.name.lower() == name.strip().lower() for t in self.teams.values() if t.id != team_id):
                 raise TournamentError(f"A team named '{name.strip()}' is already registered.")
             team.name = name.strip()
-        team.captain = captain.strip()
-        team.phone = phone.strip()
         team.players = players
-        self._say(f"Roster updated for {team.name}.")
+        change = f" Combined skill {old_skill} → {new_skill}." if new_skill != old_skill else ""
+        self._say(f"Roster updated for {team.name}.{change}")
         return team
-
-    def set_skill_level(self, team_id: str, skill_level: str) -> None:
-        team = self.team(team_id)
-        if team.status != REGISTERED:
-            raise TournamentError("Skill level can only change before the tournament starts.")
-        self.chips_for_skill(skill_level)
-        team.skill_level = str(skill_level)
 
     def remove_team(self, team_id: str) -> None:
         team = self.team(team_id)
@@ -358,6 +404,12 @@ class Tournament:
             raise TournamentError("At least two teams are needed to start.")
         if not self.settings.tables:
             raise TournamentError("Add at least one table before starting.")
+        too_high = [f"{t.name} ({t.combined_skill})" for t in teams if self.chips_preview(t) is None]
+        if too_high:
+            raise TournamentError(
+                f"Combined skill over {self.max_skill}, so these teams need a new partner "
+                f"(or must be removed) before the start: {', '.join(too_high)}."
+            )
 
         self.status = RUNNING
         self.pot_cents = self.settings.added_money_cents

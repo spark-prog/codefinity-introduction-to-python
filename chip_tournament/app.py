@@ -23,13 +23,12 @@ from chips.engine import (
     RUNNING,
     SETUP,
     WAITING,
+    TEAM_SIZE,
     Player,
     TournamentError,
     money,
 )
 from chips.storage import Store
-
-MAX_PLAYERS = 8
 
 
 def parse_money(text: str) -> int:
@@ -41,29 +40,37 @@ def parse_money(text: str) -> int:
         raise TournamentError(f"'{text}' is not a dollar amount.") from None
 
 
-def parse_skill_chips(text: str) -> dict[str, int]:
-    """Lines like '3 = 4' (skill level 3 starts with 4 chips)."""
-    result = {}
+def parse_chip_brackets(text: str) -> list[list[int]]:
+    """Lines like '8 = 4' (combined skill up to 8 starts with 4 chips)."""
+    brackets = []
     for line in (text or "").replace(",", "\n").splitlines():
         if not line.strip():
             continue
         if "=" not in line:
-            raise TournamentError(f"Use 'skill = chips' on each line, not '{line.strip()}'.")
-        level, chips = (part.strip() for part in line.split("=", 1))
-        if not level or not chips.isdigit() or int(chips) < 1:
+            raise TournamentError(f"Use 'highest combined skill = chips' on each line, not '{line.strip()}'.")
+        top, chips = (part.strip() for part in line.split("=", 1))
+        if not top.isdigit() or not chips.isdigit() or int(chips) < 1:
             raise TournamentError(f"Bad chip setting: '{line.strip()}'.")
-        result[level] = int(chips)
-    if not result:
-        raise TournamentError("Set at least one skill level.")
-    return result
+        brackets.append([int(top), int(chips)])
+    if not brackets:
+        raise TournamentError("Set at least one chip bracket.")
+    tops = [top for top, _ in brackets]
+    if len(set(tops)) != len(tops):
+        raise TournamentError("Each skill level can only appear once in the chip brackets.")
+    return sorted(brackets)
 
 
 def players_from_form(form) -> list[Player]:
     players = []
-    for i in range(MAX_PLAYERS):
-        name = form.get(f"player_name_{i}", "").strip()
-        if name:
-            players.append(Player(name=name, phone=form.get(f"player_phone_{i}", "").strip()))
+    for i in range(TEAM_SIZE):
+        skill = form.get(f"player_skill_{i}", "").strip()
+        if skill and not skill.isdigit():
+            raise TournamentError(f"Skill level '{skill}' must be a whole number.")
+        players.append(Player(
+            name=form.get(f"player_name_{i}", "").strip(),
+            phone=form.get(f"player_phone_{i}", "").strip(),
+            skill=int(skill or 0),
+        ))
     return players
 
 
@@ -99,7 +106,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             "SETUP": SETUP,
             "RUNNING": RUNNING,
             "FINISHED": FINISHED,
-            "MAX_PLAYERS": MAX_PLAYERS,
+            "TEAM_SIZE": TEAM_SIZE,
         }
 
     def send_texts(t) -> None:
@@ -149,16 +156,18 @@ def create_app(data_dir: str | None = None) -> Flask:
             f = request.form
             team = act(
                 "Register team",
-                lambda t: t.register_team(
-                    f.get("name", ""), f.get("skill_level", ""), f.get("captain", ""), f.get("phone", ""),
-                    players_from_form(f),
-                ),
+                lambda t: t.register_team(f.get("name", ""), players_from_form(f)),
             )
             if team:
                 session[f"team_{team.id}"] = True
                 flash(f"{team.name} is registered! Your team PIN is {team.pin} — keep it to edit your roster.", "ok")
                 return redirect(url_for("team_page", team_id=team.id))
-        return render_template("register.html", t=t, form=request.form)
+        players = [
+            Player(name=request.form.get(f"player_name_{i}", ""), phone=request.form.get(f"player_phone_{i}", ""),
+                   skill=int(request.form[f"player_skill_{i}"]) if request.form.get(f"player_skill_{i}", "").isdigit() else 0)
+            for i in range(TEAM_SIZE)
+        ]
+        return render_template("register.html", t=t, form=request.form, players=players)
 
     @app.get("/team/<team_id>")
     def team_page(team_id):
@@ -185,8 +194,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             f = request.form
             if act(
                 "Update roster",
-                lambda t: t.update_roster(team_id, f.get("captain", ""), f.get("phone", ""), players_from_form(f),
-                                          name=f.get("name")),
+                lambda t: t.update_roster(team_id, players_from_form(f), name=f.get("name")),
                 "Roster saved.",
             ):
                 return redirect(url_for("team_page", team_id=team_id))
@@ -216,7 +224,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         t = store.load()
         return render_template(
             "admin.html", t=t, undo_label=store.last_undo_label(), texts=sms.recent(50), sms_enabled=sms.enabled,
-            skill_text="\n".join(f"{k} = {v}" for k, v in t.settings.skill_chips.items()),
+            bracket_text="\n".join(f"{top} = {chips}" for top, chips in t.settings.chip_brackets),
         )
 
     @app.post("/admin/settings")
@@ -245,10 +253,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             if t.status == SETUP:
                 s.entry_fee_cents = parse_money(f.get("entry_fee", "0"))
                 s.added_money_cents = parse_money(f.get("added_money", "0"))
-                s.skill_chips = parse_skill_chips(f.get("skill_chips", ""))
-                missing = {tm.skill_level for tm in t.teams.values()} - set(s.skill_chips)
-                if missing:
-                    raise TournamentError(f"Registered teams use skill level(s) {', '.join(sorted(missing))}.")
+                s.chip_brackets = parse_chip_brackets(f.get("chip_brackets", ""))
+                cap = f.get("registration_cap", "")
+                if not cap.isdigit():
+                    raise TournamentError("Registration cap must be a whole number.")
+                s.registration_cap = int(cap)
+                if s.registration_cap > t.max_skill:
+                    raise TournamentError("The registration cap can't be higher than the top chip bracket.")
             s.race_to = int(race)
             if t.status == RUNNING:
                 t._call_matches()  # new tables may be free now
@@ -303,13 +314,6 @@ def create_app(data_dir: str | None = None) -> Flask:
         except ValueError:
             change = 0
         act("Adjust chips", lambda t: t.adjust_chips(team_id, change, request.form.get("reason", "")), "Chips adjusted.")
-        return redirect(url_for("admin") + "#teams")
-
-    @app.post("/admin/team/<team_id>/skill")
-    @admin_required
-    def admin_skill(team_id):
-        act("Change skill level", lambda t: t.set_skill_level(team_id, request.form.get("skill_level", "")),
-            "Skill level updated.")
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/team/<team_id>/remove")

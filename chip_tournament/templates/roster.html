@@ -8,10 +8,17 @@
     <button class="button">Continue</button>
   </form>
 {% else %}
+  {% set locked = team.status != "registered" %}
+  {% if locked %}
+  <p class="banner">The tournament has started, so partners and skill levels are locked. You can still change the team name and cell numbers.</p>
+  {% else %}
+  <p>If a partner's skill level has gone up since registration, update it here. Your combined skill can go up to {{ t.max_skill }}; at {{ t.max_skill + 1 }} or more you'll need a new partner.</p>
+  {% include "_chip_table.html" %}
+  {% endif %}
   <form method="post" class="card form">
     {% set v = team %}
+    {% set cap = t.max_skill %}
     {% include "_roster_fields.html" %}
-    <p class="muted">Skill level ({{ team.skill_level }}) sets your starting chips and can only be changed by the tournament director.</p>
     <button class="button">Save roster</button>
     <a href="{{ url_for('team_page', team_id=team.id) }}">Cancel</a>
   </form>

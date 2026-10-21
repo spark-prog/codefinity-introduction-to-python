@@ -1,14 +1,37 @@
 <label>Team name <input name="name" required value="{{ v.name }}"></label>
-<label>Captain <input name="captain" required value="{{ v.captain }}"></label>
-<label>Captain's cell (for text alerts) <input name="phone" type="tel" required value="{{ v.phone }}" placeholder="(555) 123-4567"></label>
-<h3>Players</h3>
-<p class="muted">Add a cell number for any player who also wants text alerts.</p>
-<div class="players">
-  {% for i in range(MAX_PLAYERS) %}
+<div class="partners">
+  {% for i in range(TEAM_SIZE) %}
   {% set p = v.players[i] if v.players and i < v.players|length else none %}
-  <div class="player-row">
-    <input name="player_name_{{ i }}" placeholder="Player {{ i + 1 }}" value="{{ p.name if p else '' }}">
-    <input name="player_phone_{{ i }}" type="tel" placeholder="Cell (optional)" value="{{ p.phone if p else '' }}">
-  </div>
+  <fieldset class="partner">
+    <legend>Partner {{ i + 1 }}</legend>
+    <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if locked %}readonly{% endif %}></label>
+    <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" step="1" required
+      value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
+    <label>Cell for text alerts{% if i %} (optional){% endif %}
+      <input name="player_phone_{{ i }}" type="tel" placeholder="(555) 123-4567" value="{{ p.phone if p else '' }}" {% if not i %}required{% endif %}></label>
+  </fieldset>
   {% endfor %}
 </div>
+<p class="skill-check" id="skill-check"></p>
+<script>
+(function () {
+  var brackets = {{ t.settings.chip_brackets|tojson }}, cap = {{ cap|tojson }};
+  var inputs = document.querySelectorAll("input.skill"), out = document.getElementById("skill-check");
+  function update() {
+    var total = 0, filled = 0;
+    inputs.forEach(function (el) { if (el.value) { total += parseInt(el.value, 10) || 0; filled++; } });
+    if (filled < inputs.length) { out.textContent = ""; out.className = "skill-check"; return; }
+    var chips = null;
+    for (var i = 0; i < brackets.length; i++) { if (total <= brackets[i][0]) { chips = brackets[i][1]; break; } }
+    if (total > cap) {
+      out.textContent = "Combined skill " + total + " is over the limit of " + cap + ". You need a different partner.";
+      out.className = "skill-check bad";
+    } else {
+      out.textContent = "Combined skill " + total + " → starts with " + chips + " chips.";
+      out.className = "skill-check good";
+    }
+  }
+  inputs.forEach(function (el) { el.addEventListener("input", update); });
+  update();
+})();
+</script>

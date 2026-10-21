@@ -1,16 +1,16 @@
 <section>
   <h2>Teams</h2>
   <table class="grid">
-    <thead><tr><th>Team</th><th>Skill</th><th>Chips</th><th>W-L</th><th>Status</th><th>{% if t.status == SETUP %}Starts with{% else %}Worth / Paid{% endif %}</th></tr></thead>
+    <thead><tr><th>Team</th><th>Combined skill</th><th>Chips</th><th>W-L</th><th>Status</th><th>{% if t.status == SETUP %}Starts with{% else %}Worth / Paid{% endif %}</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
       <tr class="status-{{ team.status }}">
         <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a></td>
-        <td>{{ team.skill_level }}</td>
+        <td>{{ team.combined_skill }}</td>
         <td>{% if team.status == ACTIVE %}<span class="chips">{% for _ in range(team.chips) %}●{% endfor %}</span> {{ team.chips }}{% else %}–{% endif %}</td>
         <td>{{ team.wins }}-{{ team.losses }}</td>
         <td>{{ team.status.replace("_", " ") }}</td>
-        <td>{% if t.status == SETUP %}{{ t.settings.skill_chips.get(team.skill_level, "?") }} chips
+        <td>{% if t.status == SETUP %}{% set c = t.chips_preview(team) %}{% if c %}{{ c }} chips{% else %}<span class="warn">needs new partner</span>{% endif %}
             {% elif team.status == ACTIVE %}{{ t.payout_for(team)|money }}
             {% else %}{{ team.payout_cents|money }}{% endif %}</td>
       </tr>

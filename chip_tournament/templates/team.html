@@ -4,7 +4,7 @@
 <div class="stats">
   <div class="stat"><span class="label">Status</span><span class="value small">{{ team.status.replace("_", " ") }}</span></div>
   <div class="stat"><span class="label">Chips</span><span class="value">{{ team.chips }}</span></div>
-  <div class="stat"><span class="label">Skill</span><span class="value">{{ team.skill_level }}</span></div>
+  <div class="stat"><span class="label">Combined skill</span><span class="value">{{ team.combined_skill }}</span></div>
   <div class="stat"><span class="label">Record</span><span class="value">{{ team.wins }}-{{ team.losses }}</span></div>
   <div class="stat highlight"><span class="label">{% if team.status == ACTIVE %}Cash-in value now{% else %}Paid out{% endif %}</span>
     <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
@@ -23,8 +23,12 @@
 
 <section class="card">
   <h2>Roster</h2>
-  <p><b>Captain:</b> {{ team.captain }}{% if can_edit %} · {{ team.phone }}{% endif %}</p>
-  <ul>{% for p in team.players %}<li>{{ p.name }}</li>{% else %}<li class="muted">No players listed.</li>{% endfor %}</ul>
+  <ul>{% for p in team.players %}<li>{{ p.name }} — skill {{ p.skill }}{% if can_edit and p.phone %} · {{ p.phone }}{% endif %}</li>{% endfor %}</ul>
+  {% if team.status == "registered" %}
+    {% set chips = t.chips_preview(team) %}
+    {% if chips %}<p>Combined skill {{ team.combined_skill }} → starts with <b>{{ chips }} chips</b>.</p>
+    {% else %}<p class="banner danger">Combined skill {{ team.combined_skill }} is over {{ t.max_skill }}. You need a new partner before the tournament starts.</p>{% endif %}
+  {% endif %}
   <a class="button" href="{{ url_for('roster', team_id=team.id) }}">Update roster</a>
 </section>
 

@@ -11,7 +11,8 @@
   <ul class="facts">
     <li>Entry: <b>{{ s.entry_fee_cents|money }}</b> per team{% if s.added_money_cents %} · <b>{{ s.added_money_cents|money }}</b> added{% endif %}</li>
     <li>Race to <b>{{ s.race_to }}</b></li>
-    <li>Starting chips by skill: {% for lvl, chips in s.skill_chips.items() %}<span class="pill">Skill {{ lvl }} → {{ chips }}</span>{% endfor %}</li>
+    <li>Teams of {{ TEAM_SIZE }}. Starting chips by combined skill level: {% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
+      <br><span class="muted">Combined skill can't be over {{ s.registration_cap }} at registration. It can go up to {{ t.max_skill }} by tournament time; {{ t.max_skill + 1 }} or more needs a new partner.</span></li>
     {% if s.cash_in_time %}<li>Cash-in opens: <b>{{ s.cash_in_time }}</b></li>{% endif %}
     {% if s.last_call_time %}<li>Last call: <b>{{ s.last_call_time }}</b></li>{% endif %}
   </ul>
@@ -22,7 +23,7 @@
 <details class="howto">
   <summary>How a chip tournament works</summary>
   <ul>
-    <li>Every team starts with chips based on its skill level.</li>
+    <li>Every team starts with chips based on its partners' combined skill level.</li>
     <li>Round 1 is a random draw. Each match is a race to {{ s.race_to }}.</li>
     <li>Win and you keep your chips and go to the bottom of the <b>winners list</b>. Lose and you give one chip back to the main table and go to the bottom of the <b>losers list</b>.</li>
     <li>Next round: winner 1 plays winner 2, loser 1 plays loser 2, and so on.</li>

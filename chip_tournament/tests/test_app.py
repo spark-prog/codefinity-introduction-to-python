@@ -13,11 +13,11 @@ def client(tmp_path, monkeypatch):
     return app.test_client()
 
 
-def register(client, name, skill="3"):
+def register(client, name, skills=(5, 5)):
     return client.post(
         "/register",
-        data={"name": name, "captain": "Cap", "phone": "5551234567", "skill_level": skill,
-              "player_name_0": "Ann", "player_phone_0": ""},
+        data={"name": name, "player_name_0": "Ann", "player_phone_0": "5551234567", "player_skill_0": str(skills[0]),
+              "player_name_1": "Bob", "player_phone_1": "", "player_skill_1": str(skills[1])},
         follow_redirects=True,
     )
 
@@ -32,7 +32,8 @@ def test_full_flow(client):
     client.post("/admin/login", data={"password": "secret"})
     page = client.post("/admin/settings", data={
         "name": "Fall Chips", "venue": "Corner Pocket", "address": "1 Main St", "entry_fee": "$25",
-        "added_money": "0", "race_to": "2", "tables": "1, 2", "skill_chips": "3 = 3\n4 = 2",
+        "added_money": "0", "race_to": "2", "tables": "1, 2", "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2",
+        "registration_cap": "10",
     }, follow_redirects=True)
     assert b"Settings saved" in page.data
 
@@ -75,12 +76,20 @@ def test_roster_needs_pin(client):
     page = other.get(f"/team/{team.id}/roster")
     assert b"Team PIN" in page.data
     other.post(f"/team/{team.id}/roster", data={"pin": "wrong"})
-    other.post(f"/team/{team.id}/roster", data={"name": "Hacked", "captain": "x", "phone": "1"})
+    other.post(f"/team/{team.id}/roster", data={"name": "Hacked", "player_name_0": "x", "player_skill_0": "1",
+                                                "player_phone_0": "1", "player_name_1": "y", "player_skill_1": "1"})
     assert store.load().teams[team.id].name == "Sharks"
 
     other.post(f"/team/{team.id}/roster", data={"pin": team.pin})
-    other.post(f"/team/{team.id}/roster", data={"name": "Sharks", "captain": "New Cap", "phone": "5559990000",
-                                                "player_name_0": "Bo", "player_phone_0": "5558887777"})
+    other.post(f"/team/{team.id}/roster", data={"name": "Sharks", "player_name_0": "Ann", "player_phone_0": "5559990000",
+                                                "player_skill_0": "6", "player_name_1": "Bo", "player_skill_1": "5"})
     updated = store.load().teams[team.id]
-    assert updated.captain == "New Cap"
-    assert [p.name for p in updated.players] == ["Bo"]
+    assert [(p.name, p.skill) for p in updated.players] == [("Ann", 6), ("Bo", 5)]
+    assert updated.combined_skill == 11
+
+
+def test_registration_over_cap_is_rejected(client):
+    page = register(client, "Too Good", skills=(6, 5))
+    assert b"registration cap of 10" in page.data
+    assert b"Too Good" in page.data  # form keeps what was typed
+    assert not client.application.config["store"].load().teams

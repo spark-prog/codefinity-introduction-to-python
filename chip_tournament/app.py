@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import secrets
 import threading
+import time
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -29,6 +31,14 @@ from chips.engine import (
     money,
 )
 from chips.storage import Store
+
+
+def clock(value) -> str:
+    """'2026-11-07T21:42:00' or a datetime -> '9:42 PM'."""
+    if not value:
+        return ""
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(value)
+    return dt.strftime("%I:%M %p").lstrip("0")
 
 
 def parse_money(text: str) -> int:
@@ -94,6 +104,7 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     app.jinja_env.filters["money"] = money
     app.jinja_env.filters["urlquote"] = quote_plus
+    app.jinja_env.filters["clock"] = clock
 
     @app.context_processor
     def globals_():
@@ -129,6 +140,33 @@ def create_app(data_dir: str | None = None) -> Flask:
         except TournamentError as exc:
             flash(str(exc), "error")
             return None
+
+    def tick() -> None:
+        """Start grace periods and record no-show forfeits that are due."""
+        if store.load().check_clock() == 0:  # cheap check first, so idle ticks don't fill the undo history
+            return
+        with store.change("Check-in clock (grace / forfeit)") as t:
+            t.check_clock()
+            send_texts(t)
+
+    def clock_loop() -> None:
+        while True:
+            try:
+                tick()
+            except Exception as exc:  # keep the clock running no matter what
+                app.logger.exception("check-in clock failed: %s", exc)
+            time.sleep(15)
+
+    clock_started = threading.Event()
+
+    @app.before_request
+    def start_clock():
+        # Started on the first request so it runs in the serving process only.
+        if not app.testing and not clock_started.is_set():
+            clock_started.set()
+            threading.Thread(target=clock_loop, daemon=True).start()
+
+    app.config["tick"] = tick
 
     def admin_required(view):
         @wraps(view)
@@ -221,6 +259,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.get("/admin")
     @admin_required
     def admin():
+        tick()
         t = store.load()
         return render_template(
             "admin.html", t=t, undo_label=store.last_undo_label(), texts=sms.recent(50), sms_enabled=sms.enabled,
@@ -261,6 +300,11 @@ def create_app(data_dir: str | None = None) -> Flask:
                 if s.registration_cap > t.max_skill:
                     raise TournamentError("The registration cap can't be higher than the top chip bracket.")
             s.race_to = int(race)
+            for key in ("warmup_minutes", "checkin_minutes", "grace_minutes"):
+                value = f.get(key, str(getattr(s, key))).strip()
+                if not value.isdigit():
+                    raise TournamentError("Check-in times must be whole minutes.")
+                setattr(s, key, int(value))
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
@@ -284,6 +328,15 @@ def create_app(data_dir: str | None = None) -> Flask:
         if side not in ("a", "b") or delta not in (1, -1):
             abort(400)
         act("Score", lambda t: t.score(match_id, side, delta))
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/admin/match/<match_id>/arrived")
+    @admin_required
+    def admin_arrived(match_id):
+        side = request.form.get("side")
+        if side not in ("a", "b"):
+            abort(400)
+        act("Check in", lambda t: t.check_in(match_id, side))
         return redirect(url_for("admin") + "#matches")
 
     @app.post("/admin/match/<match_id>/winner")

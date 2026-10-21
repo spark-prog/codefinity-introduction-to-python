@@ -10,6 +10,7 @@
       <div class="vs"><span>{{ t.name_of(m.team_a) }}</span><b>{{ m.score_a }}</b></div>
       <div class="vs"><span>{{ t.name_of(m.team_b) }}</span><b>{{ m.score_b }}</b></div>
       <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · round {{ m.round }}</div>
+      {% include "_match_clock.html" %}
     </div>
     {% endfor %}
   </div>

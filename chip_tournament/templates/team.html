@@ -16,6 +16,7 @@
   <div class="banner {% if match.status == CALLED %}danger{% endif %}">
   {% set opp = match.team_b if match.team_a == team.id else match.team_a %}
   {% if match.status == CALLED %}Go to <b>TABLE {{ match.table }}</b> now — vs {{ t.name_of(opp) }}, race to {{ t.settings.race_to }}.
+    {% set m = match %}{% include "_match_clock.html" %}
   {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}
   </div>
 {% elif team.status == ACTIVE %}

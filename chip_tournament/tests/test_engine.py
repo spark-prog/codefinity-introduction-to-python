@@ -390,3 +390,86 @@ def test_round_trip_serialization():
     play(t, called(t)[0])
     again = Tournament.from_dict(t.to_dict())
     assert again.to_dict() == t.to_dict()
+
+
+# ------------------------------------------------------------------ check-in
+
+from datetime import datetime, timedelta  # noqa: E402
+
+
+def called_at(t, minutes_ago=0):
+    """The first match on a table, with its call time set `minutes_ago`."""
+    m = called(t)[0]
+    base = datetime(2026, 11, 7, 21, 0, 0)
+    m.called_at = (base - timedelta(minutes=minutes_ago)).isoformat()
+    return m, base
+
+
+def test_both_arrive_sets_start_two_minutes_after_the_second():
+    t = make(n_teams=2)
+    t.start(random.Random(30))
+    m, base = called_at(t)
+    t.check_in(m.id, "a", at=base + timedelta(minutes=1))
+    assert m.start_at is None
+    t.check_in(m.id, "b", at=base + timedelta(minutes=3))
+    assert m.start_at == (base + timedelta(minutes=5)).isoformat()
+    assert any("starts at 9:05 PM" in msg.body for msg in t.outbox)
+    with pytest.raises(TournamentError, match="already checked in"):
+        t.check_in(m.id, "b")
+
+
+def test_no_show_gets_grace_after_5_minutes_then_forfeits_after_15_more():
+    t = make(n_teams=2)
+    t.start(random.Random(31))
+    m, base = called_at(t)
+    t.check_in(m.id, "a", at=base + timedelta(minutes=1))
+
+    assert t.check_clock(at=base + timedelta(minutes=4, seconds=59)) == 0
+    assert m.grace_b is None
+
+    t.outbox.clear()
+    assert t.check_clock(at=base + timedelta(minutes=5)) == 1
+    assert m.grace_b and m.grace_a is None
+    late = t.teams[m.team_b]
+    assert any("by 9:20 PM or you forfeit" in msg.body for msg in t.outbox if msg.team_id == late.id)
+    assert t.check_clock(at=base + timedelta(minutes=10)) == 0  # grace only starts once
+
+    t.check_clock(at=base + timedelta(minutes=20))
+    assert m.status == "done" and m.forfeit == "b"
+    assert m.winner == m.team_a
+    assert late.chips == 2
+    assert t.ledger[-1].reason.endswith("by forfeit")
+
+
+def test_arriving_during_grace_avoids_forfeit():
+    t = make(n_teams=2)
+    t.start(random.Random(32))
+    m, base = called_at(t)
+    t.check_clock(at=base + timedelta(minutes=6))
+    assert m.grace_a and m.grace_b
+    t.check_in(m.id, "a", at=base + timedelta(minutes=12))
+    t.check_in(m.id, "b", at=base + timedelta(minutes=19))
+    t.check_clock(at=base + timedelta(minutes=30))
+    assert m.status == CALLED
+    assert m.start_at == (base + timedelta(minutes=21)).isoformat()
+
+
+def test_neither_team_shows_both_forfeit_a_chip():
+    t = make(n_teams=4, tables=["1"])
+    t.start(random.Random(33))
+    m, base = called_at(t)
+    t.check_clock(at=base + timedelta(minutes=20))
+    assert m.forfeit == "both"
+    assert t.teams[m.team_a].chips == 2 and t.teams[m.team_b].chips == 2
+    assert t.losers_list == [m.team_a, m.team_b]
+    assert called(t) and called(t)[0].id != m.id  # table goes to the next match
+
+
+def test_scoring_counts_as_checked_in():
+    t = make(n_teams=2)
+    t.start(random.Random(34))
+    m, base = called_at(t)
+    t.score(m.id, "a", 1)
+    assert m.arrived_a and m.arrived_b and m.start_at
+    t.check_clock(at=base + timedelta(minutes=60))
+    assert m.status == CALLED

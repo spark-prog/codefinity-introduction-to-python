@@ -20,6 +20,10 @@ How the format works
 * A team with zero chips is eliminated.
 * When every match in the round is done, the next round pairs the lists in
   order: winner 1 vs winner 2, winner 3 vs winner 4, loser 1 vs loser 2, ...
+* Check-in: when called, each team taps in as it arrives at the table. Once
+  both are there the match starts 2 minutes later. A team that hasn't checked
+  in 5 minutes after being called gets a 15-minute grace period, then forfeits
+  (loses the match and gives a chip back). If neither team shows, both forfeit.
 * Pot = entry fees (+ any added money). Chip value = pot / chips still in play,
   so each chip lost to the table makes every remaining chip worth more.
 * When cash-in opens, a team may cash in: it is paid chips x chip value and
@@ -35,7 +39,7 @@ import random
 import secrets
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Team statuses
 REGISTERED = "registered"
@@ -128,6 +132,12 @@ class Match:
     loser: str | None = None
     called_at: str | None = None
     finished_at: str | None = None
+    arrived_a: str | None = None  # when each team checked in at the table
+    arrived_b: str | None = None
+    start_at: str | None = None  # set once both teams are at the table
+    grace_a: str | None = None  # when each team's grace period began
+    grace_b: str | None = None
+    forfeit: str | None = None  # "a", "b" or "both"
 
 
 @dataclass
@@ -141,6 +151,9 @@ class Settings:
     entry_fee_cents: int = 2000
     added_money_cents: int = 0
     race_to: int = 3
+    warmup_minutes: int = 2  # from both teams arriving to the match start
+    checkin_minutes: int = 5  # to reach the table after being called
+    grace_minutes: int = 15  # extra time before a no-show forfeits
     chip_brackets: list[list[int]] = field(default_factory=lambda: [list(b) for b in DEFAULT_CHIP_BRACKETS])
     registration_cap: int = DEFAULT_REGISTRATION_CAP
     field_cap: int = 0  # most teams in the field; 0 = no limit set
@@ -575,6 +588,11 @@ class Tournament:
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("Only a match at a table can be scored.")
+        stamp = now()
+        for s_ in ("a", "b"):  # a scored game means both teams are at the table
+            if not getattr(m, "arrived_" + s_):
+                setattr(m, "arrived_" + s_, stamp)
+        m.start_at = m.start_at or stamp
         attr = "score_a" if side == "a" else "score_b"
         value = max(0, min(self.settings.race_to, getattr(m, attr) + delta))
         setattr(m, attr, value)
@@ -582,7 +600,7 @@ class Tournament:
             self.record_result(match_id, m.team_a if side == "a" else m.team_b)
         return m
 
-    def record_result(self, match_id: str, winner_id: str) -> Match:
+    def record_result(self, match_id: str, winner_id: str, forfeit: bool = False) -> Match:
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("That match is not at a table.")
@@ -596,25 +614,115 @@ class Tournament:
         m.finished_at = now()
         winner.wins += 1
         loser.losses += 1
+        how = " by forfeit" if forfeit else ""
+        if forfeit:
+            m.forfeit = "a" if loser_id == m.team_a else "b"
 
-        self._chip_change(loser, -1, f"Lost round {m.round} to {winner.name}")
+        self._chip_change(loser, -1, f"Lost round {m.round} to {winner.name}{how}")
         self._say(
-            f"{winner.name} beat {loser.name} on table {m.table}. {loser.name} gives a chip back "
+            f"{winner.name} beat {loser.name}{how} on table {m.table}. {loser.name} gives a chip back "
             f"({loser.chips} left). Chip value now {money(self.chip_value_cents)}."
         )
+        if forfeit:
+            self._text_team(loser, f"{loser.name}: you didn't check in at table {m.table} in time and forfeited round {m.round}.")
+        self._after_loss(loser, m)
+        if not self._played_last_match(winner):
+            self.winners_list.append(winner_id)
+            self._text_team(winner, f"{winner.name}: {'your opponent forfeited, ' if forfeit else 'nice win! '}"
+                                    f"You keep your {winner.chips} chip(s).")
+
+        self._advance()
+        return m
+
+    def _after_loss(self, loser: Team, m: Match) -> None:
         if loser.chips <= 0:
             loser.status = ELIMINATED
             self._say(f"{loser.name} is out of chips and eliminated.")
             self._text_team(loser, f"{loser.name}: you're out of chips and eliminated. Thanks for playing!")
         elif not self._played_last_match(loser):
-            self.losers_list.append(loser_id)
+            self.losers_list.append(loser.id)
             self._text_team(loser, f"{loser.name}: you lost round {m.round} and have {loser.chips} chip(s) left.")
-        if not self._played_last_match(winner):
-            self.winners_list.append(winner_id)
-            self._text_team(winner, f"{winner.name}: nice win! You keep your {winner.chips} chip(s).")
 
+    def _double_forfeit(self, m: Match) -> None:
+        """Neither team showed: both give a chip back and go to the losers list."""
+        m.status = DONE
+        m.forfeit = "both"
+        m.finished_at = now()
+        teams = [self.teams[m.team_a], self.teams[m.team_b]]
+        for team in teams:
+            team.losses += 1
+            self._chip_change(team, -1, f"Forfeited round {m.round} (no-show)")
+        self._say(f"Neither {teams[0].name} nor {teams[1].name} checked in at table {m.table}; both forfeit a chip.")
+        for team in teams:
+            self._text_team(team, f"{team.name}: you didn't check in at table {m.table} in time and forfeited round {m.round}.")
+            self._after_loss(team, m)
         self._advance()
+
+    # ----------------------------------------------------------------- check-in
+
+    def checkin_deadline(self, m: Match) -> datetime:
+        return datetime.fromisoformat(m.called_at) + timedelta(minutes=self.settings.checkin_minutes)
+
+    def forfeit_deadline(self, m: Match) -> datetime:
+        return self.checkin_deadline(m) + timedelta(minutes=self.settings.grace_minutes)
+
+    def check_in(self, match_id: str, side: str, at: datetime | None = None) -> Match:
+        """A team has arrived at its table."""
+        m = self.match(match_id)
+        if m.status != CALLED:
+            raise TournamentError("That match is not at a table.")
+        attr = "arrived_a" if side == "a" else "arrived_b"
+        team = self.teams[m.team_a if side == "a" else m.team_b]
+        if getattr(m, attr):
+            raise TournamentError(f"{team.name} is already checked in.")
+        at = at or datetime.now()
+        setattr(m, attr, at.isoformat(timespec="seconds"))
+        late = " (during grace)" if getattr(m, "grace_" + side) else ""
+        self._say(f"{team.name} checked in at table {m.table}{late}.")
+        if m.arrived_a and m.arrived_b and not m.start_at:
+            start = max(datetime.fromisoformat(m.arrived_a), datetime.fromisoformat(m.arrived_b))
+            start += timedelta(minutes=self.settings.warmup_minutes)
+            m.start_at = start.isoformat(timespec="seconds")
+            when = start.strftime("%I:%M %p").lstrip("0")
+            self._say(f"Table {m.table}: both teams are here; the match starts at {when}.")
+            for tid in (m.team_a, m.team_b):
+                self._text_team(self.teams[tid], f"Both teams are at table {m.table}. Your match starts at {when}.")
         return m
+
+    def check_clock(self, at: datetime | None = None) -> int:
+        """Start grace periods and record forfeits that are due. Returns how many things changed."""
+        if self.status != RUNNING:
+            return 0
+        at = at or datetime.now()
+        changes = 0
+        for m in [m for m in self.matches if m.status == CALLED]:
+            if m.status != CALLED or not m.called_at or m.score_a or m.score_b:
+                continue
+            missing = [side for side in ("a", "b") if not getattr(m, "arrived_" + side)]
+            if not missing:
+                continue
+            if at >= self.forfeit_deadline(m):
+                if len(missing) == 2:
+                    self._double_forfeit(m)
+                else:
+                    self.record_result(m.id, m.team_b if missing[0] == "a" else m.team_a, forfeit=True)
+                changes += 1
+                continue
+            if at >= self.checkin_deadline(m):
+                for side in missing:
+                    if getattr(m, "grace_" + side):
+                        continue
+                    setattr(m, "grace_" + side, self.checkin_deadline(m).isoformat(timespec="seconds"))
+                    team = self.teams[m.team_a if side == "a" else m.team_b]
+                    when = self.forfeit_deadline(m).strftime("%I:%M %p").lstrip("0")
+                    self._say(f"{team.name} hasn't checked in at table {m.table}; grace period until {when}.")
+                    self._text_team(
+                        team,
+                        f"{team.name}: you were called to TABLE {m.table} {self.settings.checkin_minutes} min ago "
+                        f"and haven't checked in. Get there by {when} or you forfeit and lose a chip.",
+                    )
+                    changes += 1
+        return changes
 
     def _advance(self) -> None:
         """Fill free tables and start the next round when this one is complete."""

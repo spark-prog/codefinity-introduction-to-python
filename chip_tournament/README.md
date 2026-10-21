@@ -42,18 +42,24 @@ Run the tests with `python -m pytest`.
 
    **Field cap and waiting list.** The director sets the field cap (the most teams) in Settings. Once the field is full, new registrations go on a **waiting list** in order, and each team is texted its place. When a team in the field is removed before the start, or the director raises the cap, the next waiting team moves into the field and gets a text. Waiting-list teams don't play or pay into the pot unless they get a spot. A cap of 0 means no limit, and the cap can't be set below the number of teams already in the field.
 2. **Round 1** is a random draw. Matches go to free tables in order. If there are more matches than tables, the rest wait and get called automatically as tables free up.
-3. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
-4. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
-5. **The next round** starts when every match in the round is finished: winner 1 vs winner 2, winner 3 vs winner 4, …, loser 1 vs loser 2, …
-6. **Pot and chip value.** Pot = entry fee × teams + added money. Chip value = pot ÷ chips still in play, so it goes up every time a chip goes back to the table.
-7. **Cash-in.** When the director opens cash-in, every team gets a text with the chip value and what its chips are worth. A team can cash in at the desk (the director clicks **Cash in**) for chips × chip value, or keep playing. Cashing in doesn't change what the other teams' chips are worth.
-8. **Last call** tells every team that its next match is its last. When that match ends, both teams are cashed in automatically: the loser gives its chip back first, then each team is paid its chips × the chip value.
+3. **Check-in at the table.** Each team on the scorekeeping card has an **Arrived** button. When both teams have checked in, the match start time is set **2 minutes after the second arrival**, and both teams get a text with the start time. The card, the board and the team's page show the start time with a live countdown.
+   - A team that hasn't checked in **5 minutes** after being called starts a **15-minute grace period**. It gets a text saying when it will forfeit, and its card turns red.
+   - If it still hasn't checked in when the grace period ends, it **forfeits**: it loses the match and gives a chip back, and the opponent wins. If **neither** team checks in, both forfeit a chip and both go to the losers list.
+   - A background timer checks every 15 seconds, so grace texts and forfeits happen on time even if no one is looking at the screen. The director page reloads itself when a deadline passes, and an automatic forfeit can be reversed with **Undo**.
+   - Entering a score counts as both teams being at the table, so a match being played can't be forfeited by mistake.
+   - The 2 / 5 / 15 minutes can be changed in Settings.
+4. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
+5. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
+6. **The next round** starts when every match in the round is finished: winner 1 vs winner 2, winner 3 vs winner 4, …, loser 1 vs loser 2, …
+7. **Pot and chip value.** Pot = entry fee × teams + added money. Chip value = pot ÷ chips still in play, so it goes up every time a chip goes back to the table.
+8. **Cash-in.** When the director opens cash-in, every team gets a text with the chip value and what its chips are worth. A team can cash in at the desk (the director clicks **Cash in**) for chips × chip value, or keep playing. Cashing in doesn't change what the other teams' chips are worth.
+9. **Last call** tells every team that its next match is its last. When that match ends, both teams are cashed in automatically: the loser gives its chip back first, then each team is paid its chips × the chip value.
    - A match already **on a table** when last call happens finishes as normal. Those teams then play one more match, which is their last.
    - Teams **waiting** for a table or for the next round play one more match, then cash in.
    - Pairing keeps working the same way (winners vs winners, losers vs losers) until every team has played its last match. A team left with no opponent is cashed in right away.
    - Every team gets a text at last call, and the director's team list shows "last match" or "2 matches left" for each team. Registration closes at last call.
    - **End now — cash everyone out** is a separate emergency button (for example, if the bar is closing). It stops every match and cashes everyone in at once. The last team paid gets whatever is left in the pot, so every cent is paid out.
-9. If only one team has chips left, it wins the rest of the pot automatically.
+10. If only one team has chips left, it wins the rest of the pot automatically.
 
 ### Decisions the rules didn't specify (easy to change in `chips/engine.py`)
 

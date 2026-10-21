@@ -121,3 +121,18 @@ def test_registration_over_cap_is_rejected(client):
     assert b"registration cap of 10" in page.data
     assert b"Too Good" in page.data  # form keeps what was typed
     assert not client.application.config["store"].load().teams
+
+
+def test_arrived_buttons_set_start_time(client):
+    for name in ("Sharks", "Rails"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    client.post("/admin/start")
+    store = client.application.config["store"]
+    m = store.load().open_matches()[0]
+    page = client.get("/admin").data
+    assert b"Arrived" in page and b"check in by" in page
+    client.post(f"/admin/match/{m.id}/arrived", data={"side": "a"})
+    page = client.post(f"/admin/match/{m.id}/arrived", data={"side": "b"}, follow_redirects=True).data
+    assert b"Match starts" in page
+    assert store.load().match(m.id).start_at

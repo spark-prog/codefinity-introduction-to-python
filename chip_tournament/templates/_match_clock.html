@@ -1,0 +1,21 @@
+{# Check-in status for a match on a table. Expects m (and t). #}
+{% if m.status == CALLED and m.called_at %}
+<div class="match-clock">
+  {% if m.start_at %}
+    <span class="go">Match starts {{ m.start_at|clock }}</span> <span class="countdown" data-at="{{ m.start_at }}"></span>
+  {% else %}
+    <span class="muted">Called {{ m.called_at|clock }}.</span>
+    {% for side, tid in (("a", m.team_a), ("b", m.team_b)) %}
+      {% if not m["arrived_" ~ side] %}
+        {% if m["grace_" ~ side] %}
+        <div class="warn">⚠ {{ t.name_of(tid) }} on grace — forfeits at {{ t.forfeit_deadline(m)|clock }}
+          <span class="countdown" data-at="{{ t.forfeit_deadline(m).isoformat() }}" {% if reload %}data-reload="1"{% endif %}></span></div>
+        {% else %}
+        <div>{{ t.name_of(tid) }}: check in by {{ t.checkin_deadline(m)|clock }}
+          <span class="countdown" data-at="{{ t.checkin_deadline(m).isoformat() }}" {% if reload %}data-reload="1"{% endif %}></span></div>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% endif %}

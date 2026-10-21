@@ -26,5 +26,26 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+<script>
+// Live countdowns: <span class="countdown" data-at="ISO time">. On the director page a
+// passed deadline reloads the page so automatic grace/forfeit updates show up.
+(function () {
+  var els = document.querySelectorAll(".countdown[data-at]"), reloading = false;
+  if (!els.length) return;
+  function tick() {
+    var now = Date.now();
+    els.forEach(function (el) {
+      var diff = Math.round((new Date(el.dataset.at).getTime() - now) / 1000);
+      if (diff > 0) {
+        el.textContent = "(in " + Math.floor(diff / 60) + ":" + String(diff % 60).padStart(2, "0") + ")";
+      } else {
+        el.textContent = "(now)";
+        if (el.dataset.reload && !reloading && diff < -2) { reloading = true; setTimeout(function () { location.reload(); }, 15000); }
+      }
+    });
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
 </body>
 </html>

@@ -42,10 +42,18 @@
       {% if m.status == CALLED %}<b>Table {{ m.table }}</b>{% else %}<b>Waiting for a table</b>{% endif %}
       <span class="muted">{{ m.bracket }} · race to {{ s.race_to }}</span>
     </div>
+    {% set reload = true %}{% include "_match_clock.html" %}
     {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}
     <div class="score-row">
       <span class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span></span>
       {% if m.status == CALLED %}
+      {% if m["arrived_" ~ side] %}
+      <span class="arrived" title="Checked in">✓ {{ m["arrived_" ~ side]|clock }}</span>
+      {% else %}
+      <form method="post" action="{{ url_for('admin_arrived', match_id=m.id) }}" class="inline">
+        <input type="hidden" name="side" value="{{ side }}">
+        <button class="button small {% if m['grace_' ~ side] %}danger{% else %}checkin{% endif %}">Arrived</button></form>
+      {% endif %}
       <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
         <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
         <button class="button secondary small">−</button></form>
@@ -146,6 +154,9 @@
     <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
     <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
+    <label>Warm-up after both arrive (min) <input name="warmup_minutes" type="number" min="0" value="{{ s.warmup_minutes }}"></label>
+    <label>Time to check in after being called (min) <input name="checkin_minutes" type="number" min="0" value="{{ s.checkin_minutes }}"></label>
+    <label>Grace period before a no-show forfeits (min) <input name="grace_minutes" type="number" min="0" value="{{ s.grace_minutes }}"></label>
     <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>

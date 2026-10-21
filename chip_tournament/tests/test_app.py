@@ -199,3 +199,8 @@ def test_csv_import_flow(client):
             break
         time.sleep(0.02)
     assert any("PIN" in x["body"] for x in sms.recent())
+
+
+def test_registration_shows_text_consent(client):
+    page = client.get("/register").data
+    assert b"you agree to receive text alerts" in page and b"Reply STOP to opt out" in page

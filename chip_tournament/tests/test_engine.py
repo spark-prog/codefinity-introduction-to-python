@@ -226,14 +226,12 @@ def test_odd_team_waits_for_the_next_free_table():
 
 def test_team_behind_on_matches_jumps_the_line():
     t = make(n_teams=4, tables=["1"])
+    t.settings.catchup_matches = 1
     t.start(random.Random(40))
-    for _ in range(3):
-        play(t, called(t)[0])
-    assert max(x.matches_played for x in t.active_teams) >= 2
-    late = t.register_team("Latecomers", partners(8))  # 0 played: 2+ behind the leader
-    assert t.is_behind(late)
-    play(t, called(t)[0])
-    assert late.id in (called(t)[0].team_a, called(t)[0].team_b)
+    play(t, called(t)[0])  # two teams have played; two haven't, so entries are still open
+    late = t.register_team("Latecomers", partners(8))
+    assert t.is_behind(late) and not t.entries_locked
+    assert any(late.id in (m.team_a, m.team_b) for m in t.open_matches())  # paired right away
 
 
 def test_call_next_puts_a_pair_first_in_line():
@@ -741,3 +739,49 @@ def test_no_show_who_arrives_after_the_start_joins_late():
     t.start(random.Random(3))
     t.restore_team(c.id)
     assert c.status == "active" and c.chips == 4 and t.pot_cents == 3 * 2000
+
+
+# ------------------------------------------------- entries and money lock
+
+def test_entries_lock_once_every_team_has_played():
+    t = make(n_teams=4, tables=["1"])
+    t.start(random.Random(50))
+    play(t, called(t)[0])
+    t.register_team("Late", partners(8))  # still open: two teams haven't played
+    while t.teams_yet_to_play:
+        play(t, called(t)[0])
+    assert t.entries_locked
+    with pytest.raises(TournamentError, match="Registration is closed"):
+        t.register_team("Too late", partners(8))
+    with pytest.raises(TournamentError, match="locked"):
+        t.set_money(3000, 0, t.settings.chip_brackets, 10)
+
+
+def test_money_changes_after_the_start_adjust_pot_and_chips():
+    t = make(n_teams=4, skills=[6, 8, 10, 10], fee=2000)
+    t.start(random.Random(51))  # chips 5, 4, 3, 3 = 15; pot $80
+    t.set_money(2500, 1000, [[6, 6], [8, 4], [10, 3], [11, 2]], 10)
+    assert t.pot_cents == 4 * 2500 + 1000
+    assert sorted(x.chips for x in t.teams.values()) == [3, 3, 4, 6]
+    assert any(e.reason.startswith("Chip brackets changed") for e in t.ledger)
+
+
+def test_money_cant_change_once_someone_has_cashed_in():
+    t = make(n_teams=4, tables=["1"])
+    t.start(random.Random(52))
+    t.open_cash_in()
+    waiting = next(x for x in t.active_teams if not t.current_match_for(x.id)
+                   or t.current_match_for(x.id).status == "waiting")
+    t.cash_in(waiting.id)
+    with pytest.raises(TournamentError, match="cashed in"):
+        t.set_money(3000, 0, t.settings.chip_brackets, 10)
+
+
+def test_table_call_text_has_no_league_prefix_but_others_do():
+    t = make(n_teams=2)
+    t.settings.sms_name = "First Coast APA"
+    t.outbox.clear()
+    t.start(random.Random(53))
+    assert all(m.body.startswith("New match: Table 1:") for m in t.outbox)
+    play(t, called(t)[0])
+    assert any(m.body.startswith("First Coast APA: ") for m in t.outbox)

@@ -309,3 +309,24 @@ def test_event_check_in_and_no_show(client):
     assert b"Bankers" not in client.get("/").data  # no-shows aren't listed publicly
     client.post("/admin/start")
     assert store.load().status == "running" and len(store.load().active_teams) == 2
+
+
+def test_money_settings_editable_until_every_team_has_played(client):
+    for name in ("Sharks", "Rails", "Bankers", "Scratch"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    settings = {"name": "X", "race_to": "1", "tables": "1", "entry_fee": "20", "added_money": "0",
+                "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2", "registration_cap": "10", "field_cap": "0"}
+    client.post("/admin/settings", data=settings)
+    check_in_and_start(client)
+    store = client.application.config["store"]
+    assert b"Late entries are open" in client.get("/admin").data
+    page = client.post("/admin/settings", data={**settings, "entry_fee": "25"}, follow_redirects=True).data
+    assert b"Settings saved" in page and store.load().pot_cents == 4 * 2500
+    while store.load().teams_yet_to_play:
+        m = next(x for x in store.load().matches if x.status == "called")
+        client.post(f"/admin/match/{m.id}/winner", data={"winner": m.team_a})
+    assert store.load().entries_locked
+    assert b"Registration is closed" in client.get("/register").data
+    client.post("/admin/settings", data={**settings, "entry_fee": "30"})
+    assert store.load().settings.entry_fee_cents == 2500  # locked: ignored

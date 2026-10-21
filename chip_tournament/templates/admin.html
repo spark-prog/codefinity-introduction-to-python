@@ -26,6 +26,10 @@
     <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('Start the tournament and call the first matches?')">
       <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first"{% endif %}>Start tournament</button></form>
   {% elif t.status == RUNNING %}
+    {% if not t.entries_locked and not t.last_call %}
+    <p class="banner">Late entries are open and money settings can still change until every team has completed a match
+      ({{ t.teams_yet_to_play|length }} team(s) still to finish their first: {{ t.teams_yet_to_play|map(attribute="name")|join(", ") }}).</p>
+    {% elif t.entries_locked %}<p class="muted">Entries and money settings are locked: every team has completed a match.</p>{% endif %}
     {% if not t.cash_in_open %}
     <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
       <button class="button">Open cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</button></form>
@@ -131,7 +135,7 @@
       <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
       <td class="actions">
         <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
-        {% if team.status == "no_show" and t.status == RUNNING and not t.last_call %}
+        {% if team.status == "no_show" and t.status == RUNNING and not t.last_call and not t.entries_locked %}
         <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"
               onsubmit="return confirm('{{ team.name|e }} arrived late? They pay the entry fee and join as a late entry.')">
           <button class="button small checkin">Arrived late: restore</button></form>
@@ -184,6 +188,7 @@
   </details>
 </section>
 
+{% set money_locked = t.entries_locked or t.status == FINISHED %}
 <section class="card">
   <h2>Tournament details & settings</h2>
   <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
@@ -196,8 +201,8 @@
     <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
     <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
-    <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
-    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
+    <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
+    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
     <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
     <label>Warm-up after both arrive (min) <input name="warmup_minutes" type="number" min="0" value="{{ s.warmup_minutes }}"></label>
     <label>Time to check in after being called (min) <input name="checkin_minutes" type="number" min="0" value="{{ s.checkin_minutes }}"></label>
@@ -216,10 +221,11 @@
     <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
     <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>
       (e.g. <code>8 = 4</code> means 7–8 starts with 4 chips). Anything above the last line needs a new partner.
-      <textarea name="chip_brackets" rows="5" {% if t.status != SETUP %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
+      <textarea name="chip_brackets" rows="5" {% if money_locked %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
     <label>Registration cap (highest combined skill to register)
-      <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if t.status != SETUP %}disabled{% endif %}></label>
-    {% if t.status != SETUP %}<p class="muted wide">Entry fee, added money and chip counts are locked once the tournament starts.</p>{% endif %}
+      <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if money_locked %}disabled{% endif %}></label>
+    {% if money_locked %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap are locked{% if t.entries_locked %}: every team has completed a match{% endif %}.</p>
+    {% elif t.status == RUNNING %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap can still change until every team has completed a match. Changes adjust the pot and teams' chips (shown in the chip ledger).</p>{% endif %}
     <button class="button">Save settings</button>
   </form>
 </section>

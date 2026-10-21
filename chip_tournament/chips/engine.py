@@ -1,4 +1,4 @@
-"""Core rules for a "cups" (chip) billiards tournament.
+"""Core rules for a chip billiards tournament.
 
 This module has no web or storage code in it, so the rules can be tested on
 their own. Money is always kept in whole cents (int) to avoid rounding drift.
@@ -110,7 +110,7 @@ class Match:
 
 @dataclass
 class Settings:
-    name: str = "Cups Tournament"
+    name: str = "Chip Tournament"
     date: str = ""
     start_time: str = ""
     venue: str = ""

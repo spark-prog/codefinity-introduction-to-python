@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from cups.engine import (
+from chips.engine import (
     ACTIVE,
     CALLED,
     CASHED_OUT,

@@ -1,4 +1,4 @@
-"""Web app for running a cups (chip) billiards tournament.
+"""Web app for running a chip billiards tournament.
 
 Run it with:  python app.py   (then open http://localhost:5000)
 """
@@ -14,8 +14,8 @@ from urllib.parse import quote_plus
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 
-from cups.alerts import SmsSender
-from cups.engine import (
+from chips.alerts import SmsSender
+from chips.engine import (
     ACTIVE,
     CALLED,
     DONE,
@@ -27,7 +27,7 @@ from cups.engine import (
     TournamentError,
     money,
 )
-from cups.storage import Store
+from chips.storage import Store
 
 MAX_PLAYERS = 8
 
@@ -69,7 +69,7 @@ def players_from_form(form) -> list[Player]:
 
 def create_app(data_dir: str | None = None) -> Flask:
     app = Flask(__name__)
-    data_path = Path(data_dir or os.environ.get("CUPS_DATA_DIR", Path(__file__).parent / "data"))
+    data_path = Path(data_dir or os.environ.get("CHIPS_DATA_DIR", Path(__file__).parent / "data"))
     store = Store(data_path)
     sms = SmsSender(data_path / "texts.log")
 
@@ -226,7 +226,7 @@ def create_app(data_dir: str | None = None) -> Flask:
 
         def update(t):
             s = t.settings
-            s.name = f.get("name", "").strip() or "Cups Tournament"
+            s.name = f.get("name", "").strip() or "Chip Tournament"
             s.date, s.start_time = f.get("date", ""), f.get("start_time", "")
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.cash_in_time, s.last_call_time = f.get("cash_in_time", ""), f.get("last_call_time", "")

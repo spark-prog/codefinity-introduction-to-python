@@ -1,11 +1,11 @@
-# Cups Tournament Manager
+# Chip Tournament Manager
 
-A web app for running a billiards league **cups (chip) tournament**: team registration, tournament details and location, roster updates, scorekeeping, winners/losers-list pairing, chip tracking, payouts and text alerts.
+A web app for running a billiards league **chip tournament**: team registration, tournament details and location, roster updates, scorekeeping, winners/losers-list pairing, chip tracking, payouts and text alerts.
 
 ## Run it
 
 ```bash
-cd cups_tournament
+cd chip_tournament
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ADMIN_PASSWORD=choose-one python app.py
@@ -38,7 +38,7 @@ Run the tests with `python -m pytest`.
 8. **Last call** stops all matches and cashes in every remaining team at the current chip value. The last team paid gets whatever is left in the pot, so every cent is paid out.
 9. If only one team has chips left, it wins the rest of the pot automatically.
 
-### Decisions the rules didn't specify (easy to change in `cups/engine.py`)
+### Decisions the rules didn't specify (easy to change in `chips/engine.py`)
 
 - **Odd number of teams on a list:** the leftover winner plays the leftover loser (a "cross" match). If only one team is left over, it gets a bye and keeps its chips.
 - **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent waits for the next round.
@@ -66,11 +66,11 @@ Without these, texts are only logged (see **Recent texts** on the director page)
 
 ## Data
 
-Everything is saved in `cups_tournament/data/` (`tournament.json`, the undo history and `texts.log`). **Archive and start over** on the director page renames the old file and starts a fresh tournament. Set `CUPS_DATA_DIR` to store the data somewhere else.
+Everything is saved in `chip_tournament/data/` (`tournament.json`, the undo history and `texts.log`). **Archive and start over** on the director page renames the old file and starts a fresh tournament. Set `CHIPS_DATA_DIR` to store the data somewhere else.
 
 ## Code layout
 
-- `cups/engine.py`: all tournament rules (no web code), tested in `tests/test_engine.py`
-- `cups/storage.py`: JSON save/load and undo
-- `cups/alerts.py`: Twilio texts with a log-only fallback
+- `chips/engine.py`: all tournament rules (no web code), tested in `tests/test_engine.py`
+- `chips/storage.py`: JSON save/load and undo
+- `chips/alerts.py`: Twilio texts with a log-only fallback
 - `app.py`: Flask routes, with `templates/` and `static/` for the pages

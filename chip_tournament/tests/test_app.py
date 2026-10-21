@@ -31,7 +31,7 @@ def test_full_flow(client):
 
     client.post("/admin/login", data={"password": "secret"})
     page = client.post("/admin/settings", data={
-        "name": "Fall Cups", "venue": "Corner Pocket", "address": "1 Main St", "entry_fee": "$25",
+        "name": "Fall Chips", "venue": "Corner Pocket", "address": "1 Main St", "entry_fee": "$25",
         "added_money": "0", "race_to": "2", "tables": "1, 2", "skill_chips": "3 = 3\n4 = 2",
     }, follow_redirects=True)
     assert b"Settings saved" in page.data

@@ -732,3 +732,12 @@ def test_no_show_everyone_not_checked_in():
     assert [x.status for x in teams] == ["registered", "no_show", "registered", "no_show"]
     t.start(random.Random(2))
     assert t.status == "running"
+
+
+def test_no_show_who_arrives_after_the_start_joins_late():
+    t = Tournament()
+    a, b, c = (t.register_team(n, partners(8)) for n in "ABC")
+    t.check_in_team(a.id); t.check_in_team(b.id); t.mark_no_show(c.id)
+    t.start(random.Random(3))
+    t.restore_team(c.id)
+    assert c.status == "active" and c.chips == 4 and t.pot_cents == 3 * 2000

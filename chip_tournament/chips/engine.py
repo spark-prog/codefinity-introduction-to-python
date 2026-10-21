@@ -569,17 +569,25 @@ class Tournament:
         return len(teams)
 
     def restore_team(self, team_id: str) -> None:
-        """Undo a no-show: back into the field if there's room, otherwise the end of the waiting list."""
+        """Undo a no-show: back into the field if there's room, otherwise the end of the waiting list.
+
+        After the start, a restored team joins as a late entry (pays in, gets its chips).
+        """
         team = self.team(team_id)
-        if team.status != NO_SHOW or self.status != SETUP:
+        if team.status != NO_SHOW:
             raise TournamentError(f"{team.name} isn't a no-show.")
+        if self.status == FINISHED or self.last_call:
+            raise TournamentError("Teams can't be added after last call.")
         if self.field_full:
             team.status = WAITLISTED
             self.waitlist.append(team.id)
             self._say(f"{team.name} restored to the waiting list (#{len(self.waitlist)}); the field is full.")
-        else:
-            team.status = REGISTERED
-            self._say(f"{team.name} restored to the field.")
+            return
+        team.status = REGISTERED
+        team.checked_in_at = now()  # restoring means they're here
+        self._say(f"{team.name} restored to the field.")
+        if self.status == RUNNING:
+            self._join_running(team)
 
     # ----------------------------------------------------------------- running
 

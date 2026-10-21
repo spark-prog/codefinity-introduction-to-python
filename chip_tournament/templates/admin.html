@@ -131,6 +131,11 @@
       <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
       <td class="actions">
         <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
+        {% if team.status == "no_show" and t.status == RUNNING and not t.last_call %}
+        <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"
+              onsubmit="return confirm('{{ team.name|e }} arrived late? They pay the entry fee and join as a late entry.')">
+          <button class="button small checkin">Arrived late: restore</button></form>
+        {% endif %}
         {% if t.status == SETUP or team.status == "waitlisted" %}
         <form method="post" action="{{ url_for('admin_remove', team_id=team.id) }}" class="inline" onsubmit="return confirm('Remove {{ team.name|e }}?')">
           <button class="link danger">Remove</button></form>

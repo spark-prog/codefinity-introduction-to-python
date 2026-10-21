@@ -1,0 +1,14 @@
+<label>Team name <input name="name" required value="{{ v.name }}"></label>
+<label>Captain <input name="captain" required value="{{ v.captain }}"></label>
+<label>Captain's cell (for text alerts) <input name="phone" type="tel" required value="{{ v.phone }}" placeholder="(555) 123-4567"></label>
+<h3>Players</h3>
+<p class="muted">Add a cell number for any player who also wants text alerts.</p>
+<div class="players">
+  {% for i in range(MAX_PLAYERS) %}
+  {% set p = v.players[i] if v.players and i < v.players|length else none %}
+  <div class="player-row">
+    <input name="player_name_{{ i }}" placeholder="Player {{ i + 1 }}" value="{{ p.name if p else '' }}">
+    <input name="player_phone_{{ i }}" type="tel" placeholder="Cell (optional)" value="{{ p.phone if p else '' }}">
+  </div>
+  {% endfor %}
+</div>

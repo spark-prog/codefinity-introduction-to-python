@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ team.name }}</h1>
+<div class="stats">
+  <div class="stat"><span class="label">Status</span><span class="value small">{{ team.status.replace("_", " ") }}</span></div>
+  <div class="stat"><span class="label">Chips</span><span class="value">{{ team.chips }}</span></div>
+  <div class="stat"><span class="label">Skill</span><span class="value">{{ team.skill_level }}</span></div>
+  <div class="stat"><span class="label">Record</span><span class="value">{{ team.wins }}-{{ team.losses }}</span></div>
+  <div class="stat highlight"><span class="label">{% if team.status == ACTIVE %}Cash-in value now{% else %}Paid out{% endif %}</span>
+    <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
+</div>
+
+{% if match %}
+  <div class="banner {% if match.status == CALLED %}danger{% endif %}">
+  {% set opp = match.team_b if match.team_a == team.id else match.team_a %}
+  {% if match.status == CALLED %}Go to <b>TABLE {{ match.table }}</b> now — vs {{ t.name_of(opp) }}, race to {{ t.settings.race_to }}.
+  {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}
+  </div>
+{% elif team.status == ACTIVE %}
+  <p class="muted">Waiting for the next round.</p>
+{% endif %}
+{% if team.status == ACTIVE and t.cash_in_open %}<div class="banner">Cash-in is open. See the desk to cash in for {{ t.payout_for(team)|money }}, or keep playing.</div>{% endif %}
+
+<section class="card">
+  <h2>Roster</h2>
+  <p><b>Captain:</b> {{ team.captain }}{% if can_edit %} · {{ team.phone }}{% endif %}</p>
+  <ul>{% for p in team.players %}<li>{{ p.name }}</li>{% else %}<li class="muted">No players listed.</li>{% endfor %}</ul>
+  <a class="button" href="{{ url_for('roster', team_id=team.id) }}">Update roster</a>
+</section>
+
+{% if history %}
+<section>
+  <h2>Results</h2>
+  <table class="grid">
+    <thead><tr><th>Round</th><th>Opponent</th><th>Score</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for m in history %}
+      {% set mine_a = m.team_a == team.id %}
+      <tr><td>{{ m.round }}</td>
+        <td>{{ t.name_of(m.team_b if mine_a else m.team_a) }}</td>
+        <td>{% if m.team_b %}{{ m.score_a if mine_a else m.score_b }}–{{ m.score_b if mine_a else m.score_a }}{% endif %}</td>
+        <td>{% if not m.team_b %}Bye{% elif m.winner == team.id %}Won{% else %}Lost a chip{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

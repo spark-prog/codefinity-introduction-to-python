@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Register a team</h1>
+{% if t.status == FINISHED %}
+  <p>This tournament is over.</p>
+{% else %}
+  {% if t.status == RUNNING %}<div class="banner">The tournament has started. Late entries pay {{ t.settings.entry_fee_cents|money }} and join the winners list.</div>{% endif %}
+  <p>Entry fee: <b>{{ t.settings.entry_fee_cents|money }}</b> per team, paid at the desk.</p>
+  <form method="post" class="card form">
+    {% set v = {"name": form.get("name", ""), "captain": form.get("captain", ""), "phone": form.get("phone", ""), "players": []} %}
+    {% include "_roster_fields.html" %}
+    <label>Team skill level
+      <select name="skill_level" required>
+        {% for lvl, chips in t.settings.skill_chips.items() %}
+        <option value="{{ lvl }}" {% if form.get("skill_level") == lvl %}selected{% endif %}>Skill {{ lvl }} — starts with {{ chips }} chips</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="button">Register</button>
+  </form>
+{% endif %}
+{% endblock %}

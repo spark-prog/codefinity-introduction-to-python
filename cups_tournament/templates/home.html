@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+{% set s = t.settings %}
+<section class="hero">
+  <h1>{{ s.name }}</h1>
+  <p class="when">{{ s.date or "Date TBA" }}{% if s.start_time %} · starts {{ s.start_time }}{% endif %}</p>
+  {% if s.venue or s.address %}
+  <p class="where"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}
+    · <a href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}</p>
+  {% endif %}
+  <ul class="facts">
+    <li>Entry: <b>{{ s.entry_fee_cents|money }}</b> per team{% if s.added_money_cents %} · <b>{{ s.added_money_cents|money }}</b> added{% endif %}</li>
+    <li>Race to <b>{{ s.race_to }}</b></li>
+    <li>Starting chips by skill: {% for lvl, chips in s.skill_chips.items() %}<span class="pill">Skill {{ lvl }} → {{ chips }}</span>{% endfor %}</li>
+    {% if s.cash_in_time %}<li>Cash-in opens: <b>{{ s.cash_in_time }}</b></li>{% endif %}
+    {% if s.last_call_time %}<li>Last call: <b>{{ s.last_call_time }}</b></li>{% endif %}
+  </ul>
+  {% if s.details %}<div class="details">{{ s.details }}</div>{% endif %}
+  {% if t.status != FINISHED %}<a class="button" href="{{ url_for('register') }}">Register a team</a>{% endif %}
+</section>
+
+<details class="howto">
+  <summary>How a cups tournament works</summary>
+  <ul>
+    <li>Every team starts with chips based on its skill level.</li>
+    <li>Round 1 is a random draw. Each match is a race to {{ s.race_to }}.</li>
+    <li>Win and you keep your chips and go to the bottom of the <b>winners list</b>. Lose and you give one chip back to the main table and go to the bottom of the <b>losers list</b>.</li>
+    <li>Next round: winner 1 plays winner 2, loser 1 plays loser 2, and so on.</li>
+    <li>Run out of chips and you're out.</li>
+    <li>Chip value = pot ÷ chips still in play, so every chip lost to the table makes yours worth more.</li>
+    <li>Once cash-in opens you can cash in your chips or keep playing. At last call everyone cashes in.</li>
+  </ul>
+</details>
+
+{% if t.status != SETUP %}{% include "_stats.html" %}{% include "_tables.html" %}{% endif %}
+{% include "_standings.html" %}
+{% endblock %}

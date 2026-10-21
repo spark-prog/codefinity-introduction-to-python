@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Director login{% endblock %}
+{% block content %}
+<h1>Tournament director</h1>
+<form method="post" class="card form narrow">
+  <label>Password <input name="password" type="password" required autofocus></label>
+  <button class="button">Log in</button>
+  {% if default_password %}<p class="muted">Using the default password "admin". Set the ADMIN_PASSWORD environment variable before tournament night.</p>{% endif %}
+</form>
+{% endblock %}

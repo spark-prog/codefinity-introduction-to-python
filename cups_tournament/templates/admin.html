@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Director — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+<h1>Tournament director</h1>
+{% include "_stats.html" %}
+
+<section class="card controls">
+  {% if t.status == SETUP %}
+    <p>{{ t.teams|length }} team(s) registered. Starting will collect {{ s.entry_fee_cents|money }} × {{ t.teams|length }}
+      {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by skill level, and randomly draw round 1.</p>
+    <form method="post" action="{{ url_for('admin_start') }}" onsubmit="return confirm('Start the tournament and draw round 1?')">
+      <button class="button big">Start tournament</button></form>
+  {% elif t.status == RUNNING %}
+    {% if not t.cash_in_open %}
+    <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
+      <button class="button">Open cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin_last_call') }}" class="inline" onsubmit="return confirm('LAST CALL: stop all matches and cash every team in now?')">
+      <button class="button danger">Last call — cash everyone in{% if s.last_call_time %} (scheduled {{ s.last_call_time }}){% endif %}</button></form>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin_undo') }}" class="inline">
+    <button class="button secondary" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+</section>
+
+{% if t.status == RUNNING %}
+<section id="matches">
+  <h2>Round {{ t.round }} — matches</h2>
+  {% set open = t.open_matches() %}
+  {% for m in open %}
+  <div class="card match {{ m.status }}">
+    <div class="match-head">
+      {% if m.status == CALLED %}<b>Table {{ m.table }}</b>{% else %}<b>Waiting for a table</b>{% endif %}
+      <span class="muted">{{ m.bracket }} · race to {{ s.race_to }}</span>
+    </div>
+    {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}
+    <div class="score-row">
+      <span class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span></span>
+      {% if m.status == CALLED %}
+      <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
+        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
+        <button class="button secondary small">−</button></form>
+      <b class="score">{{ sc }}</b>
+      <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
+        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
+        <button class="button small">+</button></form>
+      <form method="post" action="{{ url_for('admin_winner', match_id=m.id) }}" class="inline"
+            onsubmit="return confirm('{{ t.name_of(tid)|e }} wins?')">
+        <input type="hidden" name="winner" value="{{ tid }}"><button class="button secondary small">Winner</button></form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No open matches.</p>
+  {% endfor %}
+  <div class="lists">
+    <div><h3>Winners list</h3><ol>{% for id in t.winners_list %}<li>{{ t.name_of(id) }}</li>{% else %}<li class="muted">empty</li>{% endfor %}</ol></div>
+    <div><h3>Losers list</h3><ol>{% for id in t.losers_list %}<li>{{ t.name_of(id) }}</li>{% else %}<li class="muted">empty</li>{% endfor %}</ol></div>
+  </div>
+</section>
+{% endif %}
+
+<section id="teams">
+  <h2>Teams & chips</h2>
+  <table class="grid">
+    <thead><tr><th>Team</th><th>Captain / cell</th><th>Skill</th><th>Chips</th><th>Status</th><th>Value / paid</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for team in t.standings() %}
+    <tr class="status-{{ team.status }}">
+      <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }} · {{ team.players|length }} players</span></td>
+      <td>{{ team.captain }}<br><span class="muted">{{ team.phone }}</span></td>
+      <td>
+        {% if t.status == SETUP %}
+        <form method="post" action="{{ url_for('admin_skill', team_id=team.id) }}" class="inline">
+          <select name="skill_level" onchange="this.form.submit()">
+            {% for lvl in s.skill_chips %}<option value="{{ lvl }}" {% if lvl == team.skill_level %}selected{% endif %}>{{ lvl }}</option>{% endfor %}
+          </select></form>
+        {% else %}{{ team.skill_level }}{% endif %}
+      </td>
+      <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
+      <td>{{ team.status.replace("_", " ") }}</td>
+      <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
+      <td class="actions">
+        <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
+        {% if t.status == SETUP %}
+        <form method="post" action="{{ url_for('admin_remove', team_id=team.id) }}" class="inline" onsubmit="return confirm('Remove {{ team.name|e }}?')">
+          <button class="link danger">Remove</button></form>
+        {% elif team.status == ACTIVE %}
+          {% if t.cash_in_open %}
+          <form method="post" action="{{ url_for('admin_cash_in', team_id=team.id) }}" class="inline"
+                onsubmit="return confirm('Cash in {{ team.name|e }} for {{ t.payout_for(team)|money }}?')">
+            <button class="button small">Cash in {{ t.payout_for(team)|money }}</button></form>
+          {% endif %}
+          <form method="post" action="{{ url_for('admin_adjust', team_id=team.id) }}" class="inline adjust">
+            <input name="change" type="number" step="1" placeholder="±" required>
+            <input name="reason" placeholder="Reason" required>
+            <button class="button secondary small">Adjust</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">No teams yet. Share the <a href="{{ url_for('register') }}">registration page</a>.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if t.status != SETUP %}
+  <p class="muted">Chip check: {{ t.total_chips_issued }} issued = {{ t.chips_in_play }} in play + {{ t.chips_returned }} returned to the table
+    + {{ t.total_chips_issued - t.chips_in_play - t.chips_returned }} cashed in / adjusted.
+    Collected {{ t.total_collected_cents|money }}{% if s.added_money_cents %} + {{ s.added_money_cents|money }} added{% endif %};
+    paid out {{ (t.total_collected_cents + s.added_money_cents - t.pot_cents)|money }}; pot left {{ t.pot_cents|money }}.</p>
+  {% endif %}
+</section>
+
+<section id="texts" class="card">
+  <h2>Text alerts</h2>
+  {% if not sms_enabled %}<p class="banner">Texting is not set up, so alerts are only logged below. See the README to connect Twilio.</p>{% endif %}
+  <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
+    <label>Text every {% if t.status == RUNNING %}active{% else %}registered{% endif %} team
+      <textarea name="body" rows="2" maxlength="300" required placeholder="e.g. 15 minute break — back at 9:45"></textarea></label>
+    <button class="button">Send text</button>
+  </form>
+  <details><summary>Recent texts ({{ texts|length }})</summary>
+    <table class="grid small">
+      {% for x in texts %}<tr><td>{{ x.at[11:] }}</td><td>{{ x.to }}</td><td>{{ x.body }}</td><td>{{ x.status }}</td></tr>{% endfor %}
+    </table>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Tournament details & settings</h2>
+  <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    <label>Tournament name <input name="name" value="{{ s.name }}"></label>
+    <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
+    <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
+    <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
+    <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
+    <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+    <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
+    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
+    <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
+    <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
+    <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
+    <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
+    <label class="wide">Starting chips by skill level — one per line, <code>skill = chips</code>
+      <textarea name="skill_chips" rows="5" {% if t.status != SETUP %}disabled{% endif %}>{{ skill_text }}</textarea></label>
+    {% if t.status != SETUP %}<p class="muted wide">Entry fee, added money and chip counts are locked once the tournament starts.</p>{% endif %}
+    <button class="button">Save settings</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Activity log</h2>
+  <ol class="log" reversed>{% for line in t.log|reverse %}<li>{{ line }}</li>{% endfor %}</ol>
+  <details><summary>Chip ledger ({{ t.ledger|length }} entries)</summary>
+    <table class="grid small">
+      <thead><tr><th>Time</th><th>Team</th><th>Change</th><th>After</th><th>Reason</th><th>Chip value after</th></tr></thead>
+      {% for e in t.ledger|reverse %}<tr><td>{{ e.at[11:] }}</td><td>{{ e.team_name }}</td><td>{{ "%+d"|format(e.change) }}</td><td>{{ e.chips_after }}</td><td>{{ e.reason }}</td><td>{{ e.chip_value_cents|money }}</td></tr>{% endfor %}
+    </table>
+  </details>
+</section>
+
+<section class="card">
+  <h2>New tournament</h2>
+  <form method="post" action="{{ url_for('admin_reset') }}" class="inline">
+    <input name="confirm" placeholder="Type RESET">
+    <button class="button danger small">Archive this tournament and start over</button>
+  </form>
+</section>
+{% endblock %}

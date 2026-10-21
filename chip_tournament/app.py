@@ -1,6 +1,8 @@
 """Web app for running a chip billiards tournament.
 
 Run it with:  python app.py   (then open http://localhost:5000)
+In production: gunicorn --workers 1 --threads 8 "app:create_app()"
+(one worker only: the tournament file and the check-in clock live in one process)
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from pathlib import Path
 from urllib.parse import quote_plus
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from chips.alerts import SmsSender
 from chips.engine import (
@@ -99,6 +102,12 @@ def create_app(data_dir: str | None = None) -> Flask:
         app.secret_key = key_file.read_text()
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
+    if os.environ.get("CHIPS_PRODUCTION") == "1":
+        # On the internet: refuse to run with the default password, and only send cookies over HTTPS.
+        if admin_password == "admin" or len(admin_password) < 8:
+            raise RuntimeError("Set ADMIN_PASSWORD to a password of at least 8 characters before going live.")
+        app.config["SESSION_COOKIE_SECURE"] = True
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config["store"] = store
     app.config["sms"] = sms
 
@@ -207,6 +216,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         ]
         return render_template("register.html", t=t, form=request.form, players=players)
 
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
+
     @app.get("/guide")
     def guide():
         return render_template("guide.html", t=store.load())
@@ -266,7 +279,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         tick()
         t = store.load()
         return render_template(
-            "admin.html", t=t, undo_label=store.last_undo_label(), texts=sms.recent(50), sms_enabled=sms.enabled,
+            "admin.html", t=t, undo_label=store.last_undo_label(), server_time=datetime.now(),
+            tz_name=os.environ.get("TZ", ""), texts=sms.recent(50), sms_enabled=sms.enabled,
             bracket_text="\n".join(f"{top} = {chips}" for top, chips in t.settings.chip_brackets),
         )
 

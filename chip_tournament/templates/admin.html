@@ -144,6 +144,9 @@
 
 <section class="card">
   <h2>Tournament details & settings</h2>
+  <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
+    If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
+    Check-in, grace and start times all use this clock.</p>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>

@@ -160,3 +160,14 @@ def test_guide_page(client):
     page = client.get("/guide")
     assert page.status_code == 200
     assert b"Last call" in page.data and b"Fixing mistakes" in page.data
+
+
+def test_production_refuses_default_password(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHIPS_PRODUCTION", "1")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin")
+    with pytest.raises(RuntimeError, match="ADMIN_PASSWORD"):
+        create_app(str(tmp_path))
+    monkeypatch.setenv("ADMIN_PASSWORD", "a-real-password")
+    app = create_app(str(tmp_path))
+    assert app.config["SESSION_COOKIE_SECURE"] is True
+    assert app.test_client().get("/healthz").json == {"ok": True}

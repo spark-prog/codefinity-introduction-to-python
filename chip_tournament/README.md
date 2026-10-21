@@ -4,14 +4,18 @@ A web app for running a billiards league **chip tournament**: team registration,
 
 ## Run it
 
+**To put it online for the league, follow [DEPLOY.md](DEPLOY.md).**
+
+To try it on your own computer:
+
 ```bash
 cd chip_tournament
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ADMIN_PASSWORD=choose-one python app.py
 ```
 
-Open http://localhost:5000. Players use **Home**, **Board** and **Register**. The tournament director uses **Director** (password from `ADMIN_PASSWORD`; it's `admin` if you don't set one).
+Open http://localhost:5000. Players use **Home**, **Board** and **Register**. The tournament director uses **Director** (password from `ADMIN_PASSWORD`; it's `admin` if you don't set one, which is only allowed when running locally).
 
 Run the tests with `python -m pytest`.
 

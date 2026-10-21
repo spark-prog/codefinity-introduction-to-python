@@ -1,0 +1,14 @@
+<table class="grid small import-rows">
+  <thead><tr><th>Row</th><th>Team</th><th>Partner 1</th><th>Partner 2</th><th>Combined</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{% if r.result.startswith('Skipped') %}skipped{% elif r.result.startswith('Waiting') %}waiting{% endif %}">
+      <td>{{ r.line }}</td>
+      <td>{{ r.team_name or "—" }}</td>
+      {% for p in r.players %}<td>{{ p.name or "—" }}{% if p.skill %} ({{ p.skill }}){% endif %}{% if p.phone %}<br><span class="muted">{{ p.phone }}</span>{% endif %}</td>{% endfor %}
+      <td>{{ r.players|sum(attribute="skill") or "—" }}</td>
+      <td>{{ r.result }}{% if r.note %}<br><span class="muted">{{ r.note }}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

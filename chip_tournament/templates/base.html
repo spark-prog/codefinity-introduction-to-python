@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ t.settings.name if t else "Chip Tournament" }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('home') }}">🎱 {{ t.settings.name if t else "Chip Tournament" }}</a>
+    <nav>
+      <a href="{{ url_for('home') }}">Home</a>
+      <a href="{{ url_for('board') }}">Board</a>
+      <a href="{{ url_for('register') }}">Register</a>
+      <a href="{{ url_for('admin') }}">Director</a>
+      {% if is_admin %}
+      <form method="post" action="{{ url_for('admin_logout') }}" class="inline"><button class="link">Log out</button></form>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+<script>
+// Live countdowns: <span class="countdown" data-at="ISO time">. On the director page a
+// passed deadline reloads the page so automatic grace/forfeit updates show up.
+(function () {
+  var els = document.querySelectorAll(".countdown[data-at]"), reloading = false;
+  // Match timers on the director page: amber past the expected length, red at the long-match mark.
+  var timers = document.querySelectorAll(".elapsed[data-since]");
+  function elapsed() {
+    timers.forEach(function (el) {
+      var mins = (Date.now() - new Date(el.dataset.since).getTime()) / 60000, card = el.closest(".match");
+      if (mins < 0) { el.textContent = ""; return; }
+      el.textContent = "Playing " + Math.floor(mins) + ":" + String(Math.floor((mins % 1) * 60)).padStart(2, "0");
+      if (card) {
+        card.classList.toggle("long", mins >= +el.dataset.long);
+        card.classList.toggle("over", mins >= +el.dataset.over && mins < +el.dataset.long);
+      }
+    });
+  }
+  if (timers.length) { elapsed(); setInterval(elapsed, 1000); }
+  if (!els.length) return;
+  function tick() {
+    var now = Date.now();
+    els.forEach(function (el) {
+      var diff = Math.round((new Date(el.dataset.at).getTime() - now) / 1000);
+      if (diff > 0) {
+        el.textContent = "(in " + Math.floor(diff / 60) + ":" + String(diff % 60).padStart(2, "0") + ")";
+      } else {
+        el.textContent = "(now)";
+        if (el.dataset.reload && !reloading && diff < -2) { reloading = true; setTimeout(function () { location.reload(); }, 15000); }
+      }
+    });
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

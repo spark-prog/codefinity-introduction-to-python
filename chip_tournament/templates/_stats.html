@@ -1,0 +1,10 @@
+<div class="stats">
+  <div class="stat"><span class="label">Pot</span><span class="value">{{ t.pot_cents|money }}</span></div>
+  <div class="stat"><span class="label">Chips in play</span><span class="value">{{ t.chips_in_play }}</span></div>
+  <div class="stat highlight"><span class="label">Chip value</span><span class="value">{{ t.chip_value_cents|money }}</span></div>
+  <div class="stat"><span class="label">Teams left</span><span class="value">{{ t.active_teams|length }}{% if t.status != SETUP %} / {{ t.teams|length }}{% endif %}</span></div>
+  <div class="stat"><span class="label">Matches played</span><span class="value">{{ t.matches_completed }}</span></div>
+</div>
+{% if t.last_call and t.status == RUNNING %}<div class="banner danger">LAST CALL — each team's next match is its last. Teams are cashed in automatically when it ends. (A match already on a table at last call finishes first, then those teams play one more.)</div>
+{% elif t.cash_in_open and t.status == RUNNING %}<div class="banner">Cash-in is OPEN — see the desk to cash in, or keep playing.</div>{% endif %}
+{% if t.status == FINISHED %}<div class="banner">This tournament is finished.</div>{% endif %}

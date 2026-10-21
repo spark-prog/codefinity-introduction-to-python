@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Director's guide — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+<article class="guide">
+<h1>Tournament night: director's guide</h1>
+<p class="muted">Everything the director does, in order. The numbers below come from this tournament's current settings.
+  <button class="link noprint" onclick="window.print()">Print this guide</button></p>
+
+<nav class="toc noprint">
+  <a href="#before">1. Days before</a> · <a href="#arrive">2. At the venue</a> · <a href="#start">3. Start</a> ·
+  <a href="#match">4. Running matches</a> · <a href="#cashin">5. Cash-in</a> · <a href="#lastcall">6. Last call</a> ·
+  <a href="#payout">7. Paying out</a> · <a href="#fixes">8. Fixing mistakes</a> · <a href="#after">9. After the night</a>
+</nav>
+
+<section id="before">
+<h2>1. Days before</h2>
+<ol class="steps">
+  <li><b>Set a director password.</b> Start the app with <code>ADMIN_PASSWORD=your-password python app.py</code>. Without it, the password is <code>admin</code>.</li>
+  <li><b>Turn on real texts</b> (optional). Set the three Twilio settings described in the README. Until then, texts are only logged under <i>Text alerts → Recent texts</i>.</li>
+  <li><b>Fill in Settings</b> on the Director page:
+    <ul>
+      <li>Name, date, start time, venue, address, and details for players. These show on the home page with a map link.</li>
+      <li><b>Entry fee</b> and <b>added money</b>. These lock when you press Start.</li>
+      <li><b>Field cap</b>: the most teams in the event. Teams that register after it's full go on the waiting list.</li>
+      <li><b>Tables</b>, as a comma-separated list using the names on the tables (e.g. <code>1, 2, 3, 7</code>).</li>
+      <li><b>Race to</b> (now {{ s.race_to }}).</li>
+      <li><b>Chip brackets</b> and the <b>registration cap</b> (now {{ s.registration_cap }}). These lock at the start.</li>
+      <li><b>Check-in times</b>: warm-up {{ s.warmup_minutes }} min, check-in {{ s.checkin_minutes }} min, grace {{ s.grace_minutes }} min.</li>
+      <li><b>Cash-in</b> and <b>last call</b> times. These are reminders on screen only; nothing happens until you press the button.</li>
+    </ul></li>
+  <li><b>Share the registration link</b> (<code>/register</code>). Teams get a text with their 4-digit PIN for roster changes.
+    Teams that signed up some other way, such as a Google Form, can be brought in with <b>Import teams from a spreadsheet (CSV)</b> on the Director page. Upload the responses, check the preview, and import.</li>
+  <li><b>Send yourself a test text</b>. Register a practice team with your own cell number, check that the text arrives, then remove the team.</li>
+</ol>
+</section>
+
+<section id="arrive">
+<h2>2. At the venue (about an hour before)</h2>
+<ol class="steps">
+  <li><b>Put the Board on the TV</b>: open <code>/board</code> in a browser. It refreshes itself every 15 seconds.</li>
+  <li><b>Check teams in as they arrive{% if s.checkin_by %} (check-in is by {{ s.checkin_by }}){% endif %}, and collect entry fees</b> ({{ s.entry_fee_cents|money }} per team). Press <b>Check in</b> next to the team in the <i>Teams &amp; chips</i> table; the time is recorded and the count at the top updates. Waiting-list teams who show up can be checked in too.</li>
+  <li><b>Look for red "needs new partner" notes.</b> A team over a combined {{ t.max_skill }} can't start. Have it swap partners (the new pair must be {{ s.registration_cap }} or less) or remove it.</li>
+  <li><b>Mark no-shows</b> with <b>No-show</b>, or once check-in closes, use <b>Mark all not checked in as no-shows</b>. Each no-show gets a text, and the next team on the waiting list moves into the field and gets a text (check it in when it arrives). <b>Restore</b> undoes a no-show: the team goes back into the field if there's room, otherwise to the end of the waiting list. Raising the field cap also moves waiting teams in.</li>
+  <li><b>Start</b> stays greyed out until every team in the field is checked in or marked a no-show. You can turn that requirement off in Settings.</li>
+  <li><b>Roster questions</b>: click <i>Roster</i> next to any team to edit it without a PIN. Each team's PIN is shown under its name if it forgot.</li>
+</ol>
+</section>
+
+<section id="start">
+<h2>3. Starting the tournament</h2>
+<p>Press <b>Start tournament</b>. The app:</p>
+<ul>
+  <li>adds up the pot (entry fees + added money), with waiting-list teams not included</li>
+  <li>gives each team its chips based on combined skill</li>
+  <li>puts every team on the winners list in random order and calls the top two to each free table, texting both teams the match-up</li>
+</ul>
+<p>The app won't start if fewer than 2 teams are in the field, no tables are set, or any team is over {{ t.max_skill }}. The error message names the teams.</p>
+</section>
+
+<section id="match">
+<h2>4. Running matches</h2>
+<p>Each match on a table has a card on the Director page:</p>
+<table class="grid">
+  <thead><tr><th>When</th><th>What you do</th><th>What the app does</th></tr></thead>
+  <tbody>
+    <tr><td>A team reaches its table</td><td>Nothing. The team taps <b>We're at the table</b> on its own team page (after entering its PIN). If a team can't, tap <b>Arrived</b> for it.</td><td>Shows a ✓ and the time.</td></tr>
+    <tr><td>Both teams are there</td><td>Nothing.</td><td>Sets the start time {{ s.warmup_minutes }} min later and texts both teams.</td></tr>
+    <tr><td>A team isn't there {{ s.checkin_minutes }} min after being called</td><td>Nothing (the Arrived button turns red).</td><td>Starts a {{ s.grace_minutes }}-minute grace period and texts the team its forfeit time.</td></tr>
+    <tr><td>The team arrives during grace</td><td>Nothing if it checks in itself; otherwise tap <b>Arrived</b>.</td><td>Cancels the forfeit. The start is {{ s.warmup_minutes }} min later.</td></tr>
+    <tr><td>Grace runs out</td><td>Nothing.</td><td>Records a forfeit: the no-show gives a chip back and the opponent wins. If neither team showed, both give a chip back and go to the losers list.</td></tr>
+    <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Entering a score also counts both teams as checked in.</td></tr>
+    <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
+  </tbody>
+</table>
+<p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when they're called.</p>
+<ul>
+  <li><b>No rematches unless it's the only option.</b> A team that has already played everyone waiting on its list is tagged <i>waiting for a new opponent</i> and holds until another team arrives, even if a table sits free. A rematch happens only when both teams have played everyone still in, or when nothing is playing or queued that could bring a new opponent. Rematches are tagged in the queue.</li>
+  <li><b>Winners vs losers</b> matches only happen when teams are stuck on opposite lists with nothing else coming, or for a team that's catching up.</li>
+</ul>
+<ul>
+  <li><b>Catching up:</b> a team {{ s.catchup_matches }} or more matches behind the leader (after arriving late, or when an opponent cashes in) is tagged <i>catching up</i> and moves to the top of its list. If no one else is waiting on its list, it plays the top team of the other list.</li>
+  <li><b>Call next:</b> on a pair in the queue, it moves that pair to the front for the next free table. On a team still on a list, it pairs that team right away (a new opponent from either list if one is waiting, otherwise a rematch) and puts the pair first. Use it when a team has been holding too long.</li>
+  <li><b>Slow play:</b> each card shows how long the match has been playing. It turns <b>amber</b> after {{ s.match_minutes }} minutes and <b>red</b> at {{ s.long_match_minutes }} minutes past the start, and a "Running long" banner lists those tables. Go speak to the table. Catch-up can't help a team that plays slowly every match; only speeding them up can.</li>
+</ul>
+<p><b>Late teams</b> can register until last call. They pay the entry fee, get their chips and join the winners list, or go on the waiting list if the field is full.</p>
+</section>
+
+<section id="cashin">
+<h2>5. Cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</h2>
+<ol class="steps">
+  <li>Press <b>Open cash-in</b>. Every team gets a text with the chip value and what its chips are worth.</li>
+  <li>When a team comes to the desk, press <b>Cash in $…</b> in its row. Pay the amount shown in the green message.</li>
+  <li>A team <b>can't cash in once a game in its current match has been scored</b>. If its match hasn't started, the match is cancelled and the opponent goes back to the front of the line.</li>
+  <li>Other teams' chips are worth the same after a cash-in. Chip value only goes up when a chip goes back to the table.</li>
+</ol>
+</section>
+
+<section id="lastcall">
+<h2>6. Last call{% if s.last_call_time %} (scheduled {{ s.last_call_time }}){% endif %}</h2>
+<p>Press <b>Last call</b>. Every team gets a text, and the Board shows a banner.</p>
+<ul>
+  <li><b>Teams not on a table</b> play one more match. When it ends, both teams are cashed in automatically.</li>
+  <li><b>Teams already on a table</b> finish that match, then play one more, then are cashed in.</li>
+  <li>The <i>Teams &amp; chips</i> table shows "last match" or "2 matches left" for each team.</li>
+  <li>A team with nobody left to play is cashed in right away. Registration closes.</li>
+  <li>The tournament finishes on its own when the last team is cashed in.</li>
+</ul>
+<p class="banner"><b>Emergency only:</b> <i>End now — cash everyone out</i> stops every match and cashes every team in at once (for example, if the venue is closing). It can be reversed with Undo.</p>
+</section>
+
+<section id="payout">
+<h2>7. Paying out</h2>
+<ul>
+  <li>The <b>Value / paid</b> column shows what each cashed-in team is owed. The green message after each cash-in shows the same amount.</li>
+  <li>The <b>chip check</b> line under the team table confirms chips issued = in play + returned + cashed in, and money collected = paid out + pot left. At the end, the pot left should be $0.00.</li>
+  <li>Every chip movement, with its reason, is in the <b>Chip ledger</b> under <i>Activity log</i>.</li>
+</ul>
+</section>
+
+<section id="fixes">
+<h2>8. Fixing mistakes</h2>
+<table class="grid">
+  <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr><td>Wrong winner, wrong score, or any button pressed by mistake</td><td><b>Undo</b> reverses the most recent action; press again to go further back (up to 100 steps). The button shows what it will undo. Texts already sent can't be recalled, so send a correction with <i>Text every team</i>.</td></tr>
+    <tr><td>A forfeit went through but the team was there</td><td>Press <b>Undo</b>. The app pauses the auto-forfeit on that match; then tap <b>Arrived</b>.</td></tr>
+    <tr><td>A team's chip count is wrong and Undo would go back too far</td><td>Use <b>Adjust</b> in the team's row (e.g. <code>+1</code> or <code>-1</code>) and enter a reason. Adjusting to 0 eliminates the team.</td></tr>
+    <tr><td>A team forgot its PIN</td><td>It's shown under the team name in <i>Teams &amp; chips</i>.</td></tr>
+    <tr><td>A team didn't get a text</td><td>Check <i>Text alerts → Recent texts</i> for the number and status, then fix the number with <i>Roster</i>.</td></tr>
+    <tr><td>A table goes out of service</td><td>Remove it from <i>Tables</i> in Settings once its match is finished. A table with a match on it can't be removed.</td></tr>
+    <tr><td>Need to announce something</td><td>Use <b>Text every team</b> (e.g. "15-minute break, back at 9:45").</td></tr>
+    <tr><td>The laptop restarts or the app closes</td><td>Nothing is lost; everything is saved after each action. Start the app again and open the Director page. The check-in clock resumes once a page is opened.</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="after">
+<h2>9. After the night</h2>
+<ul>
+  <li>Make sure every team in <i>Teams &amp; chips</i> shows as cashed out or eliminated, and the pot left is $0.00.</li>
+  <li>To set up the next tournament, type <code>RESET</code> under <i>New tournament</i> and press the button. The finished tournament is archived (not deleted) in the app's <code>data</code> folder.</li>
+</ul>
+</section>
+</article>
+{% endblock %}

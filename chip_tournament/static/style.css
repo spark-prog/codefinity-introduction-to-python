@@ -153,3 +153,5 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--card); bo
 .tag.behind { background: #fff0c2; color: #6b5200; }
 .tag.call { background: #dff3e9; color: var(--felt-dark); }
 .lists li { margin: 3px 0; }
+.tag.wait { background: #e8eef9; color: #2c4a7a; }
+.queue li { margin: 4px 0; }

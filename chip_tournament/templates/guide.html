@@ -72,10 +72,14 @@
     <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
 </table>
-<p><b>Pairing is rolling, so there's nothing to do between matches.</b> As soon as a table is free, the top two teams waiting on the winners list (or the losers list) are called to it, and both teams get a text with the match-up. The lists on the Director page are shown in the order teams will be called. If only one team is waiting on each list and no one else is playing, those two play each other.</p>
+<p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when they're called.</p>
+<ul>
+  <li><b>No rematches unless it's the only option.</b> A team that has already played everyone waiting on its list is tagged <i>waiting for a new opponent</i> and holds until another team arrives, even if a table sits free. A rematch happens only when both teams have played everyone still in, or when nothing is playing or queued that could bring a new opponent. Rematches are tagged in the queue.</li>
+  <li><b>Winners vs losers</b> matches only happen when teams are stuck on opposite lists with nothing else coming, or for a team that's catching up.</li>
+</ul>
 <ul>
   <li><b>Catching up:</b> a team {{ s.catchup_matches }} or more matches behind the leader (after arriving late, or when an opponent cashes in) is tagged <i>catching up</i> and moves to the top of its list. If no one else is waiting on its list, it plays the top team of the other list.</li>
-  <li><b>Call next:</b> press <i>Call next</i> next to any waiting team to put it first in line. It goes to the next free table.</li>
+  <li><b>Call next:</b> on a pair in the queue, it moves that pair to the front for the next free table. On a team still on a list, it pairs that team right away (a new opponent from either list if one is waiting, otherwise a rematch) and puts the pair first. Use it when a team has been holding too long.</li>
   <li><b>Slow play:</b> each card shows how long the match has been playing. It turns <b>amber</b> after {{ s.match_minutes }} minutes and <b>red</b> at {{ s.long_match_minutes }} minutes past the start, and a "Running long" banner lists those tables. Go speak to the table. Catch-up can't help a team that plays slowly every match; only speeding them up can.</li>
 </ul>
 <p><b>Late teams</b> can register until last call. They pay the entry fee, get their chips and join the winners list, or go on the waiting list if the field is full.</p>

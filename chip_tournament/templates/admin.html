@@ -39,7 +39,7 @@
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min since the start):
     {% for m in long %}<b>Table {{ m.table }}</b> ({{ t.name_of(m.team_a) }} vs {{ t.name_of(m.team_b) }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
-  {% set open = t.open_matches() %}
+  {% set open = t.matches|selectattr("status", "equalto", CALLED)|list %}
   {% for m in open %}
   {% set mins = t.match_minutes_played(m) %}
   <div class="card match {{ m.status }}{% if mins is not none and mins >= s.long_match_minutes %} long{% elif mins is not none and mins >= s.match_minutes %} over{% endif %}">
@@ -77,8 +77,12 @@
   {% else %}
   <p class="muted">No open matches.</p>
   {% endfor %}
-  <p class="muted">Waiting teams are listed in the order they'll be called. Teams {{ s.catchup_matches }}+ matches behind the leader move up automatically ("catching up"); <b>Call next</b> puts a team first in line.</p>
-  {% set admin_controls = true %}{% include "_lists.html" %}
+  {% set admin_controls = true %}
+  {% include "_queue.html" %}
+  <p class="muted">Pairs go to tables fewest rounds played first; <b>Call next</b> puts a pair (or an unpaired team) first in line.
+    Teams on a list are paired with the first team above them they haven't played. A team that has played everyone waiting
+    holds out for a new opponent; a rematch only happens when it's the only option. Teams {{ s.catchup_matches }}+ matches behind the leader move up ("catching up").</p>
+  {% include "_lists.html" %}
 </section>
 {% endif %}
 

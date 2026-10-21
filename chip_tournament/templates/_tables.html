@@ -14,5 +14,5 @@
     {% endfor %}
   </div>
   {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
-  {% if t.status == RUNNING %}{% include "_lists.html" %}{% endif %}
+  {% if t.status == RUNNING %}{% include "_queue.html" %}{% include "_lists.html" %}{% endif %}
 </section>

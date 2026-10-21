@@ -167,14 +167,14 @@ def test_start_fills_every_table_from_a_random_draw():
     assert all(m.bracket == "start" for m in first)
 
 
-def test_more_teams_than_tables_wait_in_line():
+def test_pairs_wait_in_the_table_queue():
     t = make(n_teams=6, tables=["A"])
     t.start(random.Random(3))
-    waiting = t.queue_order(t.winners_list)
-    assert len(called(t)) == 1 and len(waiting) == 4
+    queue = t.table_queue()
+    assert len(called(t)) == 1 and len(queue) == 2  # everyone is paired; two pairs wait for the table
+    assert t.queue_order(t.winners_list) == []
     play(t, called(t)[0])
-    m = called(t)[0]
-    assert m.table == "A" and (m.team_a, m.team_b) == (waiting[0], waiting[1])
+    assert called(t)[0].id == queue[0].id and called(t)[0].table == "A"
 
 
 def test_loser_gives_chip_back_and_value_rises():
@@ -227,27 +227,23 @@ def test_team_behind_on_matches_jumps_the_line():
     t.start(random.Random(40))
     for _ in range(3):
         play(t, called(t)[0])
-    assert max(x.matches_played for x in t.active_teams) == 2
-    late = t.register_team("Latecomers", partners(8))  # 0 played: 2 behind the leader
+    assert max(x.matches_played for x in t.active_teams) >= 2
+    late = t.register_team("Latecomers", partners(8))  # 0 played: 2+ behind the leader
     assert t.is_behind(late)
-    assert t.queue_order(t.winners_list)[0] == late.id or t.queue_order(t.losers_list)[0] == late.id
     play(t, called(t)[0])
     assert late.id in (called(t)[0].team_a, called(t)[0].team_b)
 
 
-def test_call_next_puts_a_team_first_in_line():
+def test_call_next_puts_a_pair_first_in_line():
     t = make(n_teams=6, tables=["1"])
     t.start(random.Random(41))
-    last_in_line = t.queue_order(t.winners_list)[-1]
-    t.call_next(last_in_line)
-    assert t.teams[last_in_line].priority
-    assert t.queue_order(t.winners_list)[0] == last_in_line
+    last_pair = t.table_queue()[-1]
+    t.call_next(last_pair.team_b)
+    assert t.table_queue()[0].id == last_pair.id
     play(t, called(t)[0])
-    assert last_in_line in (called(t)[0].team_a, called(t)[0].team_b)
-    assert not t.teams[last_in_line].priority
-    on_table = called(t)[0].team_a
+    assert called(t)[0].id == last_pair.id
     with pytest.raises(TournamentError, match="already on a table"):
-        t.call_next(on_table)
+        t.call_next(last_pair.team_a)
 
 
 def test_call_next_calls_immediately_when_a_table_is_free():
@@ -517,11 +513,11 @@ def test_neither_team_shows_both_forfeit_a_chip():
     t = make(n_teams=4, tables=["1"])
     t.start(random.Random(33))
     m, base = called_at(t)
+    next_pair = t.table_queue()[0]
     t.check_clock(at=base + timedelta(minutes=20))
     assert m.forfeit == "both"
     assert t.teams[m.team_a].chips == 2 and t.teams[m.team_b].chips == 2
-    assert t.losers_list == [m.team_a, m.team_b]
-    assert called(t) and called(t)[0].id != m.id  # table goes to the next match
+    assert called(t)[0].id == next_pair.id  # table goes to the next match
 
 
 def test_scoring_counts_as_checked_in():
@@ -570,3 +566,128 @@ def test_texts_carry_sender_name_and_questions_phone():
     assert "Questions?" not in t.outbox[-1].body  # only on the registration text
     assert "Reply STOP to opt out." in body
     assert body.endswith("Questions? Call/text 904-528-7657")
+
+
+# ------------------------------------------------------------- no rematches
+
+from chips.engine import DONE, Match  # noqa: E402
+
+
+def scenario(names, played=(), playing=(), winners=(), losers=(), tables=("1", "2", "3", "4")):
+    """A running tournament with a made-up history.
+
+    played: (winner, loser) pairs already finished; playing: pairs on a table now.
+    """
+    t = Tournament()
+    t.settings.tables = list(tables)
+    ids = {n: t.register_team(n, partners(8)).id for n in names}
+    t.start(random.Random(0))
+    t.matches.clear(); t.winners_list.clear(); t.losers_list.clear(); t.round = 0
+    for team in t.teams.values():
+        team.wins = team.losses = 0
+    for w, l in played:
+        t.round += 1
+        t.matches.append(Match(id=f"p{t.round}", round=t.round, team_a=ids[w], team_b=ids[l], bracket="winners",
+                               status=DONE, winner=ids[w], loser=ids[l]))
+        t.teams[ids[w]].wins += 1
+        t.teams[ids[l]].losses += 1
+    for i, (a, b) in enumerate(playing):
+        t.round += 1
+        t.matches.append(Match(id=f"m{t.round}", round=t.round, team_a=ids[a], team_b=ids[b], bracket="winners",
+                               status=CALLED, table=tables[i], called_at=datetime.now().isoformat()))
+    for n in winners:
+        t._enqueue(ids[n], t.winners_list)
+    for n in losers:
+        t._enqueue(ids[n], t.losers_list)
+    t._advance()
+    return t, ids
+
+
+def pairs(t, ids, status=None):
+    name = {v: k for k, v in ids.items()}
+    return [{name[m.team_a], name[m.team_b]} for m in t.matches
+            if m.status in ((status,) if status else ("waiting", "called")) and m.id[0] not in "mp"]
+
+
+def test_no_rematch_waits_for_the_next_team_to_arrive():
+    t, ids = scenario(["Sharks", "Dynamic Duo", "Cue Crew", "8 Ballers"],
+                      played=[("Sharks", "8 Ballers"), ("Dynamic Duo", "Cue Crew"), ("Sharks", "Dynamic Duo")],
+                      playing=[("Cue Crew", "8 Ballers")], winners=["Sharks", "Dynamic Duo"])
+    assert pairs(t, ids) == []  # they played each other; Cue Crew vs 8 Ballers is still going
+    on_table = next(m for m in t.matches if m.status == CALLED)
+    t.record_result(on_table.id, ids["Cue Crew"])  # Cue Crew joins the winners list...
+    # ...and is compared with the top team first: Sharks hasn't played Cue Crew.
+    assert {"Sharks", "Cue Crew"} in pairs(t, ids)
+    assert ids["Dynamic Duo"] in t.queue_order(t.winners_list)
+
+
+def test_newcomer_who_played_the_top_team_takes_the_second():
+    t, ids = scenario(["Sharks", "Dynamic Duo", "Cue Crew", "8 Ballers", "Rails", "Banks"],
+                      played=[("Sharks", "Dynamic Duo"), ("Cue Crew", "Sharks"), ("Rails", "Banks")],
+                      playing=[("Cue Crew", "8 Ballers"), ("Rails", "Banks")],
+                      winners=["Sharks", "Dynamic Duo"])
+    on_table = next(m for m in t.matches if m.status == CALLED and ids["Cue Crew"] in (m.team_a, m.team_b))
+    t.record_result(on_table.id, ids["Cue Crew"])  # Cue Crew already played Sharks (top)...
+    assert {"Dynamic Duo", "Cue Crew"} in pairs(t, ids)  # ...so it takes Dynamic Duo (second)
+
+
+def test_rematch_when_both_have_played_everyone_left():
+    t, ids = scenario(["X", "Y", "Z", "W"],
+                      played=[("X", "Y"), ("X", "Z"), ("X", "W"), ("Y", "Z"), ("Y", "W")],
+                      playing=[("Z", "W")], winners=["X", "Y"])
+    (m,) = [m for m in t.matches if m.status in ("waiting", "called") and m.id[0] not in "mp"]
+    assert m.rematch  # no new opponent exists for either team, so no point waiting
+
+
+def test_rematch_when_nothing_else_is_coming():
+    t, ids = scenario(["X", "Y", "Z"], played=[("X", "Y")], winners=["X", "Y"])
+    # Z sits on no list and isn't playing: the safety net puts it on the winners list,
+    # and X (top) takes Z, a new opponent, instead of a rematch with Y.
+    assert {"X", "Z"} in pairs(t, ids)
+    t2, ids2 = scenario(["X", "Y"], played=[("X", "Y")], winners=["X", "Y"])
+    (m,) = [m for m in t2.matches if m.status in ("waiting", "called") and m.id[0] not in "mp"]
+    assert m.rematch  # only two teams left: the rematch is the only option
+
+
+def test_winners_vs_losers_only_when_stuck():
+    t, ids = scenario(["A", "B", "C", "D"], played=[("A", "B"), ("C", "D")],
+                      playing=[], winners=["A", "B", "C"], losers=["D"])
+    assert pairs(t, ids) == [{"A", "C"}]  # A skips B (played) and takes C
+    # B and D could cross lists, but A-C will bring a team back, so they wait.
+    m = next(x for x in t.matches if x.status in ("waiting", "called") and x.id[0] not in "mp")
+    if m.status == "waiting":
+        t._call_waiting()
+    t.record_result(m.id, ids["A"])
+    # Now winners [B, A] (played) and losers [D, C] (played): nothing else is coming, so cross.
+    assert {"B", "D"} in pairs(t, ids)
+
+
+def test_table_queue_favors_fewer_rounds_played():
+    t, ids = scenario(["A", "B", "C", "D", "E", "F"],
+                      played=[("A", "E"), ("A", "F"), ("B", "E"), ("B", "F")],
+                      playing=[("E", "F")], tables=("1",),
+                      winners=["A", "B", "C", "D"])
+    name = {v: k for k, v in ids.items()}
+    # A-B is set first (they're at the top), but C and D have played fewer rounds, so they get the table first.
+    assert [{name[m.team_a], name[m.team_b]} for m in t.table_queue()] == [{"C", "D"}, {"A", "B"}]
+
+
+def test_last_two_teams_both_no_show_still_pays_the_pot():
+    t = make(skills=[10, 10], fee=2000)  # 3 chips each
+    t.start(random.Random(44))
+    m = called(t)[0]
+    t.adjust_chips(m.team_a, -2, "test"); t.adjust_chips(m.team_b, -2, "test")  # down to 1 chip each
+    m, base = called_at(t)
+    t.check_clock(at=base + timedelta(minutes=20))
+    assert t.status == FINISHED and t.pot_cents == 0
+    assert sum(x.payout_cents for x in t.teams.values()) == 4000
+
+
+def test_call_next_overrides_a_held_team():
+    t, ids = scenario(["Sharks", "Dynamic Duo", "Cue Crew", "8 Ballers"],
+                      played=[("Sharks", "Dynamic Duo")], playing=[("Cue Crew", "8 Ballers")],
+                      winners=["Sharks", "Dynamic Duo"])
+    assert pairs(t, ids) == []  # held: they've played each other
+    t.call_next(ids["Dynamic Duo"])
+    (m,) = [m for m in t.matches if m.status in ("waiting", "called") and m.id[0] not in "mp"]
+    assert {m.team_a, m.team_b} == {ids["Sharks"], ids["Dynamic Duo"]} and m.rematch  # only option: rematch

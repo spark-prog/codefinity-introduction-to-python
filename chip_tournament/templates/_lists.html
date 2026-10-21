@@ -1,12 +1,14 @@
-{# The winners and losers lists in the order teams will be called. Set admin_controls for Call next buttons. #}
+{# Teams on the winners and losers lists that aren't paired yet. Set admin_controls for Call next buttons. #}
 <div class="lists">
   {% for label, lst in (("Winners list", t.winners_list), ("Losers list", t.losers_list)) %}
-  <div><h3>{{ label }}</h3>
+  {% set waiting = t.queue_order(lst) %}
+  <div><h3>{{ label }} <span class="muted">— not paired yet</span></h3>
     <ol>
-    {% for id in t.queue_order(lst) %}{% set tm = t.teams[id] %}
+    {% for id in waiting %}{% set tm = t.teams[id] %}
       <li>{{ tm.name }} <span class="muted">({{ tm.matches_played }} played)</span>
         {% if tm.priority %}<span class="tag call">called next</span>{% elif t.is_behind(tm) %}<span class="tag behind">catching up</span>{% endif %}
-        {% if admin_controls and not tm.priority and not loop.first %}
+        {% if waiting|length > 1 %}<span class="tag wait">waiting for a new opponent</span>{% endif %}
+        {% if admin_controls and not tm.priority %}
         <form method="post" action="{{ url_for('admin_call_next', team_id=id) }}" class="inline">
           <button class="link">Call next</button></form>
         {% endif %}

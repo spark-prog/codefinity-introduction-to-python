@@ -14,9 +14,15 @@ How the format works
   partner counts as registering again, so the 10 cap applies, but the team
   keeps its spot in the field. Above the top bracket a team needs a new partner.
 * Pairing is rolling. At the start every team is put on the winners list in
-  random order. Whenever a table is free, the top two teams waiting on the same
-  list are called to it (winner 1 vs winner 2, loser 1 vs loser 2), so tables
-  never wait for a whole round to finish.
+  random order. As soon as two teams on the same list can play each other they
+  are paired and join the "waiting on a table" queue; tables take pairs from
+  that queue, fewest rounds played first.
+* No rematches unless it's the only option. A team arriving on a list is
+  compared with the top team, then the second, and so on, and paired with the
+  first one it hasn't played. If it has played them all it waits for the next
+  arrival. A rematch (or a winners-vs-losers "cross" match) only happens when
+  both teams have already played everyone still in, or when nothing is playing
+  or queued that could bring a new opponent.
 * A match is a race to N games. The winner keeps its chips and goes to the
   bottom of the WINNERS list. The loser gives one chip back to the main table
   and goes to the bottom of the LOSERS list.
@@ -25,8 +31,7 @@ How the format works
   play, late entry, an opponent cashing in) jumps to the top of its list. If
   nobody else is waiting on its list it plays the top team of the other list.
   The director can also push any waiting team to the front ("Call next").
-* When only one team is waiting on each list and no match is in play, they play
-  each other.
+
 * Check-in: when called, each team taps in as it arrives at the table. Once
   both are there the match starts 2 minutes later. A team that hasn't checked
   in 5 minutes after being called gets a 15-minute grace period, then forfeits
@@ -151,6 +156,8 @@ class Match:
     grace_a: str | None = None  # when each team's grace period began
     grace_b: str | None = None
     forfeit: str | None = None  # "a", "b" or "both"
+    priority: bool = False  # director pressed "Call next" for this pair
+    rematch: bool = False  # these teams had already played each other
     clock_paused: bool = False  # no automatic forfeit (set after an Undo restores an overdue match)
 
 
@@ -574,29 +581,96 @@ class Tournament:
         return 0 if team.priority else 1 if self.is_behind(team) else 2
 
     def queue_order(self, lst: list[str]) -> list[str]:
-        """Waiting teams on a list in the order they'll be called.
+        """Teams on a list that aren't paired yet, in the order they're considered.
 
         "Call next" teams first, then teams behind on matches (fewest played
-        first), then everyone else in the order they finished.
+        first), then everyone else in the order they arrived.
         """
         busy = {x for m in self.open_matches() for x in (m.team_a, m.team_b)}
         waiting = [t for t in lst if t in self.teams and self.teams[t].status == ACTIVE and t not in busy]
         return sorted(waiting, key=lambda t: (self._urgency(t), self.teams[t].matches_played if self._urgency(t) < 2 else 0))
 
-    def _next_pair(self) -> tuple[str, str, str] | None:
+    def played_pairs(self) -> set[frozenset]:
+        """Pairs of teams that have actually played each other (forfeits don't count)."""
+        return {frozenset((m.team_a, m.team_b)) for m in self.matches
+                if m.status == DONE and m.team_b and not m.forfeit}
+
+    def opponents_of(self, team_id: str) -> set[str]:
+        return {x for pair in self.played_pairs() if team_id in pair for x in pair if x != team_id}
+
+    def table_queue(self) -> list[Match]:
+        """Pairs waiting for a table, in the order they'll be called."""
+        waiting = [m for m in self.matches if m.status == WAITING]
+        return sorted(waiting, key=lambda m: (
+            0 if m.priority else 1,
+            min(self.teams[m.team_a].matches_played, self.teams[m.team_b].matches_played),
+            self.teams[m.team_a].matches_played + self.teams[m.team_b].matches_played,
+            m.round,
+        ))
+
+    def _find_pair(self, level: int) -> tuple[str, str, str] | None:
+        """The next pair to set, or None.
+
+        level 0: same list, new opponents only (a rematch is allowed only if both
+                 teams have already played everyone still in). A team behind on
+                 matches may also take a new opponent from the other list.
+        level 1: also winners-vs-losers with new opponents     } only when nothing is
+        level 2: also rematches on the same list               } playing or queued, so
+        level 3: also rematches across the lists               } waiting can't help
+        """
+        played = self.played_pairs()
+        active = {t.id for t in self.active_teams}
+
+        def exhausted(x: str) -> bool:  # has played every other team still in
+            return all(frozenset((x, y)) in played for y in active if y != x)
+
+        def ok(a: str, b: str, allow_rematch: bool) -> bool:
+            return (frozenset((a, b)) not in played or allow_rematch
+                    or (exhausted(a) and exhausted(b)))
+
+        def same_list(lst: list[str], allow_rematch: bool):
+            # Each team, in list order, takes the highest team above it that it may play.
+            for j in range(1, len(lst)):
+                for i in range(j):
+                    if ok(lst[i], lst[j], allow_rematch):
+                        return lst[i], lst[j]
+            return None
+
+        def cross(a_list: list[str], b_list: list[str], allow_rematch: bool, only_urgent: bool):
+            for a in a_list:
+                if only_urgent and self._urgency(a) == 2:
+                    continue
+                for b in b_list:
+                    if ok(a, b, allow_rematch):
+                        return a, b
+            return None
+
         w, l = self.queue_order(self.winners_list), self.queue_order(self.losers_list)
-        in_play = bool(self.open_matches())
         choices = []
-        if len(w) >= 2:
-            choices.append((w[0], w[1], "winners"))
-        if len(l) >= 2:
-            choices.append((l[0], l[1], "losers"))
-        # A lone team on one list plays the top of the other list when it needs to
-        # catch up, or when nobody is playing (otherwise both would wait forever).
-        if len(w) == 1 and l and (self._urgency(w[0]) < 2 or (not in_play and len(l) == 1)):
-            choices.append((w[0], l[0], "cross"))
-        if len(l) == 1 and w and self._urgency(l[0]) < 2:
-            choices.append((w[0], l[0], "cross"))
+        for lst, label in ((w, "winners"), (l, "losers")):
+            pair = same_list(lst, allow_rematch=level >= 2)
+            if pair:
+                choices.append((*pair, label))
+        if not choices:
+            urgent_only = level == 0
+            if level == 0 or level in (1, 3):
+                for a_list, b_list in ((w, l), (l, w)):
+                    pair = cross(a_list, b_list, allow_rematch=level >= 3, only_urgent=urgent_only)
+                    if pair:
+                        a, b = pair
+                        choices.append((a, b, "cross") if a in w else (b, a, "cross"))
+        if not choices and level == 0:
+            # Director override ("Call next"): pair the team now, with a new opponent
+            # from either list if one is waiting, otherwise a rematch.
+            for a in [x for x in w + l if self.teams[x].priority]:
+                others = [x for x in w + l if x != a]
+                fresh = [x for x in others if frozenset((a, x)) not in played]
+                b = (fresh or others or [None])[0]
+                if b:
+                    same = (a in w) == (b in w)
+                    label = ("winners" if a in w else "losers") if same else "cross"
+                    choices.append((a, b, label) if a in w or not same else (b, a, label))
+                    break
         if not choices:
             return None
 
@@ -607,39 +681,72 @@ class Tournament:
 
         return min(choices, key=key)
 
-    def _call_pair(self, a_id: str, b_id: str, bracket: str, table: str) -> Match:
+    def _form_pairs(self) -> None:
+        """Pair every team that can be paired and add the pairs to the table queue."""
+        while True:
+            # Rematches and cross matches are a last resort: only when nothing that
+            # is playing or queued could bring a new opponent onto the lists.
+            nothing_coming = not self.open_matches()
+            pair = None
+            for level in (0, 1, 2, 3) if nothing_coming else (0,):
+                pair = self._find_pair(level)
+                if pair:
+                    break
+            if not pair:
+                return
+            self._queue_pair(*pair)
+
+    def _queue_pair(self, a_id: str, b_id: str, bracket: str) -> Match:
         a, b = self.teams[a_id], self.teams[b_id]
         if a.matches_played == 0 and b.matches_played == 0:
             bracket = "start"
+        rematch = frozenset((a_id, b_id)) in self.played_pairs()
         for team in (a, b):
-            team.priority = False
             for lst in (self.winners_list, self.losers_list):
                 if team.id in lst:
                     lst.remove(team.id)
         self.round += 1
         m = Match(id=uuid.uuid4().hex[:8], round=self.round, team_a=a_id, team_b=b_id, bracket=bracket,
-                  status=CALLED, table=table, called_at=now())
+                  priority=a.priority or b.priority, rematch=rematch)
+        a.priority = b.priority = False
         self.matches.append(m)
-        self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {table} ({bracket}).")
-
-        def side(t: Team) -> str:
-            return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
-
-        body = f"New match: Table {table}: {side(a)} VS {side(b)}. Good Luck!"
-        for team in (a, b):
-            self._text_team(team, body)
+        note = " (rematch: the only option left)" if rematch else ""
+        self._say(f"Match #{m.round} set: {a.name} vs {b.name} ({bracket}){note}. Waiting for a table.")
         return m
 
+    def _call_waiting(self) -> None:
+        """Send queued pairs to free tables."""
+        free = self.free_tables()
+        for m in self.table_queue():
+            if not free:
+                break
+            m.table = free.pop(0)
+            m.status = CALLED
+            m.called_at = now()
+            a, b = self.teams[m.team_a], self.teams[m.team_b]
+            self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {m.table}.")
+
+            def side(t: Team) -> str:
+                return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
+
+            body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
+            for team in (a, b):
+                self._text_team(team, body)
+
     def call_next(self, team_id: str) -> None:
-        """Director override: put a waiting team first in line for the next free table."""
+        """Director override: this team's pair (or the team, if not paired yet) goes first."""
         team = self.team(team_id)
         if self.status != RUNNING or team.status != ACTIVE:
             raise TournamentError(f"{team.name} isn't waiting to play.")
-        if self.current_match_for(team_id):
+        m = self.current_match_for(team_id)
+        if m is not None and m.status == CALLED:
             raise TournamentError(f"{team.name} is already on a table.")
-        if team.id not in self.winners_list and team.id not in self.losers_list:
-            self._enqueue(team.id, self.winners_list)
-        team.priority = True
+        if m is not None:
+            m.priority = True
+        else:
+            if team.id not in self.winners_list and team.id not in self.losers_list:
+                self._enqueue(team.id, self.winners_list)
+            team.priority = True
         self._say(f"Director moved {team.name} to the front of the line.")
         self._advance()
 
@@ -704,10 +811,23 @@ class Tournament:
 
     def _double_forfeit(self, m: Match) -> None:
         """Neither team showed: both give a chip back and go to the losers list."""
+        teams = [self.teams[m.team_a], self.teams[m.team_b]]
+        others = [x for x in self.active_teams if x.id not in (m.team_a, m.team_b)]
+        if not others and all(team.chips <= 1 for team in teams):
+            # Forfeiting would leave nobody holding chips and the pot unpaid,
+            # so the last two teams are cashed in at the current value instead.
+            m.status = CANCELLED
+            m.finished_at = now()
+            self._say(f"Neither {teams[0].name} nor {teams[1].name} checked in for the final match; both are cashed in.")
+            for team in sorted(teams, key=lambda x: x.chips):
+                payout = self._cash_out(team, "No-show in the final match")
+                self._text_team(team, f"{team.name}: you didn't check in for your match and have been cashed in for "
+                                      f"{money(payout)}. See the desk to collect.")
+            self._check_finished()
+            return
         m.status = DONE
         m.forfeit = "both"
         m.finished_at = now()
-        teams = [self.teams[m.team_a], self.teams[m.team_b]]
         for team in teams:
             team.losses += 1
             self._chip_change(team, -1, f"Forfeited match #{m.round} (no-show)")
@@ -799,7 +919,7 @@ class Tournament:
         return changes
 
     def _advance(self) -> None:
-        """Call waiting teams to every free table."""
+        """Pair whoever can be paired, then send queued pairs to free tables."""
         if self.status != RUNNING or self._check_finished():
             return
         # Safety net: every active team is either on a table or on a list.
@@ -807,12 +927,8 @@ class Tournament:
         for team in self.active_teams:
             if team.id not in busy and team.id not in self.winners_list and team.id not in self.losers_list:
                 self._enqueue(team.id, self.winners_list)
-        free = self.free_tables()
-        while free:
-            pair = self._next_pair()
-            if pair is None:
-                break
-            self._call_pair(*pair, table=free.pop(0))
+        self._form_pairs()
+        self._call_waiting()
 
     def match_minutes_played(self, m: Match, at: datetime | None = None) -> float | None:
         """Minutes since the match started (None before it starts)."""

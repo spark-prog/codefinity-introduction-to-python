@@ -1,0 +1,16 @@
+{# Pairs set and waiting for a table, in call order. Set admin_controls for Call next buttons. #}
+<h3>Teams waiting on a table</h3>
+<ol class="queue">
+{% for m in t.table_queue() %}
+  <li>{{ t.name_of(m.team_a) }} <span class="muted">({{ t.teams[m.team_a].matches_played }} played)</span>
+    vs {{ t.name_of(m.team_b) }} <span class="muted">({{ t.teams[m.team_b].matches_played }} played)</span>
+    {% if m.priority %}<span class="tag call">called next</span>{% endif %}
+    {% if m.rematch %}<span class="tag behind">rematch: only option</span>{% endif %}
+    {% if m.bracket == "cross" %}<span class="muted">· winners vs losers</span>{% endif %}
+    {% if admin_controls and not loop.first and not m.priority %}
+    <form method="post" action="{{ url_for('admin_call_next', team_id=m.team_a) }}" class="inline">
+      <button class="link">Call next</button></form>
+    {% endif %}
+  </li>
+{% else %}<li class="muted">No pairs waiting.</li>{% endfor %}
+</ol>

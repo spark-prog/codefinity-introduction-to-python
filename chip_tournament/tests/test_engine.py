@@ -156,22 +156,25 @@ def test_bracket_labels():
     assert Tournament().bracket_labels() == [("6 or less", 5), ("7–8", 4), ("9–10", 3), ("11", 2)]
 
 
-def test_round_one_pairs_everyone_and_calls_tables():
-    t = make(n_teams=6)
+def test_start_fills_every_table_from_a_random_draw():
+    t = make(n_teams=7)  # 4 tables
     t.start(random.Random(2))
-    first = [m for m in t.matches if m.round == 1]
-    assert len(first) == 3
-    seen = [x for m in first for x in (m.team_a, m.team_b)]
-    assert sorted(seen) == sorted(t.teams)
-    assert {m.table for m in first} == {"1", "2", "3"}
+    first = called(t)
+    assert len(first) == 3 and {m.table for m in first} == {"1", "2", "3"}
+    playing = [x for m in first for x in (m.team_a, m.team_b)]
+    assert len(set(playing)) == 6
+    assert len(t.queue_order(t.winners_list)) == 1  # the odd team waits, no bye
+    assert all(m.bracket == "start" for m in first)
 
 
-def test_more_matches_than_tables_wait_in_order():
+def test_more_teams_than_tables_wait_in_line():
     t = make(n_teams=6, tables=["A"])
     t.start(random.Random(3))
-    assert len(called(t)) == 1
+    waiting = t.queue_order(t.winners_list)
+    assert len(called(t)) == 1 and len(waiting) == 4
     play(t, called(t)[0])
-    assert len(called(t)) == 1 and called(t)[0].table == "A"
+    m = called(t)[0]
+    assert m.table == "A" and (m.team_a, m.team_b) == (waiting[0], waiting[1])
 
 
 def test_loser_gives_chip_back_and_value_rises():
@@ -188,34 +191,72 @@ def test_loser_gives_chip_back_and_value_rises():
     assert t.chip_value_cents > before
 
 
-def test_next_round_pairs_winners_and_losers_in_finish_order():
+def test_rolling_pairs_as_soon_as_two_wait_on_the_same_list():
     t = make(n_teams=4)
     t.start(random.Random(5))
     m1, m2 = called(t)
-    play(t, m2, "a")  # finishes first
+    play(t, m2, "a")  # finishes first: one team on each list, the other match still playing
+    assert len(called(t)) == 1
     play(t, m1, "b")
-    r2 = [m for m in t.matches if m.round == 2]
-    assert [(m.bracket, m.team_a, m.team_b) for m in r2] == [
+    new = [m for m in called(t)]
+    assert sorted((m.bracket, m.team_a, m.team_b) for m in new) == sorted([
         ("winners", m2.team_a, m1.team_b),
         ("losers", m2.team_b, m1.team_a),
-    ]
+    ])
 
 
-def test_odd_lists_cross_over():
-    t = make(n_teams=6)
+def test_lone_teams_on_each_list_play_when_nobody_else_is():
+    t = make(n_teams=2)
     t.start(random.Random(6))
-    for m in called(t):
-        play(t, m)
-    r2 = [m for m in t.matches if m.round == 2]
-    assert sorted(m.bracket for m in r2) == ["cross", "losers", "winners"]
+    play(t, called(t)[0])
+    assert called(t)[0].bracket == "cross"
 
 
-def test_odd_field_gives_a_bye():
+def test_odd_team_waits_for_the_next_free_table():
     t = make(n_teams=3)
     t.start(random.Random(7))
-    byes = [m for m in t.matches if m.team_b is None]
-    assert len(byes) == 1
-    assert byes[0].team_a in t.winners_list
+    first = called(t)[0]
+    (waiting,) = t.queue_order(t.winners_list)
+    play(t, first, "a")
+    nxt = called(t)[0]
+    assert {nxt.team_a, nxt.team_b} == {waiting, first.team_a}  # winners list: waiting team, then the winner
+
+
+def test_team_behind_on_matches_jumps_the_line():
+    t = make(n_teams=4, tables=["1"])
+    t.start(random.Random(40))
+    for _ in range(3):
+        play(t, called(t)[0])
+    assert max(x.matches_played for x in t.active_teams) == 2
+    late = t.register_team("Latecomers", partners(8))  # 0 played: 2 behind the leader
+    assert t.is_behind(late)
+    assert t.queue_order(t.winners_list)[0] == late.id or t.queue_order(t.losers_list)[0] == late.id
+    play(t, called(t)[0])
+    assert late.id in (called(t)[0].team_a, called(t)[0].team_b)
+
+
+def test_call_next_puts_a_team_first_in_line():
+    t = make(n_teams=6, tables=["1"])
+    t.start(random.Random(41))
+    last_in_line = t.queue_order(t.winners_list)[-1]
+    t.call_next(last_in_line)
+    assert t.teams[last_in_line].priority
+    assert t.queue_order(t.winners_list)[0] == last_in_line
+    play(t, called(t)[0])
+    assert last_in_line in (called(t)[0].team_a, called(t)[0].team_b)
+    assert not t.teams[last_in_line].priority
+    on_table = called(t)[0].team_a
+    with pytest.raises(TournamentError, match="already on a table"):
+        t.call_next(on_table)
+
+
+def test_call_next_calls_immediately_when_a_table_is_free():
+    t = make(n_teams=3, tables=["1", "2"])
+    t.start(random.Random(42))
+    (waiting,) = t.queue_order(t.winners_list)
+    assert len(called(t)) == 1  # one team alone, nobody to pair with yet
+    t.call_next(waiting)  # it still has no opponent free, so it stays first in line
+    assert len(called(t)) == 1 and t.teams[waiting].priority
 
 
 def test_team_out_of_chips_is_eliminated_and_removed_from_rotation():
@@ -275,20 +316,20 @@ def test_cannot_cash_in_mid_match():
         t.cash_in(m.team_a)
 
 
-def test_last_call_waiting_match_is_the_last_one():
+def test_last_call_teams_waiting_play_one_more():
     t = make(n_teams=4, tables=["1"])
     t.start(random.Random(12))
     on_table = called(t)[0]
-    waiting = next(m for m in t.matches if m.status == WAITING)
     t.call_last_call()
     assert t.status == RUNNING  # nobody is cashed out yet
 
     play(t, on_table)  # started before last call: both teams play one more
     assert all(t.teams[x].status == ACTIVE for x in (on_table.team_a, on_table.team_b))
 
-    assert waiting.status == CALLED
-    play(t, waiting)  # not started by last call: both teams are cashed in after it
-    winner, loser = t.teams[waiting.winner], t.teams[waiting.loser]
+    waiting_match = called(t)[0]  # the two teams that were waiting at last call
+    assert {waiting_match.team_a, waiting_match.team_b}.isdisjoint({on_table.team_a, on_table.team_b})
+    play(t, waiting_match)  # their last match: both are cashed in after it
+    winner, loser = t.teams[waiting_match.winner], t.teams[waiting_match.loser]
     assert winner.status == CASHED_OUT and winner.payout_cents > 0
     assert loser.status == CASHED_OUT and loser.chips == 0
     # Two chips have gone back to the table (12 -> 10); the loser cashes in its remaining 2.
@@ -377,11 +418,29 @@ def test_late_registration_joins_winners_list():
     assert t.pot_cents == 5 * 2000
 
 
-def test_texts_are_queued_for_table_calls():
+def test_table_call_text():
     t = make(n_teams=2)
+    t.settings.contact_phone = "904-528-7657"
     t.outbox.clear()
     t.start(random.Random(16))
-    assert any("TABLE 1" in msg.body for msg in t.outbox)
+    m = called(t)[0]
+    a, b = t.teams[m.team_a], t.teams[m.team_b]
+    expected = (f"New match: Table 1: {a.name} with combined skill 10 currently holding 3 chips VS "
+                f"{b.name} with combined skill 10 currently holding 3 chips. Good Luck!")
+    assert [msg.body for msg in t.outbox] == [expected, expected]  # one text to each team, no questions line
+
+
+def test_long_match_flag():
+    t = make(n_teams=2)
+    t.start(random.Random(43))
+    m, base = called_at(t)
+    t.check_in(m.id, "a", at=base)
+    t.check_in(m.id, "b", at=base)  # starts at base + 2 min
+    start = base + timedelta(minutes=2)
+    assert t.match_minutes_played(m, at=base) is None  # not started yet
+    assert t.match_minutes_played(m, at=start + timedelta(minutes=16)) == pytest.approx(16)
+    assert t.long_matches(at=start + timedelta(minutes=19)) == []
+    assert t.long_matches(at=start + timedelta(minutes=20)) == [m]
 
 
 def test_round_trip_serialization():
@@ -506,5 +565,8 @@ def test_texts_carry_sender_name_and_questions_phone():
     t.register_team("Sharks", partners(8))
     body = t.outbox[-1].body
     assert body.startswith("First Coast APA: Sharks is registered")
+    t.register_team("Rails", partners(8))
+    t.start(random.Random(1))
+    assert "Questions?" not in t.outbox[-1].body  # only on the registration text
     assert "Reply STOP to opt out." in body
     assert body.endswith("Questions? Call/text 904-528-7657")

@@ -31,6 +31,20 @@
 // passed deadline reloads the page so automatic grace/forfeit updates show up.
 (function () {
   var els = document.querySelectorAll(".countdown[data-at]"), reloading = false;
+  // Match timers on the director page: amber past the expected length, red at the long-match mark.
+  var timers = document.querySelectorAll(".elapsed[data-since]");
+  function elapsed() {
+    timers.forEach(function (el) {
+      var mins = (Date.now() - new Date(el.dataset.since).getTime()) / 60000, card = el.closest(".match");
+      if (mins < 0) { el.textContent = ""; return; }
+      el.textContent = "Playing " + Math.floor(mins) + ":" + String(Math.floor((mins % 1) * 60)).padStart(2, "0");
+      if (card) {
+        card.classList.toggle("long", mins >= +el.dataset.long);
+        card.classList.toggle("over", mins >= +el.dataset.over && mins < +el.dataset.long);
+      }
+    });
+  }
+  if (timers.length) { elapsed(); setInterval(elapsed, 1000); }
   if (!els.length) return;
   function tick() {
     var now = Date.now();

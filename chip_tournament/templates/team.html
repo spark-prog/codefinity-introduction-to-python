@@ -20,7 +20,7 @@
   {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}
   </div>
 {% elif team.status == ACTIVE %}
-  <p class="muted">Waiting for the next round.</p>
+  <p class="muted">Waiting in line for the next free table.</p>
 {% endif %}
 {% if team.status == ACTIVE and team.matches_left %}
   <div class="banner danger">LAST CALL: {% if team.matches_left == 1 %}your next match is your last. You'll be cashed in automatically when it's over.
@@ -43,7 +43,7 @@
 <section>
   <h2>Results</h2>
   <table class="grid">
-    <thead><tr><th>Round</th><th>Opponent</th><th>Score</th><th>Result</th></tr></thead>
+    <thead><tr><th>Match #</th><th>Opponent</th><th>Score</th><th>Result</th></tr></thead>
     <tbody>
     {% for m in history %}
       {% set mine_a = m.team_a == team.id %}

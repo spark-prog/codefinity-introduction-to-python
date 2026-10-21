@@ -49,7 +49,7 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
    Combined skill can't be over **10 at registration**. If the same two partners' skill levels go up afterward, the team updates them on its roster page, up to **11**. **Swapping in a new partner counts as registering again**, so the new pair must be 10 or less, but the team keeps its spot in the field (or its place on the waiting list). A team over 11 can't be saved, and the tournament won't start until every team is 11 or less. Partners and skill levels lock once the tournament starts. The director can change the brackets and the registration cap in Settings until the start.
 
    **Field cap and waiting list.** The director sets the field cap (the most teams) in Settings. Once the field is full, new registrations go on a **waiting list** in order, and each team is texted its place. When a team in the field is removed before the start, or the director raises the cap, the next waiting team moves into the field and gets a text. Waiting-list teams don't play or pay into the pot unless they get a spot. A cap of 0 means no limit, and the cap can't be set below the number of teams already in the field.
-2. **Round 1** is a random draw. Matches go to free tables in order. If there are more matches than tables, the rest wait and get called automatically as tables free up.
+2. **Pairing is rolling.** At the start every team goes on the winners list in random order. Whenever a table is free, the top two teams waiting on the same list are called to it, so tables never wait for a whole round to finish. The table-call text reads: "New match: Table 3: Sharks with combined skill 9 currently holding 4 chips VS Rail Riders with combined skill 8 currently holding 3 chips. Good Luck!"
 3. **Check-in at the table.** Each team on the scorekeeping card has an **Arrived** button. When both teams have checked in, the match start time is set **2 minutes after the second arrival**, and both teams get a text with the start time. The card, the board and the team's page show the start time with a live countdown.
    - A team that hasn't checked in **5 minutes** after being called starts a **15-minute grace period**. It gets a text saying when it will forfeit, and its card turns red.
    - If it still hasn't checked in when the grace period ends, it **forfeits**: it loses the match and gives a chip back, and the opponent wins. If **neither** team checks in, both forfeit a chip and both go to the losers list.
@@ -58,12 +58,13 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
    - The 2 / 5 / 15 minutes can be changed in Settings.
 4. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
 5. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
-6. **The next round** starts when every match in the round is finished: winner 1 vs winner 2, winner 3 vs winner 4, …, loser 1 vs loser 2, …
+6. **Catch-up and Call next.** A team 2 or more matches behind the leader (late entry, an opponent cashing in) is tagged *catching up* and moves to the top of its list. If nobody else is waiting on its list, it plays the top team of the other list. The director can press **Call next** on any waiting team to put it first in line. The 2-match gap is a setting.
+   - **Long matches:** each match card shows how long it has been playing. It turns amber after the expected length (15 min) and red 20 minutes after the start, and a "Running long" banner lists those tables. Both times are settings.
 7. **Pot and chip value.** Pot = entry fee × teams + added money. Chip value = pot ÷ chips still in play, so it goes up every time a chip goes back to the table.
 8. **Cash-in.** When the director opens cash-in, every team gets a text with the chip value and what its chips are worth. A team can cash in at the desk (the director clicks **Cash in**) for chips × chip value, or keep playing. Cashing in doesn't change what the other teams' chips are worth.
 9. **Last call** tells every team that its next match is its last. When that match ends, both teams are cashed in automatically: the loser gives its chip back first, then each team is paid its chips × the chip value.
    - A match already **on a table** when last call happens finishes as normal. Those teams then play one more match, which is their last.
-   - Teams **waiting** for a table or for the next round play one more match, then cash in.
+   - Teams **waiting** in line play one more match, then cash in.
    - Pairing keeps working the same way (winners vs winners, losers vs losers) until every team has played its last match. A team left with no opponent is cashed in right away.
    - Every team gets a text at last call, and the director's team list shows "last match" or "2 matches left" for each team. Registration closes at last call.
    - **End now — cash everyone out** is a separate emergency button (for example, if the bar is closing). It stops every match and cashes everyone in at once. The last team paid gets whatever is left in the pot, so every cent is paid out.
@@ -71,8 +72,8 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 
 ### Decisions the rules didn't specify (easy to change in `chips/engine.py`)
 
-- **Odd number of teams on a list:** the leftover winner plays the leftover loser (a "cross" match). If only one team is left over, it gets a bye and keeps its chips.
-- **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent waits for the next round.
+- **One team waiting on each list:** if no one else is playing, they play each other (a "cross" match). Otherwise they wait for someone to join their list. There are no byes.
+- **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent goes back to the front of the line.
 - **Late entries** (after the start) pay the entry fee, get chips for their skill level and join the bottom of the winners list.
 - **Entry fee, added money, chip brackets and the registration cap** lock when the tournament starts.
 - **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Partner swap, now Ann & Cy. Combined skill 9 → 10").
@@ -98,7 +99,7 @@ Every chip movement (starting chips, losses, cash-ins, manual adjustments) goes 
 
 ## Text alerts
 
-Texts go to the captain's cell and any player who added a cell number. A team gets a text when it registers (with its PIN), is called to a table, wins or loses a round, gets a bye, is eliminated, or cashes in, and when cash-in opens or last call happens. The director can also text every team from the dashboard.
+Texts go to the captain's cell and any player who added a cell number. A team gets a text when it registers (with its PIN, plus the "Questions?" phone if one is set), is called to a table, wins or loses a match, is eliminated, or cashes in, and when cash-in opens or last call happens. Every text starts with the sender name if one is set. The director can also text every team from the dashboard.
 
 To send real texts, create a [Twilio](https://www.twilio.com) account and set:
 

@@ -52,7 +52,7 @@
 <ul>
   <li>adds up the pot (entry fees + added money), with waiting-list teams not included</li>
   <li>gives each team its chips based on combined skill</li>
-  <li>draws round 1 at random and calls matches to free tables, texting each team its table</li>
+  <li>puts every team on the winners list in random order and calls the top two to each free table, texting both teams the match-up</li>
 </ul>
 <p>The app won't start if fewer than 2 teams are in the field, no tables are set, or any team is over {{ t.max_skill }}. The error message names the teams.</p>
 </section>
@@ -72,7 +72,12 @@
     <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
 </table>
-<p><b>Between rounds there's nothing to do.</b> When the last match of a round ends, the app pairs winner 1 vs winner 2, loser 1 vs loser 2, and so on, and calls the matches to tables. An odd winner plays an odd loser. A single team left over gets a bye and keeps its chips. If there are more matches than tables, the extras wait and are called as tables free up.</p>
+<p><b>Pairing is rolling, so there's nothing to do between matches.</b> As soon as a table is free, the top two teams waiting on the winners list (or the losers list) are called to it, and both teams get a text with the match-up. The lists on the Director page are shown in the order teams will be called. If only one team is waiting on each list and no one else is playing, those two play each other.</p>
+<ul>
+  <li><b>Catching up:</b> a team {{ s.catchup_matches }} or more matches behind the leader (after arriving late, or when an opponent cashes in) is tagged <i>catching up</i> and moves to the top of its list. If no one else is waiting on its list, it plays the top team of the other list.</li>
+  <li><b>Call next:</b> press <i>Call next</i> next to any waiting team to put it first in line. It goes to the next free table.</li>
+  <li><b>Slow play:</b> each card shows how long the match has been playing. It turns <b>amber</b> after {{ s.match_minutes }} minutes and <b>red</b> at {{ s.long_match_minutes }} minutes past the start, and a "Running long" banner lists those tables. Go speak to the table. Catch-up can't help a team that plays slowly every match; only speeding them up can.</li>
+</ul>
 <p><b>Late teams</b> can register until last call. They pay the entry fee, get their chips and join the winners list, or go on the waiting list if the field is full.</p>
 </section>
 
@@ -81,7 +86,7 @@
 <ol class="steps">
   <li>Press <b>Open cash-in</b>. Every team gets a text with the chip value and what its chips are worth.</li>
   <li>When a team comes to the desk, press <b>Cash in $…</b> in its row. Pay the amount shown in the green message.</li>
-  <li>A team <b>can't cash in once a game in its current match has been scored</b>. If its match hasn't started, the match is cancelled and the opponent waits for the next round.</li>
+  <li>A team <b>can't cash in once a game in its current match has been scored</b>. If its match hasn't started, the match is cancelled and the opponent goes back to the front of the line.</li>
   <li>Other teams' chips are worth the same after a cash-in. Chip value only goes up when a chip goes back to the table.</li>
 </ol>
 </section>

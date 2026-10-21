@@ -143,3 +143,13 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--card); bo
 .checkbox { display: flex !important; align-items: center; gap: 8px; }
 .checkbox input { width: auto !important; margin: 0 !important; }
 @media (max-width: 640px) { .mapping { grid-template-columns: 1fr; } }
+
+.elapsed { font-weight: 700; font-variant-numeric: tabular-nums; }
+.match.over { border-left-color: var(--accent); background: #fffbea; }
+.match.over .elapsed { color: #8a6d00; }
+.match.long { border-left-color: var(--danger); background: #fdeeec; }
+.match.long .elapsed { color: var(--danger); }
+.tag { display: inline-block; font-size: .75em; font-weight: 700; border-radius: 99px; padding: 1px 8px; margin-left: 4px; }
+.tag.behind { background: #fff0c2; color: #6b5200; }
+.tag.call { background: #dff3e9; color: var(--felt-dark); }
+.lists li { margin: 3px 0; }

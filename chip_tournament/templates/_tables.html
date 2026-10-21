@@ -1,5 +1,4 @@
 {% set called = t.matches|selectattr("status", "equalto", CALLED)|list %}
-{% set waiting = t.matches|selectattr("status", "equalto", WAITING)|list %}
 <section>
   <h2>Now playing</h2>
   {% if called %}
@@ -9,20 +8,11 @@
       <div class="table-no">Table {{ m.table }}</div>
       <div class="vs"><span>{{ t.name_of(m.team_a) }}</span><b>{{ m.score_a }}</b></div>
       <div class="vs"><span>{{ t.name_of(m.team_b) }}</span><b>{{ m.score_b }}</b></div>
-      <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · round {{ m.round }}</div>
+      <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · match #{{ m.round }}</div>
       {% include "_match_clock.html" %}
     </div>
     {% endfor %}
   </div>
   {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
-  {% if waiting %}
-  <h3>Up next (waiting for a table)</h3>
-  <ol>{% for m in waiting %}<li>{{ t.name_of(m.team_a) }} vs {{ t.name_of(m.team_b) }} <span class="muted">({{ m.bracket }})</span></li>{% endfor %}</ol>
-  {% endif %}
-  {% if t.status == RUNNING %}
-  <div class="lists">
-    <div><h3>Winners list</h3><ol>{% for id in t.winners_list %}<li>{{ t.name_of(id) }}</li>{% else %}<li class="muted">empty</li>{% endfor %}</ol></div>
-    <div><h3>Losers list</h3><ol>{% for id in t.losers_list %}<li>{{ t.name_of(id) }}</li>{% else %}<li class="muted">empty</li>{% endfor %}</ol></div>
-  </div>
-  {% endif %}
+  {% if t.status == RUNNING %}{% include "_lists.html" %}{% endif %}
 </section>

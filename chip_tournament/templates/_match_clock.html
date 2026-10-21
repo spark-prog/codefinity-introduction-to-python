@@ -2,7 +2,8 @@
 {% if m.status == CALLED and m.called_at %}
 <div class="match-clock">
   {% if m.start_at %}
-    <span class="go">Match starts {{ m.start_at|clock }}</span> <span class="countdown" data-at="{{ m.start_at }}"></span>
+    {% if t.match_minutes_played(m) is not none %}<span class="muted">Started {{ m.start_at|clock }}</span>
+    {% else %}<span class="go">Match starts {{ m.start_at|clock }}</span> <span class="countdown" data-at="{{ m.start_at }}"></span>{% endif %}
   {% else %}
     <span class="muted">Called {{ m.called_at|clock }}.</span>
     {% for side, tid in (("a", m.team_a), ("b", m.team_b)) %}

@@ -13,13 +13,20 @@ How the format works
   the team may rise to the top bracket (11) by the start. Swapping in a new
   partner counts as registering again, so the 10 cap applies, but the team
   keeps its spot in the field. Above the top bracket a team needs a new partner.
-* Round 1: teams are paired at random and called to a table.
+* Pairing is rolling. At the start every team is put on the winners list in
+  random order. Whenever a table is free, the top two teams waiting on the same
+  list are called to it (winner 1 vs winner 2, loser 1 vs loser 2), so tables
+  never wait for a whole round to finish.
 * A match is a race to N games. The winner keeps its chips and goes to the
   bottom of the WINNERS list. The loser gives one chip back to the main table
   and goes to the bottom of the LOSERS list.
 * A team with zero chips is eliminated.
-* When every match in the round is done, the next round pairs the lists in
-  order: winner 1 vs winner 2, winner 3 vs winner 4, loser 1 vs loser 2, ...
+* Catch-up: a team that has played 2+ fewer matches than the leader (slow
+  play, late entry, an opponent cashing in) jumps to the top of its list. If
+  nobody else is waiting on its list it plays the top team of the other list.
+  The director can also push any waiting team to the front ("Call next").
+* When only one team is waiting on each list and no match is in play, they play
+  each other.
 * Check-in: when called, each team taps in as it arrives at the table. Once
   both are there the match starts 2 minutes later. A team that hasn't checked
   in 5 minutes after being called gets a 15-minute grace period, then forfeits
@@ -96,6 +103,8 @@ class Team:
     payout_cents: int = 0
     wins: int = 0
     losses: int = 0
+    priority: bool = False  # director pressed "Call next"
+    queued_at: str | None = None  # when it joined its current list
     # Set at last call: matches this team still plays before it is cashed in.
     matches_left: int | None = None
     registered_at: str = field(default_factory=now)
@@ -107,6 +116,10 @@ class Team:
             if number and number not in seen:
                 seen.append(number)
         return seen
+
+    @property
+    def matches_played(self) -> int:
+        return self.wins + self.losses
 
     @property
     def combined_skill(self) -> int:
@@ -155,6 +168,9 @@ class Settings:
     warmup_minutes: int = 2  # from both teams arriving to the match start
     checkin_minutes: int = 5  # to reach the table after being called
     grace_minutes: int = 15  # extra time before a no-show forfeits
+    match_minutes: int = 15  # expected match length (amber after this)
+    long_match_minutes: int = 20  # red flag this long after the match start
+    catchup_matches: int = 2  # this many matches behind the leader = jump the queue
     chip_brackets: list[list[int]] = field(default_factory=lambda: [list(b) for b in DEFAULT_CHIP_BRACKETS])
     registration_cap: int = DEFAULT_REGISTRATION_CAP
     field_cap: int = 0  # most teams in the field; 0 = no limit set
@@ -162,7 +178,7 @@ class Settings:
     cash_in_time: str = ""
     last_call_time: str = ""
     sms_name: str = ""  # starts every text, e.g. "First Coast APA"
-    contact_phone: str = ""  # ends every text: "Questions? Call/text ..."
+    contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
 
 
 @dataclass
@@ -290,10 +306,12 @@ class Tournament:
     def _text_team(self, team: Team, body: str) -> None:
         if self.settings.sms_name:
             body = f"{self.settings.sms_name}: {body}"
-        if self.settings.contact_phone:
-            body = f"{body} Questions? Call/text {self.settings.contact_phone}"
         for number in team.phones:
             self.outbox.append(Message(to=number, body=body, team_id=team.id))
+
+    def _questions(self) -> str:
+        phone = self.settings.contact_phone
+        return f" Questions? Call/text {phone}" if phone else ""
 
     def _text_active(self, body: str) -> None:
         for team in self.active_teams:
@@ -395,14 +413,14 @@ class Tournament:
             self._text_team(
                 team,
                 f"{self.settings.name} is full. {team.name} is #{spot} on the waiting list; we'll text you "
-                f"if a spot opens. Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.",
+                f"if a spot opens. Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.{self._questions()}",
             )
             return team
         self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
         self._text_team(
             team,
             f"{team.name} is registered for {self.settings.name}. "
-            f"Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.",
+            f"Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.{self._questions()}",
         )
         if self.status == RUNNING:
             self._join_running(team)
@@ -434,8 +452,9 @@ class Tournament:
     def _join_running(self, team: Team) -> None:
         """Late entry: pay in, get chips, and wait on the winners list."""
         self._activate(team)
-        self.winners_list.append(team.id)
+        self._enqueue(team.id, self.winners_list)
         self._say(f"{team.name} entered late with {team.chips} chips.")
+        self._advance()
 
     def _activate(self, team: Team) -> None:
         fee = self.settings.entry_fee_cents
@@ -525,71 +544,104 @@ class Tournament:
         )
         order = [t.id for t in teams]
         (rng or random.SystemRandom()).shuffle(order)
-        self.round = 1
-        self._pair(order, [], start=True)
-        self._call_matches()
+        for team_id in order:
+            self._enqueue(team_id, self.winners_list)
+        self._advance()
 
-    def _pair(self, winners: list[str], losers: list[str], start: bool = False) -> None:
-        """Create the matches for self.round from the two ordered lists."""
-        pairs: list[tuple[str, str | None, str]] = []
-        label = "start" if start else "winners"
-        for i in range(0, len(winners) - 1, 2):
-            pairs.append((winners[i], winners[i + 1], label))
-        for i in range(0, len(losers) - 1, 2):
-            pairs.append((losers[i], losers[i + 1], "losers"))
+    # ------------------------------------------------------------ rolling pairing
 
-        odd_winner = winners[-1] if len(winners) % 2 else None
-        odd_loser = losers[-1] if len(losers) % 2 else None
-        if odd_winner and odd_loser:
-            # One team left on each list: they play each other.
-            pairs.append((odd_winner, odd_loser, "cross"))
-        elif odd_winner or odd_loser:
-            pairs.append((odd_winner or odd_loser, None, label if odd_winner else "losers"))
+    def _enqueue(self, team_id: str, lst: list[str], front: bool = False) -> None:
+        for other in (self.winners_list, self.losers_list):
+            if team_id in other:
+                other.remove(team_id)
+        lst.insert(0, team_id) if front else lst.append(team_id)
+        self.teams[team_id].queued_at = now()
 
-        for a, b, bracket in pairs:
-            m = Match(id=uuid.uuid4().hex[:8], round=self.round, team_a=a, team_b=b, bracket=bracket)
-            self.matches.append(m)
-            if b is None:
-                self._finish_bye(m)
-            else:
-                self._say(f"Round {self.round}: {self.name_of(a)} vs {self.name_of(b)} ({bracket}).")
+    @property
+    def matches_completed(self) -> int:
+        return sum(1 for m in self.matches if m.status == DONE)
 
-    def _finish_bye(self, m: Match) -> None:
-        m.status = DONE
-        m.winner = m.team_a
-        m.finished_at = now()
-        team = self.teams[m.team_a]
-        if self.last_call:
-            # No more matches are coming for a team with a bye after last call.
-            team.matches_left = 0
-            payout = self._cash_out(team, "Last call (bye)")
-            self._text_team(team, f"{team.name}: no opponent left after last call. "
-                                  f"You've been cashed in for {money(payout)}. See the desk to collect.")
-            return
-        target = self.losers_list if m.bracket == "losers" else self.winners_list
-        target.append(team.id)
-        self._say(f"Round {self.round}: {team.name} has a bye and keeps its chips.")
-        self._text_team(team, f"{team.name}: you have a bye in round {self.round}. Stay close for the next round.")
+    def is_behind(self, team: Team) -> bool:
+        """Has this team played `catchup_matches` or more fewer matches than the leader?"""
+        active = self.active_teams
+        if team.status != ACTIVE or not active:
+            return False
+        lead = max(t.matches_played for t in active)
+        return lead - team.matches_played >= max(1, self.settings.catchup_matches)
 
-    def _call_matches(self) -> None:
-        """Send waiting matches to free tables, in the order they were paired."""
-        free = self.free_tables()
-        for m in self.matches:
-            if not free:
-                break
-            if m.status != WAITING:
-                continue
-            m.table = free.pop(0)
-            m.status = CALLED
-            m.called_at = now()
-            a, b = self.teams[m.team_a], self.teams[m.team_b]
-            self._say(f"Called {a.name} vs {b.name} to table {m.table}.")
-            for team, opp in ((a, b), (b, a)):
-                self._text_team(
-                    team,
-                    f"{team.name}: report to TABLE {m.table} now vs {opp.name}. "
-                    f"Race to {self.settings.race_to}. You have {team.chips} chip(s).",
-                )
+    def _urgency(self, team_id: str) -> int:
+        team = self.teams[team_id]
+        return 0 if team.priority else 1 if self.is_behind(team) else 2
+
+    def queue_order(self, lst: list[str]) -> list[str]:
+        """Waiting teams on a list in the order they'll be called.
+
+        "Call next" teams first, then teams behind on matches (fewest played
+        first), then everyone else in the order they finished.
+        """
+        busy = {x for m in self.open_matches() for x in (m.team_a, m.team_b)}
+        waiting = [t for t in lst if t in self.teams and self.teams[t].status == ACTIVE and t not in busy]
+        return sorted(waiting, key=lambda t: (self._urgency(t), self.teams[t].matches_played if self._urgency(t) < 2 else 0))
+
+    def _next_pair(self) -> tuple[str, str, str] | None:
+        w, l = self.queue_order(self.winners_list), self.queue_order(self.losers_list)
+        in_play = bool(self.open_matches())
+        choices = []
+        if len(w) >= 2:
+            choices.append((w[0], w[1], "winners"))
+        if len(l) >= 2:
+            choices.append((l[0], l[1], "losers"))
+        # A lone team on one list plays the top of the other list when it needs to
+        # catch up, or when nobody is playing (otherwise both would wait forever).
+        if len(w) == 1 and l and (self._urgency(w[0]) < 2 or (not in_play and len(l) == 1)):
+            choices.append((w[0], l[0], "cross"))
+        if len(l) == 1 and w and self._urgency(l[0]) < 2:
+            choices.append((w[0], l[0], "cross"))
+        if not choices:
+            return None
+
+        def key(choice):
+            a, b, _ = choice
+            return (min(self._urgency(a), self._urgency(b)),
+                    min(self.teams[a].queued_at or "", self.teams[b].queued_at or ""))
+
+        return min(choices, key=key)
+
+    def _call_pair(self, a_id: str, b_id: str, bracket: str, table: str) -> Match:
+        a, b = self.teams[a_id], self.teams[b_id]
+        if a.matches_played == 0 and b.matches_played == 0:
+            bracket = "start"
+        for team in (a, b):
+            team.priority = False
+            for lst in (self.winners_list, self.losers_list):
+                if team.id in lst:
+                    lst.remove(team.id)
+        self.round += 1
+        m = Match(id=uuid.uuid4().hex[:8], round=self.round, team_a=a_id, team_b=b_id, bracket=bracket,
+                  status=CALLED, table=table, called_at=now())
+        self.matches.append(m)
+        self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {table} ({bracket}).")
+
+        def side(t: Team) -> str:
+            return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
+
+        body = f"New match: Table {table}: {side(a)} VS {side(b)}. Good Luck!"
+        for team in (a, b):
+            self._text_team(team, body)
+        return m
+
+    def call_next(self, team_id: str) -> None:
+        """Director override: put a waiting team first in line for the next free table."""
+        team = self.team(team_id)
+        if self.status != RUNNING or team.status != ACTIVE:
+            raise TournamentError(f"{team.name} isn't waiting to play.")
+        if self.current_match_for(team_id):
+            raise TournamentError(f"{team.name} is already on a table.")
+        if team.id not in self.winners_list and team.id not in self.losers_list:
+            self._enqueue(team.id, self.winners_list)
+        team.priority = True
+        self._say(f"Director moved {team.name} to the front of the line.")
+        self._advance()
 
     def score(self, match_id: str, side: str, delta: int) -> Match:
         m = self.match(match_id)
@@ -625,16 +677,16 @@ class Tournament:
         if forfeit:
             m.forfeit = "a" if loser_id == m.team_a else "b"
 
-        self._chip_change(loser, -1, f"Lost round {m.round} to {winner.name}{how}")
+        self._chip_change(loser, -1, f"Lost match #{m.round} to {winner.name}{how}")
         self._say(
             f"{winner.name} beat {loser.name}{how} on table {m.table}. {loser.name} gives a chip back "
             f"({loser.chips} left). Chip value now {money(self.chip_value_cents)}."
         )
         if forfeit:
-            self._text_team(loser, f"{loser.name}: you didn't check in at table {m.table} in time and forfeited round {m.round}.")
+            self._text_team(loser, f"{loser.name}: you didn't check in at table {m.table} in time and forfeited your match.")
         self._after_loss(loser, m)
         if not self._played_last_match(winner):
-            self.winners_list.append(winner_id)
+            self._enqueue(winner_id, self.winners_list)
             self._text_team(winner, f"{winner.name}: {'your opponent forfeited, ' if forfeit else 'nice win! '}"
                                     f"You keep your {winner.chips} chip(s).")
 
@@ -647,8 +699,8 @@ class Tournament:
             self._say(f"{loser.name} is out of chips and eliminated.")
             self._text_team(loser, f"{loser.name}: you're out of chips and eliminated. Thanks for playing!")
         elif not self._played_last_match(loser):
-            self.losers_list.append(loser.id)
-            self._text_team(loser, f"{loser.name}: you lost round {m.round} and have {loser.chips} chip(s) left.")
+            self._enqueue(loser.id, self.losers_list)
+            self._text_team(loser, f"{loser.name}: you lost that match and have {loser.chips} chip(s) left.")
 
     def _double_forfeit(self, m: Match) -> None:
         """Neither team showed: both give a chip back and go to the losers list."""
@@ -658,10 +710,10 @@ class Tournament:
         teams = [self.teams[m.team_a], self.teams[m.team_b]]
         for team in teams:
             team.losses += 1
-            self._chip_change(team, -1, f"Forfeited round {m.round} (no-show)")
+            self._chip_change(team, -1, f"Forfeited match #{m.round} (no-show)")
         self._say(f"Neither {teams[0].name} nor {teams[1].name} checked in at table {m.table}; both forfeit a chip.")
         for team in teams:
-            self._text_team(team, f"{team.name}: you didn't check in at table {m.table} in time and forfeited round {m.round}.")
+            self._text_team(team, f"{team.name}: you didn't check in at table {m.table} in time and forfeited your match.")
             self._after_loss(team, m)
         self._advance()
 
@@ -747,25 +799,32 @@ class Tournament:
         return changes
 
     def _advance(self) -> None:
-        """Fill free tables and start the next round when this one is complete."""
-        if self._check_finished():
+        """Call waiting teams to every free table."""
+        if self.status != RUNNING or self._check_finished():
             return
-        if any(m.round == self.round and m.status in (WAITING, CALLED) for m in self.matches):
-            self._call_matches()
-            return
-        winners = [t for t in self.winners_list if self.teams[t].status == ACTIVE]
-        losers = [t for t in self.losers_list if self.teams[t].status == ACTIVE]
-        # Safety net: an active team should always be on a list by now.
-        winners += [t.id for t in self.active_teams if t.id not in winners and t.id not in losers]
-        self.winners_list, self.losers_list = [], []
-        self.round += 1
-        self._say(f"Round {self.round} pairings are set.")
-        self._pair(winners, losers)
-        # A round of nothing but a bye ends immediately, so go round again.
-        if not any(m.round == self.round and m.status == WAITING for m in self.matches):
-            self._advance()
-            return
-        self._call_matches()
+        # Safety net: every active team is either on a table or on a list.
+        busy = {x for m in self.open_matches() for x in (m.team_a, m.team_b)}
+        for team in self.active_teams:
+            if team.id not in busy and team.id not in self.winners_list and team.id not in self.losers_list:
+                self._enqueue(team.id, self.winners_list)
+        free = self.free_tables()
+        while free:
+            pair = self._next_pair()
+            if pair is None:
+                break
+            self._call_pair(*pair, table=free.pop(0))
+
+    def match_minutes_played(self, m: Match, at: datetime | None = None) -> float | None:
+        """Minutes since the match started (None before it starts)."""
+        if m.status != CALLED or not m.start_at:
+            return None
+        elapsed = ((at or datetime.now()) - datetime.fromisoformat(m.start_at)).total_seconds() / 60
+        return elapsed if elapsed >= 0 else None
+
+    def long_matches(self, at: datetime | None = None) -> list[Match]:
+        """Matches on a table at least `long_match_minutes` past their start."""
+        return [m for m in self.open_matches()
+                if (self.match_minutes_played(m, at) or 0) >= self.settings.long_match_minutes]
 
     def _check_finished(self) -> bool:
         active = self.active_teams
@@ -806,12 +865,13 @@ class Tournament:
             m.finished_at = now()
             other = m.team_b if m.team_a == team.id else m.team_a
             if other is not None:
-                # The opponent waits for the next round as if it had a bye.
-                target = self.losers_list if m.bracket == "losers" else self.winners_list
-                target.append(other)
+                # Not the opponent's fault: back to the front of the list it came from.
+                last = [x for x in self.matches if x.status == DONE and other in (x.team_a, x.team_b)]
+                lost_last = bool(last) and (last[-1].loser == other or last[-1].forfeit == "both")
+                self._enqueue(other, self.losers_list if lost_last else self.winners_list, front=True)
                 self._text_team(
                     self.teams[other],
-                    f"{self.teams[other].name}: your opponent cashed in. You'll be paired next round.",
+                    f"{self.teams[other].name}: your opponent left the tournament. You're first in line for the next table.",
                 )
         for lst in (self.winners_list, self.losers_list):
             if team.id in lst:

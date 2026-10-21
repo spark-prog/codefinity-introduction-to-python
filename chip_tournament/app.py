@@ -322,17 +322,18 @@ def create_app(data_dir: str | None = None) -> Flask:
                 if s.registration_cap > t.max_skill:
                     raise TournamentError("The registration cap can't be higher than the top chip bracket.")
             s.race_to = int(race)
-            for key in ("warmup_minutes", "checkin_minutes", "grace_minutes"):
+            for key in ("warmup_minutes", "checkin_minutes", "grace_minutes", "match_minutes",
+                        "long_match_minutes", "catchup_matches"):
                 value = f.get(key, str(getattr(s, key))).strip()
                 if not value.isdigit():
-                    raise TournamentError("Check-in times must be whole minutes.")
+                    raise TournamentError("Times and the catch-up gap must be whole numbers.")
                 setattr(s, key, int(value))
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
             t.set_field_cap(int(field_cap))
             if t.status == RUNNING:
-                t._call_matches()  # new tables may be free now
+                t._advance()  # new tables may be free now
 
         act("Update settings", update, "Settings saved.")
         return redirect(url_for("admin"))
@@ -417,6 +418,14 @@ def create_app(data_dir: str | None = None) -> Flask:
         if side not in ("a", "b"):
             abort(400)
         act("Check in", lambda t: t.check_in(match_id, side))
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/admin/team/<team_id>/call-next")
+    @admin_required
+    def admin_call_next(team_id):
+        name = store.load().name_of(team_id)
+        act("Call next", lambda t: t.call_next(team_id),
+            f"{name} is first in line" + " (called to a table if one was free).")
         return redirect(url_for("admin") + "#matches")
 
     @app.post("/admin/match/<match_id>/winner")

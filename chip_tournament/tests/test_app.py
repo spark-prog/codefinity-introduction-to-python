@@ -204,3 +204,22 @@ def test_csv_import_flow(client):
 def test_registration_shows_text_consent(client):
     page = client.get("/register").data
     assert b"you agree to receive text alerts" in page and b"Reply STOP to opt out" in page
+
+
+def test_call_next_button(client):
+    for name in ("Sharks", "Rails", "Bankers", "Scratch", "Cues"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    client.post("/admin/settings", data={"name": "X", "race_to": "2", "tables": "1", "entry_fee": "20",
+                                         "added_money": "0", "chip_brackets": "6 = 5\\n8 = 4\\n10 = 3\\n11 = 2",
+                                         "registration_cap": "10", "field_cap": "0"})
+    client.post("/admin/start")
+    store = client.application.config["store"]
+    t = store.load()
+    last = t.queue_order(t.winners_list)[-1]
+    page = client.get("/admin").data
+    assert b"Call next" in page and b"Winners list" in page
+    page = client.post(f"/admin/team/{last}/call-next", follow_redirects=True).data
+    assert b"is first in line" in page
+    t = store.load()
+    assert t.queue_order(t.winners_list)[0] == last

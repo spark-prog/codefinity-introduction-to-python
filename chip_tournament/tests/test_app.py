@@ -136,3 +136,27 @@ def test_arrived_buttons_set_start_time(client):
     page = client.post(f"/admin/match/{m.id}/arrived", data={"side": "b"}, follow_redirects=True).data
     assert b"Match starts" in page
     assert store.load().match(m.id).start_at
+
+
+def test_undo_of_automatic_forfeit_sticks(client):
+    from datetime import datetime, timedelta
+    for name in ("Sharks", "Rails"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    client.post("/admin/start")
+    store = client.application.config["store"]
+    with store.change("make it overdue") as t:
+        m = t.open_matches()[0]
+        m.called_at = (datetime.now() - timedelta(minutes=30)).isoformat(timespec="seconds")
+    client.application.config["tick"]()
+    assert store.load().match(m.id).forfeit == "both"
+    page = client.post("/admin/undo", follow_redirects=True).data  # the admin page runs the clock again
+    assert b"Auto-forfeit is paused" in page
+    restored = store.load().match(m.id)
+    assert restored.status == "called" and restored.clock_paused and restored.forfeit is None
+
+
+def test_guide_page(client):
+    page = client.get("/guide")
+    assert page.status_code == 200
+    assert b"Last call" in page.data and b"Fixing mistakes" in page.data

@@ -2,7 +2,7 @@
 {% block title %}Director — {{ t.settings.name }}{% endblock %}
 {% block content %}
 {% set s = t.settings %}
-<h1>Tournament director</h1>
+<h1>Tournament director <a class="guide-link" href="{{ url_for('guide') }}">Director's guide</a></h1>
 {% include "_stats.html" %}
 
 <section class="card controls">

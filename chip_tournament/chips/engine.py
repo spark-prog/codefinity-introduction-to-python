@@ -138,6 +138,7 @@ class Match:
     grace_a: str | None = None  # when each team's grace period began
     grace_b: str | None = None
     forfeit: str | None = None  # "a", "b" or "both"
+    clock_paused: bool = False  # no automatic forfeit (set after an Undo restores an overdue match)
 
 
 @dataclass
@@ -232,8 +233,8 @@ class Tournament:
 
     @property
     def chips_returned(self) -> int:
-        """Chips given back to the main table from losses."""
-        return sum(-e.change for e in self.ledger if e.reason.startswith("Lost"))
+        """Chips given back to the main table from losses and forfeits."""
+        return sum(-e.change for e in self.ledger if e.reason.startswith(("Lost", "Forfeited")))
 
     @property
     def chip_value_cents(self) -> float:
@@ -689,6 +690,21 @@ class Tournament:
                 self._text_team(self.teams[tid], f"Both teams are at table {m.table}. Your match starts at {when}.")
         return m
 
+    def pause_overdue_forfeits(self, at: datetime | None = None) -> int:
+        """Stop the clock re-forfeiting matches whose deadline has already passed.
+
+        Used after Undo: otherwise an undone forfeit would be applied again
+        within seconds. The director then taps Arrived or picks a winner.
+        """
+        at = at or datetime.now()
+        paused = 0
+        for m in self.matches:
+            if (m.status == CALLED and m.called_at and not m.clock_paused
+                    and not (m.arrived_a and m.arrived_b) and at >= self.forfeit_deadline(m)):
+                m.clock_paused = True
+                paused += 1
+        return paused
+
     def check_clock(self, at: datetime | None = None) -> int:
         """Start grace periods and record forfeits that are due. Returns how many things changed."""
         if self.status != RUNNING:
@@ -696,7 +712,7 @@ class Tournament:
         at = at or datetime.now()
         changes = 0
         for m in [m for m in self.matches if m.status == CALLED]:
-            if m.status != CALLED or not m.called_at or m.score_a or m.score_b:
+            if m.status != CALLED or not m.called_at or m.score_a or m.score_b or m.clock_paused:
                 continue
             missing = [side for side in ("a", "b") if not getattr(m, "arrived_" + side)]
             if not missing:

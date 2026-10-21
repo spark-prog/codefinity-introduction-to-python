@@ -17,6 +17,8 @@ Run the tests with `python -m pytest`.
 
 ## Pages
 
+New director? Read the **Director's guide** in the app (`/guide`, linked from the Director page). It covers tournament night step by step and can be printed.
+
 | Page | Who | What it does |
 |---|---|---|
 | `/` | everyone | Tournament details, venue and map link, how it works, pot, chip value, tables in play, winners/losers lists, standings |
@@ -24,6 +26,7 @@ Run the tests with `python -m pytest`.
 | `/register` | teams | Register a team of two partners: names, skill levels, cell numbers. Shows the combined skill and starting chips as you type. Gives (and texts) a 4-digit team PIN |
 | `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results |
 | `/team/<id>/roster` | a team (with PIN) | Update partners, skill levels (before the start), team name and cell numbers |
+| `/guide` | director | Step-by-step guide for tournament night (printable) |
 | `/admin` | director | Settings, start, scoring, cash-in, last call, chip adjustments, texts, undo, chip ledger and activity log |
 
 ## How the rules work in the app

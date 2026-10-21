@@ -473,3 +473,27 @@ def test_scoring_counts_as_checked_in():
     assert m.arrived_a and m.arrived_b and m.start_at
     t.check_clock(at=base + timedelta(minutes=60))
     assert m.status == CALLED
+
+
+def test_undone_forfeit_is_not_reapplied():
+    t = make(n_teams=2)
+    t.start(random.Random(35))
+    m, base = called_at(t)
+    before = t.to_dict()  # what Undo would restore
+    t.check_clock(at=base + timedelta(minutes=20))
+    assert m.forfeit == "both"
+
+    restored = Tournament.from_dict(before)
+    assert restored.pause_overdue_forfeits(at=base + timedelta(minutes=21)) == 1
+    assert restored.check_clock(at=base + timedelta(minutes=22)) == 0
+    rm = restored.match(m.id)
+    assert rm.status == CALLED and rm.clock_paused
+
+
+def test_double_forfeit_chips_count_as_returned():
+    t = make(n_teams=2)
+    t.start(random.Random(36))
+    m, base = called_at(t)
+    t.check_clock(at=base + timedelta(minutes=20))
+    assert t.chips_returned == 2
+    assert t.chips_in_play + t.chips_returned == t.total_chips_issued

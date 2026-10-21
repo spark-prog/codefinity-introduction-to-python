@@ -54,6 +54,11 @@ class Store:
                 self._write(self.history_path, history[-HISTORY_LIMIT:])
             self._write(self.path, t.to_dict())
 
+    def save(self, t: Tournament) -> None:
+        """Save without adding an undo step."""
+        with self.lock:
+            self._write(self.path, t.to_dict())
+
     def last_undo_label(self) -> str | None:
         history = self._history()
         return history[-1]["label"] if history else None

@@ -207,6 +207,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         ]
         return render_template("register.html", t=t, form=request.form, players=players)
 
+    @app.get("/guide")
+    def guide():
+        return render_template("guide.html", t=store.load())
+
     @app.get("/team/<team_id>")
     def team_page(team_id):
         t = store.load()
@@ -398,8 +402,16 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/undo")
     @admin_required
     def admin_undo():
-        label = store.undo()
+        with store.lock:
+            label = store.undo()
+            t = store.load()
+            paused = t.pause_overdue_forfeits()
+            if paused:
+                store.save(t)
         flash(f"Undid: {label}." if label else "Nothing to undo.", "ok" if label else "error")
+        if paused:
+            flash(f"Auto-forfeit is paused on {paused} match(es) that are past their deadline. "
+                  "Tap Arrived, or pick the Winner to record the forfeit yourself.", "ok")
         return redirect(url_for("admin"))
 
     @app.post("/admin/reset")

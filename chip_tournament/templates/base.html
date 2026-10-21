@@ -4,21 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ t.settings.name if t else "Chip Tournament" }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Libre+Baskerville:wght@400;700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body>
+<body style="--bg-image: url('{{ background_url }}')">
+  {% set ep = request.endpoint or "" %}
   <header class="topbar">
-    <a class="brand" href="{{ url_for('home') }}">🎱 {{ t.settings.name if t else "Chip Tournament" }}</a>
-    <nav>
-      <a href="{{ url_for('home') }}">Home</a>
-      <a href="{{ url_for('board') }}">Board</a>
-      <a href="{{ url_for('register') }}">Register</a>
-      <a href="{{ url_for('admin') }}">Director</a>
-      {% if is_admin %}
-      <form method="post" action="{{ url_for('admin_logout') }}" class="inline"><button class="link">Log out</button></form>
-      {% endif %}
-    </nav>
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('home') }}"><span class="brand-mark" aria-hidden="true"></span>
+        <span><span class="brand-name">{{ t.settings.name if t else "Chip Tournament" }}</span>
+        <span class="brand-sub">{{ (t.settings.sms_name if t and t.settings.sms_name else "Chip tournament") }}</span></span></a>
+      <nav class="nav">
+        <a href="{{ url_for('home') }}" class="{{ 'active' if ep == 'home' }}">Home</a>
+        <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">Board</a>
+        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">Director</a>
+        <a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>
+        {% if is_admin %}
+        <form method="post" action="{{ url_for('admin_logout') }}" class="inline"><button class="link">Log out</button></form>
+        {% endif %}
+      </nav>
+    </div>
   </header>
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}

@@ -2,10 +2,12 @@
 {% block head %}<meta http-equiv="refresh" content="15">{% endblock %}
 {% block content %}
 <div class="board">
-  <h1>{{ t.settings.name }}</h1>
+  <header class="page-head">
+    <p class="eyebrow">Live board · refreshes every 15 seconds</p>
+    <h1>{{ t.settings.name }}</h1>
+  </header>
   {% include "_stats.html" %}
   {% include "_tables.html" %}
-  {% include "_standings.html" %}
-  <p class="muted">Refreshes every 15 seconds.</p>
+  <section>{% include "_standings.html" %}</section>
 </div>
 {% endblock %}

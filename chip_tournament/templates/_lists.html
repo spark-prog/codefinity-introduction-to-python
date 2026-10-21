@@ -10,7 +10,7 @@
         {% if waiting|length > 1 %}<span class="tag wait">waiting for a new opponent</span>{% endif %}
         {% if admin_controls and not tm.priority %}
         <form method="post" action="{{ url_for('admin_call_next', team_id=id) }}" class="inline">
-          <button class="link">Call next</button></form>
+          <button class="button small secondary">Call next</button></form>
         {% endif %}
       </li>
     {% else %}<li class="muted">nobody waiting</li>{% endfor %}

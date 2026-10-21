@@ -9,7 +9,7 @@
     {% if m.bracket == "cross" %}<span class="muted">· winners vs losers</span>{% endif %}
     {% if admin_controls and not loop.first and not m.priority %}
     <form method="post" action="{{ url_for('admin_call_next', team_id=m.team_a) }}" class="inline">
-      <button class="link">Call next</button></form>
+      <button class="button small secondary">Call next</button></form>
     {% endif %}
   </li>
 {% else %}<li class="muted">No pairs waiting.</li>{% endfor %}

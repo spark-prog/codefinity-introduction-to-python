@@ -106,6 +106,10 @@ On the director page (before the start), click **Import teams from a spreadsheet
 
 Rows are added top to bottom (sign-up order), so the earliest teams get the field spots and the rest fill the waiting list in order. Every row goes through the normal registration rules. Teams already registered are skipped, so importing an updated sheet again only adds the new sign-ups. You can choose whether each imported team gets its PIN by text.
 
+## Background photo
+
+Every page shows a faded billiard-room photo behind the content. To use a photo of your own venue, go to the director page, **Settings → Background photo**, and upload a wide JPG or PNG (up to 10 MB). It's stored with the tournament data (not in the code), and **Use the default photo** switches back. The default (`static/img/billiard-room.jpg`) is an illustration drawn for this app.
+
 ## Privacy
 
 Phone numbers appear only on director pages. On a team's roster page the cell boxes are blank and show just the last 4 digits; leaving a box blank keeps the number on file.

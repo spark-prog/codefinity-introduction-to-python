@@ -3,14 +3,20 @@
 {% block content %}
 {% set s = t.settings %}
 <article class="guide">
-<h1>Tournament night: director's guide</h1>
-<p class="muted">Everything the director does, in order. The numbers below come from this tournament's current settings.
-  <button class="link noprint" onclick="window.print()">Print this guide</button></p>
+<header class="page-head">
+  <p class="eyebrow">Director's guide</p>
+  <h1>Tournament night</h1>
+  <p class="lede">Everything the director does, in order. The numbers below come from this tournament's current settings.</p>
+  <div class="button-row actions-row noprint">
+    <button class="button secondary" onclick="window.print()">Print this guide</button>
+    <a class="button secondary" href="{{ url_for('admin') }}">Back to the director page</a>
+  </div>
+</header>
 
 <nav class="toc noprint">
-  <a href="#before">1. Days before</a> · <a href="#arrive">2. At the venue</a> · <a href="#start">3. Start</a> ·
-  <a href="#match">4. Running matches</a> · <a href="#cashin">5. Cash-in</a> · <a href="#lastcall">6. Last call</a> ·
-  <a href="#payout">7. Paying out</a> · <a href="#fixes">8. Fixing mistakes</a> · <a href="#after">9. After the night</a>
+  <a href="#before">1. Days before</a> <a href="#arrive">2. At the venue</a> <a href="#start">3. Start</a>
+  <a href="#match">4. Running matches</a> <a href="#cashin">5. Cash-in</a> <a href="#lastcall">6. Last call</a>
+  <a href="#payout">7. Paying out</a> <a href="#fixes">8. Fixing mistakes</a> <a href="#after">9. After the night</a>
 </nav>
 
 <section id="before">
@@ -21,11 +27,11 @@
   <li><b>Fill in Settings</b> on the Director page:
     <ul>
       <li>Name, date, start time, venue, address, and details for players. These show on the home page with a map link.</li>
-      <li><b>Entry fee</b> and <b>added money</b>. These lock when you press Start.</li>
+      <li><b>Entry fee</b> and <b>added money</b>. These can still change after the start, until every team has completed a match.</li>
       <li><b>Field cap</b>: the most teams in the event. Teams that register after it's full go on the waiting list.</li>
       <li><b>Tables</b>, as a comma-separated list using the names on the tables (e.g. <code>1, 2, 3, 7</code>).</li>
       <li><b>Race to</b> (now {{ s.race_to }}).</li>
-      <li><b>Chip brackets</b> and the <b>registration cap</b> (now {{ s.registration_cap }}). These lock at the start.</li>
+      <li><b>Chip brackets</b> and the <b>registration cap</b> (now {{ s.registration_cap }}). These lock once every team has completed a match.</li>
       <li><b>Check-in times</b>: warm-up {{ s.warmup_minutes }} min, check-in {{ s.checkin_minutes }} min, grace {{ s.grace_minutes }} min.</li>
       <li><b>Cash-in</b> and <b>last call</b> times. These are reminders on screen only; nothing happens until you press the button.</li>
     </ul></li>
@@ -61,7 +67,7 @@
 <section id="match">
 <h2>4. Running matches</h2>
 <p>Each match on a table has a card on the Director page:</p>
-<table class="grid">
+<div class="table-wrap"><table class="grid">
   <thead><tr><th>When</th><th>What you do</th><th>What the app does</th></tr></thead>
   <tbody>
     <tr><td>A team reaches its table</td><td>Nothing. The team taps <b>We're at the table</b> on its own team page (after entering its PIN). If a team can't, tap <b>Arrived</b> for it.</td><td>Shows a ✓ and the time.</td></tr>
@@ -72,7 +78,7 @@
     <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Entering a score also counts both teams as checked in.</td></tr>
     <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
-</table>
+</table></div>
 <p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when they're called.</p>
 <ul>
   <li><b>No rematches unless it's the only option.</b> A team that has already played everyone waiting on its list is tagged <i>waiting for a new opponent</i> and holds until another team arrives, even if a table sits free. A rematch happens only when both teams have played everyone still in, or when nothing is playing or queued that could bring a new opponent. Rematches are tagged in the queue.</li>
@@ -120,7 +126,7 @@
 
 <section id="fixes">
 <h2>8. Fixing mistakes</h2>
-<table class="grid">
+<div class="table-wrap"><table class="grid">
   <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
   <tbody>
     <tr><td>Wrong winner, wrong score, or any button pressed by mistake</td><td><b>Undo</b> reverses the most recent action; press again to go further back (up to 100 steps). The button shows what it will undo. Texts already sent can't be recalled, so send a correction with <i>Text every team</i>.</td></tr>
@@ -132,7 +138,7 @@
     <tr><td>Need to announce something</td><td>Use <b>Text every team</b> (e.g. "15-minute break, back at 9:45").</td></tr>
     <tr><td>The laptop restarts or the app closes</td><td>Nothing is lost; everything is saved after each action. Start the app again and open the Director page. The check-in clock resumes once a page is opened.</td></tr>
   </tbody>
-</table>
+</table></div>
 </section>
 
 <section id="after">

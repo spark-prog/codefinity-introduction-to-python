@@ -16,7 +16,7 @@ from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from chips import importer
@@ -111,7 +111,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             key_file.write_text(secrets.token_hex(32))
         app.secret_key = key_file.read_text()
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # uploads (CSV import)
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # uploads (CSV import, background photo)
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
     if os.environ.get("CHIPS_PRODUCTION") == "1":
         # On the internet: refuse to run with the default password, and only send cookies over HTTPS.
@@ -127,9 +127,30 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["clock"] = clock
     app.jinja_env.filters["last4"] = last4
 
+    # Background photo: the director can upload their own; otherwise the bundled billiard room.
+    photo_types = {b"\xff\xd8\xff": ("jpg", "image/jpeg"), b"\x89PNG": ("png", "image/png"), b"RIFF": ("webp", "image/webp")}
+
+    def custom_background():
+        for ext in ("jpg", "png", "webp"):
+            path = data_path / f"background.{ext}"
+            if path.exists():
+                return path
+        return None
+
+    @app.get("/background")
+    def background():
+        path = custom_background()
+        if path is None:
+            return send_file(Path(app.static_folder) / "img" / "billiard-room.jpg", max_age=86400)
+        mime = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[path.suffix[1:]]
+        return send_file(path, mimetype=mime, max_age=86400)
+
     @app.context_processor
     def globals_():
+        bg = custom_background()
         return {
+            "background_url": url_for("background", v=int(bg.stat().st_mtime) if bg else 0),
+            "has_custom_background": bg is not None,
             "is_admin": session.get("admin", False),
             "ACTIVE": ACTIVE,
             "CALLED": CALLED,
@@ -322,7 +343,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 nxt = request.args.get("next", "")
                 return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("admin"))
             flash("Wrong password.", "error")
-        return render_template("login.html", default_password=admin_password == "admin")
+        return render_template("login.html", t=store.load(), default_password=admin_password == "admin")
 
     @app.post("/admin/logout")
     def admin_logout():
@@ -390,6 +411,26 @@ def create_app(data_dir: str | None = None) -> Flask:
 
         act("Update settings", update, "Settings saved.")
         return redirect(url_for("admin"))
+
+    @app.post("/admin/background")
+    @admin_required
+    def admin_background():
+        if request.form.get("reset") == "1":
+            for ext in ("jpg", "png", "webp"):
+                (data_path / f"background.{ext}").unlink(missing_ok=True)
+            flash("Using the default billiard-room background.", "ok")
+            return redirect(url_for("admin") + "#settings")
+        upload = request.files.get("photo")
+        data = upload.read() if upload and upload.filename else b""
+        kind = next((v for magic, v in photo_types.items() if data.startswith(magic)), None)
+        if not data or kind is None or (kind[0] == "webp" and data[8:12] != b"WEBP"):
+            flash("Choose a JPG, PNG or WebP photo.", "error")
+            return redirect(url_for("admin") + "#settings")
+        for ext in ("jpg", "png", "webp"):
+            (data_path / f"background.{ext}").unlink(missing_ok=True)
+        (data_path / f"background.{kind[0]}").write_bytes(data)
+        flash("Background photo updated.", "ok")
+        return redirect(url_for("admin") + "#settings")
 
     import_file = data_path / "import.csv"
 

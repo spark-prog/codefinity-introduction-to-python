@@ -2,10 +2,19 @@
 {% block title %}Director — {{ t.settings.name }}{% endblock %}
 {% block content %}
 {% set s = t.settings %}
-<h1>Tournament director <a class="guide-link" href="{{ url_for('guide') }}">Director's guide</a></h1>
-{% include "_stats.html" %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Director · {{ t.status }}</p>
+    <h1>Tournament director</h1>
+  </div>
+  <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
+    {% if t.status == SETUP %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
+  </div>
+</header>
+{% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
 
-<section class="card controls">
+<section class="card controls" style="margin-top: 0">
   {% if t.status == SETUP %}
     <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
       {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
@@ -16,20 +25,23 @@
       {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
       {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
       Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
-    <p><a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a></p>
     {% if s.require_checkin and unchecked %}
     <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
-    <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"
-          onsubmit="return confirm('Mark all {{ unchecked|length }} team(s) that haven\'t checked in as no-shows? Waiting-list teams will move up and get a text.')">
-      <button class="button danger">Mark all {{ unchecked|length }} not checked in as no-shows</button></form>
     {% endif %}
+    <div class="button-row">
     <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('Start the tournament and call the first matches?')">
       <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first"{% endif %}>Start tournament</button></form>
+    {% if s.require_checkin and unchecked %}
+    <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"
+          onsubmit="return confirm('Mark all {{ unchecked|length }} team(s) that haven\'t checked in as no-shows? Waiting-list teams will move up and get a text.')">
+      <button class="button big danger-outline">Mark all {{ unchecked|length }} not checked in as no-shows</button></form>
+    {% endif %}
   {% elif t.status == RUNNING %}
     {% if not t.entries_locked and not t.last_call %}
     <p class="banner">Late entries are open and money settings can still change until every team has completed a match
       ({{ t.teams_yet_to_play|length }} team(s) still to finish their first: {{ t.teams_yet_to_play|map(attribute="name")|join(", ") }}).</p>
     {% elif t.entries_locked %}<p class="muted">Entries and money settings are locked: every team has completed a match.</p>{% endif %}
+    <div class="button-row">
     {% if not t.cash_in_open %}
     <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
       <button class="button">Open cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</button></form>
@@ -43,74 +55,83 @@
     {% endif %}
     <form method="post" action="{{ url_for('admin_end_now') }}" class="inline"
           onsubmit="return confirm('End the tournament NOW? All matches stop and every team is cashed in at the current chip value.')">
-      <button class="button secondary">End now — cash everyone out</button></form>
+      <button class="button danger-outline">End now — cash everyone out</button></form>
   {% endif %}
+  {% if t.status == FINISHED %}<div class="button-row">{% endif %}
   <form method="post" action="{{ url_for('admin_undo') }}" class="inline">
-    <button class="button secondary" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+    <button class="button secondary{% if t.status == SETUP %} big{% endif %}" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+  </div>
 </section>
 
 {% if t.status == RUNNING %}
 <section id="matches">
-  <h2>Tables</h2>
+  <div class="section-head"><h2>Tables</h2><span class="muted">Timers turn amber after {{ s.match_minutes }} min and red at {{ s.long_match_minutes }} min.</span></div>
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min since the start):
     {% for m in long %}<b>Table {{ m.table }}</b> ({{ t.name_of(m.team_a) }} vs {{ t.name_of(m.team_b) }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
   {% set open = t.matches|selectattr("status", "equalto", CALLED)|list %}
+  <div class="match-grid">
   {% for m in open %}
   {% set mins = t.match_minutes_played(m) %}
   <div class="card match {{ m.status }}{% if mins is not none and mins >= s.long_match_minutes %} long{% elif mins is not none and mins >= s.match_minutes %} over{% endif %}">
     <div class="match-head">
-      <b>Table {{ m.table }}</b>
+      <span class="table-label">Table {{ m.table }}</span>
       {% if m.start_at %}<span class="elapsed" data-since="{{ m.start_at }}" data-over="{{ s.match_minutes }}" data-long="{{ s.long_match_minutes }}"></span>{% endif %}
       <span class="muted">match #{{ m.round }} · {{ m.bracket }} · race to {{ s.race_to }}</span>
     </div>
     {% set reload = true %}{% include "_match_clock.html" %}
     {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}
     <div class="score-row">
-      <span class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span></span>
-      {% if m.status == CALLED %}
-      {% if m["arrived_" ~ side] %}
-      <span class="arrived" title="Checked in">✓ {{ m["arrived_" ~ side]|clock }}</span>
-      {% else %}
-      <form method="post" action="{{ url_for('admin_arrived', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="side" value="{{ side }}">
-        <button class="button small {% if m['grace_' ~ side] %}danger{% else %}checkin{% endif %}">Arrived</button></form>
-      {% endif %}
-      <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
-        <button class="button secondary small">−</button></form>
-      <b class="score">{{ sc }}</b>
-      <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
-        <button class="button small">+</button></form>
+      <div class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span>
+        <div class="team-sub">
+        {% if m["arrived_" ~ side] %}<span class="arrived" title="Checked in">✓ at the table {{ m["arrived_" ~ side]|clock }}</span>
+        {% else %}
+        <form method="post" action="{{ url_for('admin_arrived', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}">
+          <button class="button small {% if m['grace_' ~ side] %}danger{% else %}checkin{% endif %}">Arrived</button></form>
+        {% endif %}
+        </div>
+      </div>
+      <div class="score-ctl">
+        <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
+          <button class="button secondary small square">−</button></form>
+        <b class="score">{{ sc }}</b>
+        <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
+          <button class="button small square">+</button></form>
+      </div>
       <form method="post" action="{{ url_for('admin_winner', match_id=m.id) }}" class="inline"
             onsubmit="return confirm('{{ t.name_of(tid)|e }} wins?')">
         <input type="hidden" name="winner" value="{{ tid }}"><button class="button secondary small">Winner</button></form>
-      {% endif %}
     </div>
     {% endfor %}
   </div>
   {% else %}
   <p class="muted">No open matches.</p>
   {% endfor %}
+  </div>
   {% set admin_controls = true %}
-  {% include "_queue.html" %}
-  <p class="muted">Pairs go to tables fewest rounds played first; <b>Call next</b> puts a pair (or an unpaired team) first in line.
-    Teams on a list are paired with the first team above them they haven't played. A team that has played everyone waiting
-    holds out for a new opponent; a rematch only happens when it's the only option. Teams {{ s.catchup_matches }}+ matches behind the leader move up ("catching up").</p>
-  {% include "_lists.html" %}
+  <div class="split" style="margin-top: 32px">
+    <div class="card">{% include "_queue.html" %}
+      <p class="muted" style="margin-top: 16px">Pairs go to tables fewest rounds played first; <b>Call next</b> puts a pair (or an unpaired team) first in line.
+      Teams on a list are paired with the first team above them they haven't played. A team that has played everyone waiting
+      holds out for a new opponent; a rematch only happens when it's the only option. Teams {{ s.catchup_matches }}+ matches behind the leader move up ("catching up").</p></div>
+    <div class="card">{% include "_lists.html" %}</div>
+  </div>
 </section>
 {% endif %}
 
 <section id="teams">
-  <h2>Teams & chips</h2>
+  <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span></div>
+  <div class="table-wrap">
   <table class="grid">
     <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Played</th><th>Status</th>{% if t.status == SETUP %}<th>Check-in</th>{% endif %}<th>Value / paid</th><th>Actions</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}">
-      <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }}</span></td>
-      <td>{% for p in team.players %}{{ p.name }} ({{ p.skill }}){% if p.phone %} <span class="muted">{{ p.phone }}</span>{% endif %}<br>{% endfor %}</td>
+      <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }}</span></td>
+      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ p.phone }}</span>{% endif %}</div>{% endfor %}</td>
       <td>{{ team.combined_skill }}
         {% if t.status == SETUP %}
           {% set c = t.chips_preview(team) %}
@@ -123,18 +144,24 @@
       {% if t.status == SETUP %}
       <td class="checkin-cell">
         {% if team.status == "no_show" %}
-          <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"><button class="link">Restore</button></form>
+          <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"><button class="button small secondary">Restore</button></form>
         {% elif team.checked_in_at %}<span class="arrived">✓ {{ team.checked_in_at|clock }}</span>
         {% else %}
           <form method="post" action="{{ url_for('admin_team_check_in', team_id=team.id) }}" class="inline"><button class="button small checkin">Check in</button></form>
           <form method="post" action="{{ url_for('admin_no_show', team_id=team.id) }}" class="inline"
-                onsubmit="return confirm('Mark {{ team.name|e }} as a no-show?')"><button class="link danger">No-show</button></form>
+                onsubmit="return confirm('Mark {{ team.name|e }} as a no-show?')"><button class="button small danger-outline">No-show</button></form>
         {% endif %}
       </td>
       {% endif %}
-      <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
+      <td class="value-cell">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}
+        {% if team.status == ACTIVE and t.cash_in_open %}
+        <form method="post" action="{{ url_for('admin_cash_in', team_id=team.id) }}"
+              onsubmit="return confirm('Cash in {{ team.name|e }} for {{ t.payout_for(team)|money }}?')">
+          <button class="button small">Cash in</button></form>
+        {% endif %}
+      </td>
       <td class="actions">
-        <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
+        <a class="button small secondary" href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
         {% if team.status == "no_show" and t.status == RUNNING and not t.last_call and not t.entries_locked %}
         <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"
               onsubmit="return confirm('{{ team.name|e }} arrived late? They pay the entry fee and join as a late entry.')">
@@ -142,18 +169,13 @@
         {% endif %}
         {% if t.status == SETUP or team.status == "waitlisted" %}
         <form method="post" action="{{ url_for('admin_remove', team_id=team.id) }}" class="inline" onsubmit="return confirm('Remove {{ team.name|e }}?')">
-          <button class="link danger">Remove</button></form>
+          <button class="button small danger-outline">Remove</button></form>
         {% elif team.status == ACTIVE %}
           {% if t.status == RUNNING and not t.current_match_for(team.id) and not team.priority %}
           <form method="post" action="{{ url_for('admin_call_next', team_id=team.id) }}" class="inline">
             <button class="button secondary small">Call next</button></form>
           {% endif %}
-          {% if t.cash_in_open %}
-          <form method="post" action="{{ url_for('admin_cash_in', team_id=team.id) }}" class="inline"
-                onsubmit="return confirm('Cash in {{ team.name|e }} for {{ t.payout_for(team)|money }}?')">
-            <button class="button small">Cash in {{ t.payout_for(team)|money }}</button></form>
-          {% endif %}
-          <form method="post" action="{{ url_for('admin_adjust', team_id=team.id) }}" class="inline adjust">
+          <br><form method="post" action="{{ url_for('admin_adjust', team_id=team.id) }}" class="inline adjust">
             <input name="change" type="number" step="1" placeholder="±" required>
             <input name="reason" placeholder="Reason" required>
             <button class="button secondary small">Adjust</button></form>
@@ -165,15 +187,17 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if t.status != SETUP %}
-  <p class="muted">Chip check: {{ t.total_chips_issued }} issued = {{ t.chips_in_play }} in play + {{ t.chips_returned }} returned to the table
+  <p class="muted" style="margin-top: 16px">Chip check: {{ t.total_chips_issued }} issued = {{ t.chips_in_play }} in play + {{ t.chips_returned }} returned to the table
     + {{ t.total_chips_issued - t.chips_in_play - t.chips_returned }} cashed in / adjusted.
     Collected {{ t.total_collected_cents|money }}{% if s.added_money_cents %} + {{ s.added_money_cents|money }} added{% endif %};
     paid out {{ (t.total_collected_cents + s.added_money_cents - t.pot_cents)|money }}; pot left {{ t.pot_cents|money }}.</p>
   {% endif %}
 </section>
 
-<section id="texts" class="card">
+<section class="split" id="texts">
+<div class="card">
   <h2>Text alerts</h2>
   {% if not sms_enabled %}<p class="banner">Texting is not set up, so alerts are only logged below. See the README to connect Twilio.</p>{% endif %}
   <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
@@ -186,51 +210,9 @@
       {% for x in texts %}<tr><td>{{ x.at[11:] }}</td><td>{{ x.to }}</td><td>{{ x.body }}</td><td>{{ x.status }}</td></tr>{% endfor %}
     </table>
   </details>
-</section>
+</div>
 
-{% set money_locked = t.entries_locked or t.status == FINISHED %}
-<section class="card">
-  <h2>Tournament details & settings</h2>
-  <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
-    If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
-    Check-in, grace and start times all use this clock.</p>
-  <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
-    <label>Tournament name <input name="name" value="{{ s.name }}"></label>
-    <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
-    <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
-    <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
-    <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
-    <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
-    <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
-    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
-    <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
-    <label>Warm-up after both arrive (min) <input name="warmup_minutes" type="number" min="0" value="{{ s.warmup_minutes }}"></label>
-    <label>Time to check in after being called (min) <input name="checkin_minutes" type="number" min="0" value="{{ s.checkin_minutes }}"></label>
-    <label>Grace period before a no-show forfeits (min) <input name="grace_minutes" type="number" min="0" value="{{ s.grace_minutes }}"></label>
-    <label>Expected match length (min; card turns amber after) <input name="match_minutes" type="number" min="1" value="{{ s.match_minutes }}"></label>
-    <label>Flag a match red at (min after its start) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
-    <label>Catch-up: move a team up when it's this many matches behind <input name="catchup_matches" type="number" min="1" value="{{ s.catchup_matches }}"></label>
-    <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
-    <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
-    <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
-    <label>Questions phone (ends every text) <input name="contact_phone" value="{{ s.contact_phone }}" placeholder="904-528-7657"></label>
-    <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>
-    <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if t.status != SETUP %}disabled{% endif %}>
-      Every team must be checked in (or marked a no-show) before the start</label>
-    <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
-    <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
-    <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>
-      (e.g. <code>8 = 4</code> means 7–8 starts with 4 chips). Anything above the last line needs a new partner.
-      <textarea name="chip_brackets" rows="5" {% if money_locked %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
-    <label>Registration cap (highest combined skill to register)
-      <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if money_locked %}disabled{% endif %}></label>
-    {% if money_locked %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap are locked{% if t.entries_locked %}: every team has completed a match{% endif %}.</p>
-    {% elif t.status == RUNNING %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap can still change until every team has completed a match. Changes adjust the pot and teams' chips (shown in the chip ledger).</p>{% endif %}
-    <button class="button">Save settings</button>
-  </form>
-</section>
-
-<section class="card">
+<div class="card">
   <h2>Activity log</h2>
   <ol class="log" reversed>{% for line in t.log|reverse %}<li>{{ line }}</li>{% endfor %}</ol>
   <details><summary>Chip ledger ({{ t.ledger|length }} entries)</summary>
@@ -239,13 +221,81 @@
       {% for e in t.ledger|reverse %}<tr><td>{{ e.at[11:] }}</td><td>{{ e.team_name }}</td><td>{{ "%+d"|format(e.change) }}</td><td>{{ e.chips_after }}</td><td>{{ e.reason }}</td><td>{{ e.chip_value_cents|money }}</td></tr>{% endfor %}
     </table>
   </details>
+</div>
+
+</section>
+
+{% set money_locked = t.entries_locked or t.status == FINISHED %}
+<section class="card" id="settings">
+  <h2>Tournament details & settings</h2>
+  <div class="settings-group" style="margin-top: 8px">Background photo</div>
+  <div class="photo-row">
+    <div class="photo-preview" style="background-image: url('{{ background_url }}')"></div>
+    <div>
+      <p>Shown faded behind every page. {% if has_custom_background %}You're using your own photo.{% else %}You're using the default billiard room; upload a photo of your venue to replace it.{% endif %}
+        <span class="muted">A wide (landscape) JPG or PNG works best, up to 10 MB.</span></p>
+      <form method="post" action="{{ url_for('admin_background') }}" enctype="multipart/form-data" class="form button-row">
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required style="max-width: 320px; margin: 0">
+        <button class="button">Upload photo</button>
+      </form>
+      {% if has_custom_background %}
+      <form method="post" action="{{ url_for('admin_background') }}" style="margin-top: 12px">
+        <input type="hidden" name="reset" value="1"><button class="button small secondary">Use the default photo</button></form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="settings-group" style="margin-top: 32px">Clock</div>
+  <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
+    If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
+    Check-in, grace and start times all use this clock.</p>
+  <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    <div class="settings-group">Event</div>
+    <label>Tournament name <input name="name" value="{{ s.name }}"></label>
+    <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
+    <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
+    <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
+    <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
+    <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+    <div class="settings-group">Money &amp; field</div>
+    <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
+    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
+    <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
+    <div class="settings-group">Tables &amp; timing</div>
+    <label>Warm-up after both arrive (min) <input name="warmup_minutes" type="number" min="0" value="{{ s.warmup_minutes }}"></label>
+    <label>Time to check in after being called (min) <input name="checkin_minutes" type="number" min="0" value="{{ s.checkin_minutes }}"></label>
+    <label>Grace period before a no-show forfeits (min) <input name="grace_minutes" type="number" min="0" value="{{ s.grace_minutes }}"></label>
+    <label>Expected match length (min; card turns amber after) <input name="match_minutes" type="number" min="1" value="{{ s.match_minutes }}"></label>
+    <label>Flag a match red at (min after its start) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
+    <label>Catch-up: move a team up when it's this many matches behind <input name="catchup_matches" type="number" min="1" value="{{ s.catchup_matches }}"></label>
+    <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
+    <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
+    <div class="settings-group">Texts &amp; check-in</div>
+    <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
+    <label>Questions phone (on the registration text) <input name="contact_phone" value="{{ s.contact_phone }}" placeholder="904-528-7657"></label>
+    <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>
+    <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if t.status != SETUP %}disabled{% endif %}>
+      Every team must be checked in (or marked a no-show) before the start</label>
+    <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
+    <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
+    <div class="settings-group">Chips &amp; skill levels</div>
+    <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>
+      (e.g. <code>8 = 4</code> means 7–8 starts with 4 chips). Anything above the last line needs a new partner.
+      <textarea name="chip_brackets" rows="5" {% if money_locked %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
+    <label>Registration cap (highest combined skill to register)
+      <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if money_locked %}disabled{% endif %}></label>
+    {% if money_locked %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap are locked{% if t.entries_locked %}: every team has completed a match{% endif %}.</p>
+    {% elif t.status == RUNNING %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap can still change until every team has completed a match. Changes adjust the pot and teams' chips (shown in the chip ledger).</p>{% endif %}
+    <button class="button big">Save settings</button>
+  </form>
 </section>
 
 <section class="card">
+  <p class="eyebrow">Danger zone</p>
   <h2>New tournament</h2>
-  <form method="post" action="{{ url_for('admin_reset') }}" class="inline">
+  <p class="muted">Archives this tournament (it's kept in the data folder) and starts a fresh one.</p>
+  <form method="post" action="{{ url_for('admin_reset') }}" class="reset-row">
     <input name="confirm" placeholder="Type RESET">
-    <button class="button danger small">Archive this tournament and start over</button>
+    <button class="button danger">Archive this tournament and start over</button>
   </form>
 </section>
 {% endblock %}

@@ -330,3 +330,21 @@ def test_money_settings_editable_until_every_team_has_played(client):
     assert b"Registration is closed" in client.get("/register").data
     client.post("/admin/settings", data={**settings, "entry_fee": "30"})
     assert store.load().settings.entry_fee_cents == 2500  # locked: ignored
+
+
+def test_background_photo_upload_and_reset(client):
+    import io
+    default = client.get("/background")
+    assert default.status_code == 200 and default.mimetype == "image/jpeg"
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.post("/admin/background", data={"photo": (io.BytesIO(b"not an image"), "x.txt")},
+                       content_type="multipart/form-data", follow_redirects=True).data
+    assert b"Choose a JPG, PNG or WebP photo" in page
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+    page = client.post("/admin/background", data={"photo": (io.BytesIO(png), "room.png")},
+                       content_type="multipart/form-data", follow_redirects=True).data
+    assert b"Background photo updated" in page and b"using your own photo" in page
+    custom = client.get("/background")
+    assert custom.mimetype == "image/png" and custom.data == png
+    client.post("/admin/background", data={"reset": "1"})
+    assert client.get("/background").mimetype == "image/jpeg"

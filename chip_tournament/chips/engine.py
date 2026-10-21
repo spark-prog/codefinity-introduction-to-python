@@ -11,6 +11,9 @@ How the format works
   The tournament can't start while a team in the field isn't checked in; a
   team that doesn't show is marked a no-show, which frees its spot for the
   next team on the waiting list.
+* Late entries are allowed after the start, and the money settings (entry fee,
+  added money, chip brackets, registration cap) can still change, until every
+  team still in has completed a match. Then both lock for the night.
 * A team is two partners. Their combined skill level sets the team's starting
   chips (e.g. 6 or less = 5 chips, 7-8 = 4, 9-10 = 3, 11 = 2). Combined skill
   is capped at registration (10). If the same partners' skill levels go up,
@@ -227,6 +230,7 @@ class Tournament:
     pot_cents: int = 0
     total_collected_cents: int = 0
     cash_in_open: bool = False
+    entries_locked: bool = False  # set once every team has completed a match
     last_call: bool = False
     ledger: list[LedgerEntry] = field(default_factory=list)
     # Texts produced by the rules; the app sends them and clears this list.
@@ -318,8 +322,8 @@ class Tournament:
     def _say(self, text: str) -> None:
         self.log.append(f"{now()}  {text}")
 
-    def _text_team(self, team: Team, body: str) -> None:
-        if self.settings.sms_name:
+    def _text_team(self, team: Team, body: str, prefix: bool = True) -> None:
+        if prefix and self.settings.sms_name:
             body = f"{self.settings.sms_name}: {body}"
         for number in team.phones:
             self.outbox.append(Message(to=number, body=body, team_id=team.id))
@@ -403,6 +407,8 @@ class Tournament:
             raise TournamentError("This tournament is over.")
         if self.last_call:
             raise TournamentError("Registration is closed after last call.")
+        if self.entries_locked:
+            raise TournamentError("Registration is closed: every team has already played a match.")
         self._check_players(players)
         combined = sum(p.skill for p in players)
         if combined > self.settings.registration_cap:
@@ -443,7 +449,7 @@ class Tournament:
 
     def _fill_from_waitlist(self) -> None:
         """Move waiting teams into the field, in order, while there is room."""
-        if self.status == FINISHED or self.last_call:
+        if self.status == FINISHED or self.last_call or self.entries_locked:
             return
         while self.waitlist and not self.field_full:
             team = self.teams[self.waitlist.pop(0)]
@@ -578,6 +584,8 @@ class Tournament:
             raise TournamentError(f"{team.name} isn't a no-show.")
         if self.status == FINISHED or self.last_call:
             raise TournamentError("Teams can't be added after last call.")
+        if self.entries_locked:
+            raise TournamentError("Entries are locked: every team has already played a match.")
         if self.field_full:
             team.status = WAITLISTED
             self.waitlist.append(team.id)
@@ -803,7 +811,7 @@ class Tournament:
 
             body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
             for team in (a, b):
-                self._text_team(team, body)
+                self._text_team(team, body, prefix=False)
 
     def call_next(self, team_id: str) -> None:
         """Director override: this team's pair (or the team, if not paired yet) goes first."""
@@ -997,6 +1005,7 @@ class Tournament:
         """Pair whoever can be paired, then send queued pairs to free tables."""
         if self.status != RUNNING or self._check_finished():
             return
+        self._maybe_lock_entries()
         # Safety net: every active team is either on a table or on a list.
         busy = {x for m in self.open_matches() for x in (m.team_a, m.team_b)}
         for team in self.active_teams:
@@ -1004,6 +1013,72 @@ class Tournament:
                 self._enqueue(team.id, self.winners_list)
         self._form_pairs()
         self._call_waiting()
+
+    @property
+    def teams_yet_to_play(self) -> list[Team]:
+        return [t for t in self.active_teams if t.matches_played == 0]
+
+    def _maybe_lock_entries(self) -> None:
+        """Once every team still in has completed a match, close entries and lock the money."""
+        if self.entries_locked or self.status != RUNNING or not self.active_teams or self.teams_yet_to_play:
+            return
+        self.entries_locked = True
+        self._say("Every team has completed a match: registration and money settings are now locked.")
+        for team_id in self.waitlist:
+            self._text_team(self.teams[team_id], f"{self.teams[team_id].name}: the field for "
+                                                 f"{self.settings.name} is now set, so we couldn't fit you in tonight. Sorry!")
+
+    def set_money(self, entry_fee_cents: int, added_money_cents: int,
+                  chip_brackets: list[list[int]], registration_cap: int) -> None:
+        """Change the entry fee, added money, chip brackets and registration cap.
+
+        Allowed until entries lock. After the start, the pot and every team's
+        chips are adjusted to match, and each adjustment is logged.
+        """
+        if self.entries_locked:
+            raise TournamentError("Money settings are locked: every team has already played a match.")
+        s = self.settings
+        if entry_fee_cents < 0 or added_money_cents < 0:
+            raise TournamentError("Amounts can't be negative.")
+        old_brackets, s.chip_brackets = s.chip_brackets, chip_brackets
+        if registration_cap > self.max_skill:
+            raise TournamentError("The registration cap can't be higher than the top chip bracket.")
+        if self.status == SETUP:
+            s.entry_fee_cents, s.added_money_cents, s.registration_cap = entry_fee_cents, added_money_cents, registration_cap
+            return
+
+        # Running: adjust what's already been handed out. (On any error nothing is saved.)
+        entered = [t for t in self.teams.values() if t.starting_chips]
+        money_changed = entry_fee_cents != s.entry_fee_cents or added_money_cents != s.added_money_cents
+        if money_changed and any(t.status == CASHED_OUT for t in entered):
+            raise TournamentError("The entry fee and added money can't change after a team has cashed in.")
+        chip_changes = []
+        for team in entered:
+            new = self.chips_for_skill(team.combined_skill)
+            change = new - team.starting_chips
+            if not change:
+                continue
+            if team.status != ACTIVE:
+                raise TournamentError(f"{team.name} is already out, so the chip brackets can't change its chips.")
+            if team.chips + change < 1:
+                raise TournamentError(f"{team.name} would have no chips left with those chip brackets.")
+            chip_changes.append((team, new, change))
+        for team, new, change in chip_changes:
+            team.starting_chips = new
+            self._chip_change(team, change, f"Chip brackets changed: starting chips now {new}")
+        if chip_brackets != old_brackets:
+            self._say(f"Chip brackets changed; {len(chip_changes)} team(s) adjusted.")
+        fee_change = entry_fee_cents - s.entry_fee_cents
+        if fee_change:
+            self.pot_cents += fee_change * len(entered)
+            self.total_collected_cents += fee_change * len(entered)
+            self._say(f"Entry fee changed to {money(entry_fee_cents)}: "
+                      f"{'collect' if fee_change > 0 else 'refund'} {money(abs(fee_change))} per team that has paid.")
+        added_change = added_money_cents - s.added_money_cents
+        if added_change:
+            self.pot_cents += added_change
+            self._say(f"Added money changed to {money(added_money_cents)}.")
+        s.entry_fee_cents, s.added_money_cents, s.registration_cap = entry_fee_cents, added_money_cents, registration_cap
 
     def match_minutes_played(self, m: Match, at: datetime | None = None) -> float | None:
         """Minutes since the match started (None before it starts)."""

@@ -76,8 +76,11 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 - **Winners vs losers ("cross") matches:** only when teams are stuck on opposite lists with nothing else playing or queued, or for a team catching up. There are no byes.
 - **Last two teams both no-show** with 1 chip each: instead of both forfeiting their last chip (which would leave nobody to pay), both are cashed in at the current chip value.
 - **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent goes back to the front of the line.
-- **Late entries** (after the start) pay the entry fee, get chips for their skill level and join the bottom of the winners list.
-- **Entry fee, added money, chip brackets and the registration cap** lock when the tournament starts.
+- **Late entries and money settings lock together**, once every team still in has completed a match. Until then:
+  - **Late entries:** teams can register late (or be restored from no-show). They pay the entry fee, get chips for their skill level and join the winners list.
+  - **Money settings:** the entry fee, added money, chip brackets and registration cap can still change. After the start, a change adjusts the pot (fee × teams that have paid) and every team's chips (by the difference in starting chips), and each adjustment is logged. The fee and added money can't change once any team has cashed in.
+  - **At the lock:** registration closes, and teams still on the waiting list get a text that the field is set.
+- **Table-call texts** start with "New match:" and no league name. Every other text starts with the sender name.
 - **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Partner swap, now Ann & Cy. Combined skill 9 → 10").
 - **What counts as a swap:** the app compares partner names (ignoring capitals and extra spaces). Fixing a typo in a partner's name also counts as a swap, so the director should fix name typos for a team that's at 11.
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.

@@ -3,6 +3,8 @@
 <h1>Register a team</h1>
 {% if t.status == FINISHED %}
   <p>This tournament is over.</p>
+{% elif t.entries_locked or t.last_call %}
+  <p class="banner">Registration is closed: the tournament is under way and the field is set.</p>
 {% else %}
   {% if t.status == RUNNING %}<div class="banner">The tournament has started. Late entries pay {{ t.settings.entry_fee_cents|money }} and join the winners list.</div>{% endif %}
   {% if t.settings.checkin_by %}<p class="checkin-note">On tournament day, check in at the desk by <b>{{ t.settings.checkin_by }}</b> or your spot may go to the waiting list.</p>{% endif %}

@@ -19,7 +19,7 @@
     {% if s.last_call_time %}<li>Last call: <b>{{ s.last_call_time }}</b></li>{% endif %}
   </ul>
   {% if s.details %}<div class="details">{{ s.details }}</div>{% endif %}
-  {% if t.status != FINISHED %}<a class="button" href="{{ url_for('register') }}">Register a team</a>{% endif %}
+  {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}<a class="button" href="{{ url_for('register') }}">Register a team</a>{% endif %}
 </section>
 
 <details class="howto">

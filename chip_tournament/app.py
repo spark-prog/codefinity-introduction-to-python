@@ -368,16 +368,12 @@ def create_app(data_dir: str | None = None) -> Flask:
             race = f.get("race_to", "3")
             if not race.isdigit() or int(race) < 1:
                 raise TournamentError("Race must be a whole number of games.")
-            if t.status == SETUP:
-                s.entry_fee_cents = parse_money(f.get("entry_fee", "0"))
-                s.added_money_cents = parse_money(f.get("added_money", "0"))
-                s.chip_brackets = parse_chip_brackets(f.get("chip_brackets", ""))
+            if not t.entries_locked and t.status != FINISHED:
                 cap = f.get("registration_cap", "")
                 if not cap.isdigit():
                     raise TournamentError("Registration cap must be a whole number.")
-                s.registration_cap = int(cap)
-                if s.registration_cap > t.max_skill:
-                    raise TournamentError("The registration cap can't be higher than the top chip bracket.")
+                t.set_money(parse_money(f.get("entry_fee", "0")), parse_money(f.get("added_money", "0")),
+                            parse_chip_brackets(f.get("chip_brackets", "")), int(cap))
             s.race_to = int(race)
             for key in ("warmup_minutes", "checkin_minutes", "grace_minutes", "match_minutes",
                         "long_match_minutes", "catchup_matches"):

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Import teams — {{ t.settings.name }}{% endblock %}
+{% block content %}
+<h1>Import teams</h1>
+<p><a href="{{ url_for('admin') }}">← Back to the director page</a></p>
+
+{% if done %}
+  <h2>Import results</h2>
+  {% include "_import_rows.html" %}
+  <p><a class="button" href="{{ url_for('admin') }}#teams">See the teams</a>
+     <a href="{{ url_for('admin_import') }}">Import another file</a></p>
+
+{% elif headers %}
+  <form method="post" class="card form">
+    <h2>2. Match the form's questions to team fields</h2>
+    <p class="muted">The app guessed from the column headings. Fix any that are wrong, then press <b>Update preview</b>.
+      A team name is optional. If it's missing, the team is named after its partners (e.g. "Ann &amp; Bob").</p>
+    <div class="mapping">
+      {% for key, label in fields.items() %}
+      <label>{{ label }}
+        <select name="map_{{ key }}">
+          <option value="">— not in the form —</option>
+          {% for h in headers %}
+          <option value="{{ loop.index0 }}" {% if mapping.get(key) == loop.index0 %}selected{% endif %}>
+            {{ h|truncate(60) }}{% if samples and loop.index0 < samples|length and samples[loop.index0] %} (e.g. {{ samples[loop.index0]|truncate(25) }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+    </div>
+    <button class="button secondary" name="step" value="preview">Update preview</button>
+
+    <h2>3. Check the preview</h2>
+    {% set skipped = rows|length - added - waitlisted %}
+    <p><b>{{ added }}</b> team(s) will be added to the field{% if waitlisted %}, <b>{{ waitlisted }}</b> onto the waiting list{% endif %}{% if skipped %}, and <b class="warn">{{ skipped }} skipped</b> (fix those in the sheet and import again, or register them by hand){% endif %}.
+      Rows are added top to bottom, so the earliest sign-ups get the field spots.{% if not t.settings.field_cap %} <span class="warn">No field cap is set yet; set it in Settings first if you have one.</span>{% endif %}</p>
+    {% include "_import_rows.html" %}
+    <label class="checkbox"><input type="checkbox" name="send_texts" value="1" checked> Text each team its registration and roster PIN</label>
+    <button class="button" name="step" value="import" {% if not added and not waitlisted %}disabled{% endif %}
+      onclick="return confirm('Import {{ added + waitlisted }} team(s)?')">Import {{ added + waitlisted }} team(s)</button>
+  </form>
+
+{% else %}
+  <form method="post" enctype="multipart/form-data" class="card form">
+    <h2>1. Upload the responses</h2>
+    <ol>
+      <li>In Google Forms, open the <b>Responses</b> tab and click <b>View in Sheets</b>.</li>
+      <li>In the sheet: <b>File → Download → Comma-separated values (.csv)</b>.</li>
+      <li>Choose that file below.</li>
+    </ol>
+    <label>CSV file <input type="file" name="file" accept=".csv,text/csv"></label>
+    <details><summary>Or paste the rows instead</summary>
+      <label>Paste from the sheet, with the heading row first
+        <textarea name="csv_text" rows="6" placeholder="Timestamp,Team name,Player 1 name,..."></textarea></label>
+    </details>
+    <p class="muted">Each team goes through the normal rules: 2 partners, combined skill {{ t.settings.registration_cap }} or less,
+      the field cap and waiting list, and no duplicate team names. Teams already registered are skipped, so it's safe to import an updated sheet again.</p>
+    <button class="button" name="step" value="upload">Upload and preview</button>
+  </form>
+{% endif %}
+{% endblock %}

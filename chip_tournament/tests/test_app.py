@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from app import create_app
@@ -171,3 +173,29 @@ def test_production_refuses_default_password(tmp_path, monkeypatch):
     app = create_app(str(tmp_path))
     assert app.config["SESSION_COOKIE_SECURE"] is True
     assert app.test_client().get("/healthz").json == {"ok": True}
+
+
+def test_csv_import_flow(client):
+    import io
+    client.post("/admin/login", data={"password": "secret"})
+    csv_text = ("Timestamp,Team Name,Player 1 Name,Player 1 Skill,Player 1 Phone,Player 2 Name,Player 2 Skill\n"
+                "10/1/2026 9:00,Sharks,Ann,5,5551110001,Bob,4\n"
+                "10/1/2026 9:05,Rails,Cy,6,5551110002,Di,6\n")
+    page = client.post("/admin/import", data={"step": "upload", "file": (io.BytesIO(csv_text.encode()), "responses.csv")},
+                       content_type="multipart/form-data")
+    assert b"Import 1 team(s)" in page.data and b"registration cap" in page.data
+    store = client.application.config["store"]
+    assert not store.load().teams  # preview saves nothing
+
+    form = {"step": "import", "send_texts": "1"}
+    for key, col in {"team": 1, "name1": 2, "skill1": 3, "phone1": 4, "name2": 5, "skill2": 6}.items():
+        form[f"map_{key}"] = str(col)
+    page = client.post("/admin/import", data=form, follow_redirects=True)
+    assert b"Imported 1 team(s)" in page.data
+    assert [x.name for x in store.load().teams.values()] == ["Sharks"]
+    sms = client.application.config["sms"]
+    for _ in range(50):  # texts go out on a background thread
+        if any("PIN" in x["body"] for x in sms.recent()):
+            break
+        time.sleep(0.02)
+    assert any("PIN" in x["body"] for x in sms.recent())

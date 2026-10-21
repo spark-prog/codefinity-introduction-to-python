@@ -30,6 +30,7 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 | `/register` | teams | Register a team of two partners: names, skill levels, cell numbers. Shows the combined skill and starting chips as you type. Gives (and texts) a 4-digit team PIN |
 | `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results |
 | `/team/<id>/roster` | a team (with PIN) | Update partners, skill levels (before the start), team name and cell numbers |
+| `/admin/import` | director | Import teams from a CSV file, such as Google Form responses (before the start) |
 | `/guide` | director | Step-by-step guide for tournament night (printable) |
 | `/admin` | director | Settings, start, scoring, cash-in, last call, chip adjustments, texts, undo, chip ledger and activity log |
 
@@ -78,6 +79,18 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 - **What counts as a swap:** the app compares partner names (ignoring capitals and extra spaces). Fixing a typo in a partner's name also counts as a swap, so the director should fix name typos for a team that's at 11.
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.
 - **"Started" at last call** means the match has been called to a table. Matches still waiting for a table count as not started.
+
+## Importing teams from a Google Form
+
+On the director page (before the start), click **Import teams from a spreadsheet (CSV)**.
+
+1. In Google Forms, open **Responses → View in Sheets**, then in the sheet choose **File → Download → Comma-separated values (.csv)**. Upload that file, or paste the rows.
+2. The app guesses which column is the team name, each partner's name, skill level and cell. Fix any guesses that are wrong.
+   - A team name column is optional. Without one, teams are named after their partners.
+   - If the form only asked for a combined skill, map that instead. It's split between the partners, and teams can correct it on their roster page.
+3. Check the preview, which shows every row's result before anything is saved: added (with its chips), waiting list, or skipped and why.
+
+Rows are added top to bottom (sign-up order), so the earliest teams get the field spots and the rest fill the waiting list in order. Every row goes through the normal registration rules. Teams already registered are skipped, so importing an updated sheet again only adds the new sign-ups. You can choose whether each imported team gets its PIN by text.
 
 ## Chip tracking
 

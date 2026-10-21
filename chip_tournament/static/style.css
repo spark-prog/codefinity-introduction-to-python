@@ -136,3 +136,10 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--card); bo
   .guide tr, .guide li { break-inside: avoid; }
   a { color: inherit; text-decoration: none; }
 }
+
+.mapping { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.import-rows tr.skipped td { background: #fbe3e0; }
+.import-rows tr.waiting td { background: #fff5d1; }
+.checkbox { display: flex !important; align-items: center; gap: 8px; }
+.checkbox input { width: auto !important; margin: 0 !important; }
+@media (max-width: 640px) { .mapping { grid-template-columns: 1fr; } }

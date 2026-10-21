@@ -19,6 +19,7 @@ from urllib.parse import quote_plus
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from chips import importer
 from chips.alerts import SmsSender
 from chips.engine import (
     ACTIVE,
@@ -101,6 +102,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             key_file.write_text(secrets.token_hex(32))
         app.secret_key = key_file.read_text()
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # uploads (CSV import)
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
     if os.environ.get("CHIPS_PRODUCTION") == "1":
         # On the internet: refuse to run with the default password, and only send cookies over HTTPS.
@@ -332,6 +334,64 @@ def create_app(data_dir: str | None = None) -> Flask:
 
         act("Update settings", update, "Settings saved.")
         return redirect(url_for("admin"))
+
+    import_file = data_path / "import.csv"
+
+    @app.route("/admin/import", methods=["GET", "POST"])
+    @admin_required
+    def admin_import():
+        t = store.load()
+        if t.status != SETUP:
+            flash("Teams can only be imported before the tournament starts.", "error")
+            return redirect(url_for("admin"))
+        if request.method == "GET":
+            return render_template("import.html", t=t, fields=importer.FIELDS)
+
+        step = request.form.get("step")
+        if step == "upload":
+            upload = request.files.get("file")
+            text = upload.read().decode("utf-8-sig", errors="replace") if upload and upload.filename else ""
+            text = text or request.form.get("csv_text", "")
+            if not text.strip():
+                flash("Choose a CSV file (or paste the rows) first.", "error")
+                return redirect(url_for("admin_import"))
+            import_file.write_text(text)
+        elif not import_file.exists():
+            flash("Upload the file again.", "error")
+            return redirect(url_for("admin_import"))
+
+        try:
+            headers, raw_rows = importer.read_csv(import_file.read_text())
+        except Exception as exc:  # a malformed file should never crash the page
+            flash(f"Couldn't read that file: {exc}", "error")
+            return redirect(url_for("admin_import"))
+
+        if step == "upload":
+            mapping = importer.guess_mapping(headers)
+        else:
+            mapping = {key: int(request.form[f"map_{key}"]) for key in importer.FIELDS
+                       if request.form.get(f"map_{key}", "").isdigit()
+                       and int(request.form[f"map_{key}"]) < len(headers)}
+        rows = importer.build_rows(raw_rows, mapping)
+
+        if step == "import":
+            texts_on = request.form.get("send_texts") == "1"
+            with store.change(f"Import {len(rows)} team(s) from CSV") as t:
+                added, waitlisted = importer.apply(t, rows, send_texts=texts_on)
+                send_texts(t)
+            import_file.unlink(missing_ok=True)
+            skipped = len(rows) - added - waitlisted
+            flash(f"Imported {added} team(s) into the field"
+                  f"{f', {waitlisted} onto the waiting list' if waitlisted else ''}"
+                  f"{f'; {skipped} skipped (see below)' if skipped else ''}.", "ok" if not skipped else "error")
+            return render_template("import.html", t=store.load(), fields=importer.FIELDS, done=True, rows=rows)
+
+        added, waitlisted = importer.preview(t, rows)
+        samples = raw_rows[0] if raw_rows else []
+        return render_template(
+            "import.html", t=t, fields=importer.FIELDS, headers=headers, mapping=mapping, rows=rows,
+            samples=samples, added=added, waitlisted=waitlisted,
+        )
 
     @app.post("/admin/start")
     @admin_required

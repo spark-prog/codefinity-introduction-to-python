@@ -10,6 +10,7 @@
     <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
       {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
       {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw round 1.</p>
+    <p><a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a></p>
     <form method="post" action="{{ url_for('admin_start') }}" onsubmit="return confirm('Start the tournament and draw round 1?')">
       <button class="button big">Start tournament</button></form>
   {% elif t.status == RUNNING %}

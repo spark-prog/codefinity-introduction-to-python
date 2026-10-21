@@ -10,6 +10,8 @@
     <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
 </div>
 
+{% set spot = t.waitlist_position(team) %}
+{% if spot %}<div class="banner">{{ team.name }} is <b>#{{ spot }} on the waiting list</b>. We'll text you if a spot in the field opens.</div>{% endif %}
 {% if match %}
   <div class="banner {% if match.status == CALLED %}danger{% endif %}">
   {% set opp = match.team_b if match.team_a == team.id else match.team_a %}

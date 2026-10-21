@@ -85,11 +85,35 @@ def test_roster_needs_pin(client):
     assert store.load().teams[team.id].name == "Sharks"
 
     other.post(f"/team/{team.id}/roster", data={"pin": team.pin})
+    # Same partners, skill went up: allowed up to 11.
     other.post(f"/team/{team.id}/roster", data={"name": "Sharks", "player_name_0": "Ann", "player_phone_0": "5559990000",
-                                                "player_skill_0": "6", "player_name_1": "Bo", "player_skill_1": "5"})
+                                                "player_skill_0": "6", "player_name_1": "Bob", "player_skill_1": "5"})
     updated = store.load().teams[team.id]
-    assert [(p.name, p.skill) for p in updated.players] == [("Ann", 6), ("Bo", 5)]
+    assert [(p.name, p.skill) for p in updated.players] == [("Ann", 6), ("Bob", 5)]
     assert updated.combined_skill == 11
+
+    # Swapping in a new partner counts as registering again: 10 or less.
+    page = other.post(f"/team/{team.id}/roster", follow_redirects=True, data={
+        "name": "Sharks", "player_name_0": "Ann", "player_phone_0": "5559990000", "player_skill_0": "6",
+        "player_name_1": "Cy", "player_skill_1": "5"})
+    assert b"partner swap counts as a new registration" in page.data
+    assert store.load().teams[team.id].players[1].name == "Bob"
+
+
+def test_field_cap_and_waiting_list(client):
+    client.post("/admin/login", data={"password": "secret"})
+    client.post("/admin/settings", data={"name": "Cups", "race_to": "2", "tables": "1", "entry_fee": "20",
+                                         "added_money": "0", "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2",
+                                         "registration_cap": "10", "field_cap": "2"})
+    for name in ("A Team", "B Team", "C Team"):
+        register(client, name)
+    store = client.application.config["store"]
+    t = store.load()
+    assert [x.status for x in sorted(t.teams.values(), key=lambda x: x.name)] == ["registered", "registered", "waitlisted"]
+    assert b"Waiting list" in client.get("/").data
+    first = next(x for x in t.teams.values() if x.name == "A Team")
+    client.post(f"/admin/team/{first.id}/remove")
+    assert next(x for x in store.load().teams.values() if x.name == "C Team").status == "registered"
 
 
 def test_registration_over_cap_is_rejected(client):

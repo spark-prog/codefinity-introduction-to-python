@@ -261,6 +261,10 @@ def create_app(data_dir: str | None = None) -> Flask:
                 if s.registration_cap > t.max_skill:
                     raise TournamentError("The registration cap can't be higher than the top chip bracket.")
             s.race_to = int(race)
+            field_cap = f.get("field_cap", "0").strip() or "0"
+            if not field_cap.isdigit():
+                raise TournamentError("Field cap must be a whole number (0 for no limit).")
+            t.set_field_cap(int(field_cap))
             if t.status == RUNNING:
                 t._call_matches()  # new tables may be free now
 

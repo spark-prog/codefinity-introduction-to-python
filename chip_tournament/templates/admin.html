@@ -7,7 +7,8 @@
 
 <section class="card controls">
   {% if t.status == SETUP %}
-    <p>{{ t.teams|length }} team(s) registered. Starting will collect {{ s.entry_fee_cents|money }} × {{ t.teams|length }}
+    <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
+      {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
       {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw round 1.</p>
     <form method="post" action="{{ url_for('admin_start') }}" onsubmit="return confirm('Start the tournament and draw round 1?')">
       <button class="button big">Start tournament</button></form>
@@ -85,11 +86,11 @@
         {% endif %}
       </td>
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
-      <td>{{ team.status.replace("_", " ") }}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
+      <td>{{ team.status.replace("_", " ") }}{% if team.status == "waitlisted" %} #{{ t.waitlist_position(team) }}{% endif %}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
       <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
       <td class="actions">
         <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
-        {% if t.status == SETUP %}
+        {% if t.status == SETUP or team.status == "waitlisted" %}
         <form method="post" action="{{ url_for('admin_remove', team_id=team.id) }}" class="inline" onsubmit="return confirm('Remove {{ team.name|e }}?')">
           <button class="link danger">Remove</button></form>
         {% elif team.status == ACTIVE %}
@@ -144,6 +145,7 @@
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
     <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if t.status != SETUP %}disabled{% endif %}></label>
+    <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
     <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>

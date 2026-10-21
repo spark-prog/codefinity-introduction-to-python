@@ -8,11 +8,12 @@
     <button class="button">Continue</button>
   </form>
 {% else %}
-  {% set locked = team.status != "registered" %}
+  {% set locked = team.status not in ("registered", "waitlisted") %}
   {% if locked %}
   <p class="banner">The tournament has started, so partners and skill levels are locked. You can still change the team name and cell numbers.</p>
   {% else %}
-  <p>If a partner's skill level has gone up since registration, update it here. Your combined skill can go up to {{ t.max_skill }}; at {{ t.max_skill + 1 }} or more you'll need a new partner.</p>
+  <p>If a partner's skill level has gone up since registration, update it here. With the same two partners, your combined skill can go up to {{ t.max_skill }}.</p>
+  <p><b>Swapping partners</b> counts as registering again, so the new pair's combined skill can't be over {{ t.settings.registration_cap }}. You keep your spot{% if team.status == "waitlisted" %} on the waiting list{% else %} in the field{% endif %}.</p>
   {% include "_chip_table.html" %}
   {% endif %}
   <form method="post" class="card form">

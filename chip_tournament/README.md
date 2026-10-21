@@ -38,7 +38,9 @@ Run the tests with `python -m pytest`.
    | 11 | 2 |
    | 12 or more | needs a new partner |
 
-   Combined skill can't be over **10 at registration**. If a partner's skill goes up afterward, the team updates it on its roster page, up to **11**. A team over 11 can't be saved, and the tournament won't start until every team is 11 or less. Partners and skill levels lock once the tournament starts. The director can change the brackets and the registration cap in Settings until the start.
+   Combined skill can't be over **10 at registration**. If the same two partners' skill levels go up afterward, the team updates them on its roster page, up to **11**. **Swapping in a new partner counts as registering again**, so the new pair must be 10 or less, but the team keeps its spot in the field (or its place on the waiting list). A team over 11 can't be saved, and the tournament won't start until every team is 11 or less. Partners and skill levels lock once the tournament starts. The director can change the brackets and the registration cap in Settings until the start.
+
+   **Field cap and waiting list.** The director sets the field cap (the most teams) in Settings. Once the field is full, new registrations go on a **waiting list** in order, and each team is texted its place. When a team in the field is removed before the start, or the director raises the cap, the next waiting team moves into the field and gets a text. Waiting-list teams don't play or pay into the pot unless they get a spot. A cap of 0 means no limit, and the cap can't be set below the number of teams already in the field.
 2. **Round 1** is a random draw. Matches go to free tables in order. If there are more matches than tables, the rest wait and get called automatically as tables free up.
 3. **Scoring.** Tap `+`/`−` for each game. When a team reaches the race, it wins automatically (or tap **Winner**).
 4. **After a match:** the winner keeps its chips and goes to the bottom of the **winners list**. The loser gives one chip back to the main table and goes to the bottom of the **losers list**. A team with 0 chips is **eliminated** and leaves the rotation.
@@ -59,7 +61,8 @@ Run the tests with `python -m pytest`.
 - **Cashing in during a match:** not allowed once a game has been scored. If the match hasn't started, it's cancelled and the opponent waits for the next round.
 - **Late entries** (after the start) pay the entry fee, get chips for their skill level and join the bottom of the winners list.
 - **Entry fee, added money, chip brackets and the registration cap** lock when the tournament starts.
-- **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Combined skill 10 → 11"). The 10 cap applies only to new registrations, so a team that swaps partners after registering can go up to 11.
+- **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Partner swap, now Ann & Cy. Combined skill 9 → 10").
+- **What counts as a swap:** the app compares partner names (ignoring capitals and extra spaces). Fixing a typo in a partner's name also counts as a swap, so the director should fix name typos for a team that's at 11.
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.
 - **"Started" at last call** means the match has been called to a table. Matches still waiting for a table count as not started.
 

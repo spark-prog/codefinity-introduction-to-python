@@ -90,6 +90,49 @@ def test_skill_can_rise_to_11_before_the_start_but_not_12():
     assert team.chips == 2
 
 
+def test_partner_swap_counts_as_registering_again():
+    t = make(skills=[10, 10])
+    team = next(iter(t.teams.values()))
+    swapped = [Player("A", "5550000000", 5), Player("New Partner", "", 6)]
+    with pytest.raises(TournamentError, match="new registration"):
+        t.update_roster(team.id, swapped)
+    t.update_roster(team.id, [Player("A", "5550000000", 5), Player("New Partner", "", 4)])
+    assert team.partners == "A & New Partner"
+
+
+def test_field_cap_waiting_list_fills_in_order():
+    t = Tournament()
+    t.set_field_cap(2)
+    a, b, c, d = (t.register_team(n, partners(8)) for n in "ABCD")
+    assert (a.status, b.status) == ("registered", "registered")
+    assert t.waitlist == [c.id, d.id] and t.waitlist_position(d) == 2
+    t.remove_team(a.id)
+    assert c.status == "registered" and t.waitlist == [d.id]
+    t.set_field_cap(3)
+    assert d.status == "registered" and t.waitlist == []
+    with pytest.raises(TournamentError):
+        t.set_field_cap(2)  # below the teams already in the field
+
+
+def test_swap_keeps_waiting_list_spot():
+    t = Tournament()
+    t.set_field_cap(1)
+    t.register_team("In", partners(8))
+    first, second = t.register_team("W1", partners(8)), t.register_team("W2", partners(8))
+    t.update_roster(first.id, [Player("A", "5550000000", 4), Player("Swapped In", "", 5)])
+    assert t.waitlist == [first.id, second.id]
+
+
+def test_waitlisted_teams_do_not_play():
+    t = Tournament()
+    t.set_field_cap(2)
+    for n in "ABC":
+        t.register_team(n, partners(8))
+    t.start(random.Random(5))
+    assert len(t.active_teams) == 2
+    assert t.pot_cents == 2 * 2000
+
+
 def test_partners_and_skill_lock_at_the_start():
     t = make(skills=[8, 8])
     t.start(random.Random(1))

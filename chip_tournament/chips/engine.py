@@ -5,10 +5,14 @@ their own. Money is always kept in whole cents (int) to avoid rounding drift.
 
 How the format works
 --------------------
+* The director sets a field cap. Teams that register once the field is full go
+  on a waiting list and move into the field, in order, as spots open.
 * A team is two partners. Their combined skill level sets the team's starting
   chips (e.g. 6 or less = 5 chips, 7-8 = 4, 9-10 = 3, 11 = 2). Combined skill
-  is capped at registration (10), may rise to the top bracket (11) by the
-  start, and a team above that needs a new partner.
+  is capped at registration (10). If the same partners' skill levels go up,
+  the team may rise to the top bracket (11) by the start. Swapping in a new
+  partner counts as registering again, so the 10 cap applies, but the team
+  keeps its spot in the field. Above the top bracket a team needs a new partner.
 * Round 1: teams are paired at random and called to a table.
 * A match is a race to N games. The winner keeps its chips and goes to the
   bottom of the WINNERS list. The loser gives one chip back to the main table
@@ -35,6 +39,7 @@ from datetime import datetime
 
 # Team statuses
 REGISTERED = "registered"
+WAITLISTED = "waitlisted"
 ACTIVE = "active"
 ELIMINATED = "eliminated"
 CASHED_OUT = "cashed_out"
@@ -138,6 +143,7 @@ class Settings:
     race_to: int = 3
     chip_brackets: list[list[int]] = field(default_factory=lambda: [list(b) for b in DEFAULT_CHIP_BRACKETS])
     registration_cap: int = DEFAULT_REGISTRATION_CAP
+    field_cap: int = 0  # most teams in the field; 0 = no limit set
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     cash_in_time: str = ""
     last_call_time: str = ""
@@ -170,6 +176,7 @@ class Tournament:
     round: int = 0
     winners_list: list[str] = field(default_factory=list)
     losers_list: list[str] = field(default_factory=list)
+    waitlist: list[str] = field(default_factory=list)  # team ids, first in line first
     pot_cents: int = 0
     total_collected_cents: int = 0
     cash_in_open: bool = False
@@ -242,8 +249,20 @@ class Tournament:
         busy = {m.table for m in self.matches if m.status == CALLED}
         return [t for t in self.settings.tables if t not in busy]
 
+    @property
+    def field_teams(self) -> list[Team]:
+        """Teams with a spot in the event (everyone except the waiting list)."""
+        return [t for t in self.teams.values() if t.status != WAITLISTED]
+
+    @property
+    def field_full(self) -> bool:
+        return bool(self.settings.field_cap) and len(self.field_teams) >= self.settings.field_cap
+
+    def waitlist_position(self, team: Team) -> int | None:
+        return self.waitlist.index(team.id) + 1 if team.id in self.waitlist else None
+
     def standings(self) -> list[Team]:
-        order = {ACTIVE: 0, CASHED_OUT: 1, ELIMINATED: 2, REGISTERED: 3}
+        order = {ACTIVE: 0, CASHED_OUT: 1, ELIMINATED: 2, REGISTERED: 3, WAITLISTED: 4}
         return sorted(
             self.teams.values(),
             key=lambda t: (order.get(t.status, 9), -t.chips, -t.payout_cents, t.name.lower()),
@@ -340,6 +359,7 @@ class Tournament:
             )
         self.chips_for_skill(combined)
 
+        full = self.field_full
         team = Team(
             id=uuid.uuid4().hex[:8],
             name=name,
@@ -347,6 +367,17 @@ class Tournament:
             pin=f"{secrets.randbelow(10000):04d}",
         )
         self.teams[team.id] = team
+        if full:
+            team.status = WAITLISTED
+            self.waitlist.append(team.id)
+            spot = len(self.waitlist)
+            self._say(f"{team.name} ({team.partners}, combined skill {combined}) is #{spot} on the waiting list.")
+            self._text_team(
+                team,
+                f"{self.settings.name} is full. {team.name} is #{spot} on the waiting list; we'll text you "
+                f"if a spot opens. Your team PIN for roster changes is {team.pin}.",
+            )
+            return team
         self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
         self._text_team(
             team,
@@ -356,6 +387,29 @@ class Tournament:
         if self.status == RUNNING:
             self._join_running(team)
         return team
+
+    def _fill_from_waitlist(self) -> None:
+        """Move waiting teams into the field, in order, while there is room."""
+        if self.status == FINISHED or self.last_call:
+            return
+        while self.waitlist and not self.field_full:
+            team = self.teams[self.waitlist.pop(0)]
+            team.status = REGISTERED
+            self._say(f"{team.name} moved from the waiting list into the field.")
+            self._text_team(team, f"Good news: a spot opened and {team.name} is now in the field for {self.settings.name}.")
+            if self.status == RUNNING:
+                self._join_running(team)
+
+    def set_field_cap(self, cap: int) -> None:
+        if cap < 0:
+            raise TournamentError("The field cap can't be negative.")
+        in_field = len(self.field_teams)
+        if cap and cap < in_field:
+            raise TournamentError(f"{in_field} teams are already in the field, so the cap can't be lower than that.")
+        if cap != self.settings.field_cap:
+            self.settings.field_cap = cap
+            self._say(f"Field cap set to {cap or 'no limit'}.")
+            self._fill_from_waitlist()
 
     def _join_running(self, team: Team) -> None:
         """Late entry: pay in, get chips, and wait on the winners list."""
@@ -371,19 +425,32 @@ class Tournament:
         team.starting_chips = self.chips_for_skill(team.combined_skill)
         self._chip_change(team, team.starting_chips, f"Starting chips (combined skill {team.combined_skill})")
 
+    @staticmethod
+    def _names(players: list[Player]) -> set[str]:
+        return {" ".join(p.name.lower().split()) for p in players}
+
     def update_roster(self, team_id: str, players: list[Player], name: str | None = None) -> Team:
         """Change partners, phones or skill levels.
 
-        Skill levels can rise after registration (up to the top chip bracket)
-        but are locked once the team has been given its chips.
+        With the same two partners, skill levels can rise after registration
+        (up to the top chip bracket). Swapping in a new partner counts as a new
+        registration, so the registration cap applies, but the team keeps its
+        place (in the field or on the waiting list). Partners and skill levels
+        lock once the team has been given its chips.
         """
         team = self.team(team_id)
         self._check_players(players)
         old_skill, new_skill = team.combined_skill, sum(p.skill for p in players)
-        if team.status != REGISTERED and [(p.name, p.skill) for p in players] != [
+        swap = self._names(players) != self._names(team.players)
+        if team.status not in (REGISTERED, WAITLISTED) and [(p.name, p.skill) for p in players] != [
             (p.name, p.skill) for p in team.players
         ]:
             raise TournamentError("Partners and skill levels are locked once the tournament starts.")
+        if swap and new_skill > self.settings.registration_cap:
+            raise TournamentError(
+                f"A partner swap counts as a new registration, so combined skill can't be over "
+                f"{self.settings.registration_cap}. With the new partner it's {new_skill}."
+            )
         self.chips_for_skill(new_skill)
         if name is not None and name.strip() and name.strip() != team.name:
             if any(t.name.lower() == name.strip().lower() for t in self.teams.values() if t.id != team_id):
@@ -391,22 +458,30 @@ class Tournament:
             team.name = name.strip()
         team.players = players
         change = f" Combined skill {old_skill} → {new_skill}." if new_skill != old_skill else ""
+        if swap:
+            change = f" Partner swap, now {team.partners}." + change
         self._say(f"Roster updated for {team.name}.{change}")
         return team
 
     def remove_team(self, team_id: str) -> None:
         team = self.team(team_id)
+        if team.status == WAITLISTED:
+            self.waitlist.remove(team_id)
+            del self.teams[team_id]
+            self._say(f"Removed {team.name} from the waiting list.")
+            return
         if team.status != REGISTERED:
-            raise TournamentError("Teams can only be removed before the tournament starts.")
+            raise TournamentError("Teams in the field can only be removed before the tournament starts.")
         del self.teams[team_id]
         self._say(f"Removed {team.name}.")
+        self._fill_from_waitlist()
 
     # ----------------------------------------------------------------- running
 
     def start(self, rng: random.Random | None = None) -> None:
         if self.status != SETUP:
             raise TournamentError("The tournament has already started.")
-        teams = list(self.teams.values())
+        teams = self.field_teams
         if len(teams) < 2:
             raise TournamentError("At least two teams are needed to start.")
         if not self.settings.tables:

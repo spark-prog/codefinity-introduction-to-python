@@ -11,6 +11,7 @@
   <ul class="facts">
     <li>Entry: <b>{{ s.entry_fee_cents|money }}</b> per team{% if s.added_money_cents %} · <b>{{ s.added_money_cents|money }}</b> added{% endif %}</li>
     <li>Race to <b>{{ s.race_to }}</b></li>
+    {% if s.field_cap %}<li>Field: <b>{{ t.field_teams|length }} of {{ s.field_cap }}</b> spots filled{% if t.waitlist %} · {{ t.waitlist|length }} on the waiting list{% endif %}</li>{% endif %}
     <li>Teams of {{ TEAM_SIZE }}. Starting chips by combined skill level: {% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
       <br><span class="muted">Combined skill can't be over {{ s.registration_cap }} at registration. It can go up to {{ t.max_skill }} by tournament time; {{ t.max_skill + 1 }} or more needs a new partner.</span></li>
     {% if s.cash_in_time %}<li>Cash-in opens: <b>{{ s.cash_in_time }}</b></li>{% endif %}

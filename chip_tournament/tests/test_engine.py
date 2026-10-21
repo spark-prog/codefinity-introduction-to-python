@@ -8,6 +8,8 @@ from chips.engine import (
     CASHED_OUT,
     ELIMINATED,
     FINISHED,
+    RUNNING,
+    WAITING,
     Player,
     Tournament,
     TournamentError,
@@ -230,21 +232,66 @@ def test_cannot_cash_in_mid_match():
         t.cash_in(m.team_a)
 
 
-def test_last_call_pays_out_entire_pot_exactly():
-    t = make(n_teams=7, skills=[4, 6, 7, 8, 9, 10, 5], fee=1500)
-    t.settings.added_money_cents = 1000
+def test_last_call_waiting_match_is_the_last_one():
+    t = make(n_teams=4, tables=["1"])
     t.start(random.Random(12))
-    for _ in range(6):
-        for m in called(t):
-            if t.status == FINISHED:
-                break
-            play(t, m, random.Random(len(t.matches)).choice("ab"))
-    if t.status != FINISHED:
-        t.call_last_call()
+    on_table = called(t)[0]
+    waiting = next(m for m in t.matches if m.status == WAITING)
+    t.call_last_call()
+    assert t.status == RUNNING  # nobody is cashed out yet
+
+    play(t, on_table)  # started before last call: both teams play one more
+    assert all(t.teams[x].status == ACTIVE for x in (on_table.team_a, on_table.team_b))
+
+    assert waiting.status == CALLED
+    play(t, waiting)  # not started by last call: both teams are cashed in after it
+    winner, loser = t.teams[waiting.winner], t.teams[waiting.loser]
+    assert winner.status == CASHED_OUT and winner.payout_cents > 0
+    assert loser.status == CASHED_OUT and loser.chips == 0
+    # Two chips have gone back to the table (12 -> 10); the loser cashes in its remaining 2.
+    assert loser.payout_cents == round(2 * 8000 / 10)
+
+
+def test_after_last_call_everyone_plays_out_and_the_pot_is_paid_exactly():
+    rng = random.Random(21)
+    t = make(n_teams=7, skills=[4, 6, 7, 8, 9, 10, 5], fee=1500, tables=["1", "2"])
+    t.settings.added_money_cents = 1000
+    t.start(rng)
+    for _ in range(4):
+        play(t, called(t)[0], rng.choice("ab"))
+    in_play = {x for m in called(t) for x in (m.team_a, m.team_b)}
+    t.call_last_call()
+    played_after = {team_id: 0 for team_id in t.teams}
+    for _ in range(100):
+        if t.status == FINISHED:
+            break
+        m = called(t)[0]
+        for x in (m.team_a, m.team_b):
+            played_after[x] += 1
+        play(t, m, rng.choice("ab"))
     assert t.status == FINISHED
     assert t.pot_cents == 0
     assert sum(team.payout_cents for team in t.teams.values()) == 7 * 1500 + 1000
     assert all(team.chips == 0 for team in t.teams.values())
+    # Nobody plays more than their allowance after last call.
+    for team_id, n in played_after.items():
+        assert n <= (2 if team_id in in_play else 1)
+
+
+def test_cash_out_everyone_ends_immediately():
+    t = make(n_teams=5)
+    t.start(random.Random(22))
+    t.cash_out_everyone()
+    assert t.status == FINISHED and t.pot_cents == 0
+    assert sum(team.payout_cents for team in t.teams.values()) == 5 * 2000
+
+
+def test_no_registration_after_last_call():
+    t = make(n_teams=2)
+    t.start(random.Random(23))
+    t.call_last_call()
+    with pytest.raises(TournamentError, match="closed"):
+        t.register_team("Late", partners(8))
 
 
 def test_full_tournament_runs_to_a_single_winner():

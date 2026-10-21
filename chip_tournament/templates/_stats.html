@@ -5,6 +5,6 @@
   <div class="stat"><span class="label">Teams left</span><span class="value">{{ t.active_teams|length }}{% if t.status != SETUP %} / {{ t.teams|length }}{% endif %}</span></div>
   <div class="stat"><span class="label">Round</span><span class="value">{{ t.round or "–" }}</span></div>
 </div>
-{% if t.last_call %}<div class="banner danger">LAST CALL — all teams have been cashed in.</div>
+{% if t.last_call and t.status == RUNNING %}<div class="banner danger">LAST CALL — each team's next match is its last. Teams are cashed in automatically when it ends. (A match already on a table at last call finishes first, then those teams play one more.)</div>
 {% elif t.cash_in_open and t.status == RUNNING %}<div class="banner">Cash-in is OPEN — see the desk to cash in, or keep playing.</div>{% endif %}
 {% if t.status == FINISHED %}<div class="banner">This tournament is finished.</div>{% endif %}

@@ -19,6 +19,10 @@
 {% elif team.status == ACTIVE %}
   <p class="muted">Waiting for the next round.</p>
 {% endif %}
+{% if team.status == ACTIVE and team.matches_left %}
+  <div class="banner danger">LAST CALL: {% if team.matches_left == 1 %}your next match is your last. You'll be cashed in automatically when it's over.
+  {% else %}finish your current match. The match after it is your last, then you're cashed in automatically.{% endif %}</div>
+{% endif %}
 {% if team.status == ACTIVE and t.cash_in_open %}<div class="banner">Cash-in is open. See the desk to cash in for {{ t.payout_for(team)|money }}, or keep playing.</div>{% endif %}
 
 <section class="card">

@@ -19,7 +19,10 @@ How the format works
 * Pot = entry fees (+ any added money). Chip value = pot / chips still in play,
   so each chip lost to the table makes every remaining chip worth more.
 * When cash-in opens, a team may cash in: it is paid chips x chip value and
-  leaves the rotation. At last call every remaining team is cashed in.
+  leaves the rotation.
+* Last call: each team's next match is its last, and both teams are cashed in
+  automatically when it ends. A match already on a table at last call finishes
+  as normal, then those teams play one more (last) match.
 """
 
 from __future__ import annotations
@@ -84,6 +87,8 @@ class Team:
     payout_cents: int = 0
     wins: int = 0
     losses: int = 0
+    # Set at last call: matches this team still plays before it is cashed in.
+    matches_left: int | None = None
     registered_at: str = field(default_factory=now)
 
     @property
@@ -324,6 +329,8 @@ class Tournament:
             raise TournamentError(f"A team named '{name}' is already registered.")
         if self.status == FINISHED:
             raise TournamentError("This tournament is over.")
+        if self.last_call:
+            raise TournamentError("Registration is closed after last call.")
         self._check_players(players)
         combined = sum(p.skill for p in players)
         if combined > self.settings.registration_cap:
@@ -457,6 +464,13 @@ class Tournament:
         m.winner = m.team_a
         m.finished_at = now()
         team = self.teams[m.team_a]
+        if self.last_call:
+            # No more matches are coming for a team with a bye after last call.
+            team.matches_left = 0
+            payout = self._cash_out(team, "Last call (bye)")
+            self._text_team(team, f"{team.name}: no opponent left after last call. "
+                                  f"You've been cashed in for {money(payout)}. See the desk to collect.")
+            return
         target = self.losers_list if m.bracket == "losers" else self.winners_list
         target.append(team.id)
         self._say(f"Round {self.round}: {team.name} has a bye and keeps its chips.")
@@ -509,7 +523,6 @@ class Tournament:
         loser.losses += 1
 
         self._chip_change(loser, -1, f"Lost round {m.round} to {winner.name}")
-        self.winners_list.append(winner_id)
         self._say(
             f"{winner.name} beat {loser.name} on table {m.table}. {loser.name} gives a chip back "
             f"({loser.chips} left). Chip value now {money(self.chip_value_cents)}."
@@ -518,10 +531,12 @@ class Tournament:
             loser.status = ELIMINATED
             self._say(f"{loser.name} is out of chips and eliminated.")
             self._text_team(loser, f"{loser.name}: you're out of chips and eliminated. Thanks for playing!")
-        else:
+        elif not self._played_last_match(loser):
             self.losers_list.append(loser_id)
             self._text_team(loser, f"{loser.name}: you lost round {m.round} and have {loser.chips} chip(s) left.")
-        self._text_team(winner, f"{winner.name}: nice win! You keep your {winner.chips} chip(s).")
+        if not self._played_last_match(winner):
+            self.winners_list.append(winner_id)
+            self._text_team(winner, f"{winner.name}: nice win! You keep your {winner.chips} chip(s).")
 
         self._advance()
         return m
@@ -553,8 +568,13 @@ class Tournament:
             return False
         if len(active) == 1:
             champ = active[0]
-            self._cash_out(champ, "Last team standing")
-            self._text_team(champ, f"{champ.name}: you're the last team standing! Payout {money(champ.payout_cents)}.")
+            if self.last_call:
+                self._cash_out(champ, "Last call (no opponents left)")
+                self._text_team(champ, f"{champ.name}: no opponents left after last call. "
+                                       f"You've been cashed in for {money(champ.payout_cents)}. See the desk to collect.")
+            else:
+                self._cash_out(champ, "Last team standing")
+                self._text_team(champ, f"{champ.name}: you're the last team standing! Payout {money(champ.payout_cents)}.")
         self.status = FINISHED
         self._say("Tournament finished.")
         return True
@@ -619,8 +639,53 @@ class Tournament:
         self._advance()
         return payout
 
+    def _played_last_match(self, team: Team) -> bool:
+        """After last call, count down a team's matches and cash it in after its last."""
+        if team.matches_left is None:
+            return False
+        team.matches_left -= 1
+        if team.matches_left > 0:
+            self._text_team(team, f"LAST CALL: {team.name}, your next match is your last.")
+            return False
+        payout = self._cash_out(team, "Last call")
+        self._text_team(
+            team,
+            f"{team.name}: that was your last match. You've been cashed in for {money(payout)} "
+            f"({money(self.chip_value_cents)} a chip). See the desk to collect.",
+        )
+        return True
+
     def call_last_call(self) -> None:
-        """Everyone still in must cash in now at the current chip value."""
+        """Every team's next match is its last; teams are cashed in after it.
+
+        A match already on a table finishes first, so those teams play one more.
+        """
+        if self.status != RUNNING:
+            raise TournamentError("The tournament is not running.")
+        if self.last_call:
+            raise TournamentError("Last call has already been called.")
+        self.last_call = True
+        self.cash_in_open = True
+        self._say("LAST CALL. Each team's next match is its last; teams are cashed in when it ends.")
+        for team in self.active_teams:
+            m = self.current_match_for(team.id)
+            if m is not None and m.status == CALLED:
+                team.matches_left = 2
+                self._text_team(
+                    team,
+                    f"LAST CALL: {team.name}, finish your match on table {m.table}. "
+                    "Your next match after it is your last, then you're cashed in automatically.",
+                )
+            else:
+                team.matches_left = 1
+                self._text_team(
+                    team,
+                    f"LAST CALL: {team.name}, your next match is your last. When it's over you're cashed in "
+                    f"automatically. Chips are worth {money(self.chip_value_cents)} each right now.",
+                )
+
+    def cash_out_everyone(self) -> None:
+        """End the tournament now: stop all matches and cash in every team."""
         if self.status != RUNNING:
             raise TournamentError("The tournament is not running.")
         self.last_call = True
@@ -629,12 +694,11 @@ class Tournament:
             m.status = CANCELLED
             m.finished_at = now()
         self.winners_list, self.losers_list = [], []
-        self._say(f"LAST CALL. All teams cash in at {money(self.chip_value_cents)} per chip.")
-        teams = sorted(self.active_teams, key=lambda t: t.chips)
-        for team in teams:
+        self._say(f"Tournament ended early. All teams cash in at {money(self.chip_value_cents)} per chip.")
+        for team in sorted(self.active_teams, key=lambda t: t.chips):
             # The last team takes whatever is left, so rounding never loses a cent.
-            payout = self._cash_out(team, "Last call")
-            self._text_team(team, f"LAST CALL: {team.name} cashed in {money(payout)}. See the desk to collect.")
+            payout = self._cash_out(team, "Tournament ended")
+            self._text_team(team, f"The tournament has ended. {team.name} cashed in {money(payout)}. See the desk to collect.")
         self.status = FINISHED
         self._say("Tournament finished.")
 

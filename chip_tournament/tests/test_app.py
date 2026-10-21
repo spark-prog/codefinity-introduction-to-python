@@ -59,7 +59,11 @@ def test_full_flow(client):
     assert b"in progress" in page.data  # match has a score, can't cash in yet
 
     page = client.post("/admin/last-call", follow_redirects=True)
-    assert b"Last call" in page.data
+    assert b"Last call is on" in page.data
+    assert store.load().status == "running"
+
+    page = client.post("/admin/end-now", follow_redirects=True)
+    assert b"Tournament ended" in page.data
     t = store.load()
     assert sum(x.payout_cents for x in t.teams.values()) == 10000
 

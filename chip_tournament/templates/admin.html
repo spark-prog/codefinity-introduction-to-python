@@ -16,8 +16,16 @@
     <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
       <button class="button">Open cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</button></form>
     {% endif %}
-    <form method="post" action="{{ url_for('admin_last_call') }}" class="inline" onsubmit="return confirm('LAST CALL: stop all matches and cash every team in now?')">
-      <button class="button danger">Last call — cash everyone in{% if s.last_call_time %} (scheduled {{ s.last_call_time }}){% endif %}</button></form>
+    {% if not t.last_call %}
+    <form method="post" action="{{ url_for('admin_last_call') }}" class="inline"
+          onsubmit="return confirm('LAST CALL: every team\'s next match will be its last, and teams are cashed in automatically when it ends. Matches on a table now finish first, then those teams play one more. Text every team?')">
+      <button class="button danger">Last call{% if s.last_call_time %} (scheduled {{ s.last_call_time }}){% endif %}</button></form>
+    {% else %}
+    <span class="muted">Last call is on — {{ t.active_teams|length }} team(s) still to finish.</span>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin_end_now') }}" class="inline"
+          onsubmit="return confirm('End the tournament NOW? All matches stop and every team is cashed in at the current chip value.')">
+      <button class="button secondary">End now — cash everyone out</button></form>
   {% endif %}
   <form method="post" action="{{ url_for('admin_undo') }}" class="inline">
     <button class="button secondary" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
@@ -77,7 +85,7 @@
         {% endif %}
       </td>
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
-      <td>{{ team.status.replace("_", " ") }}</td>
+      <td>{{ team.status.replace("_", " ") }}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
       <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
       <td class="actions">
         <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>

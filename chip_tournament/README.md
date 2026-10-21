@@ -45,7 +45,12 @@ Run the tests with `python -m pytest`.
 5. **The next round** starts when every match in the round is finished: winner 1 vs winner 2, winner 3 vs winner 4, …, loser 1 vs loser 2, …
 6. **Pot and chip value.** Pot = entry fee × teams + added money. Chip value = pot ÷ chips still in play, so it goes up every time a chip goes back to the table.
 7. **Cash-in.** When the director opens cash-in, every team gets a text with the chip value and what its chips are worth. A team can cash in at the desk (the director clicks **Cash in**) for chips × chip value, or keep playing. Cashing in doesn't change what the other teams' chips are worth.
-8. **Last call** stops all matches and cashes in every remaining team at the current chip value. The last team paid gets whatever is left in the pot, so every cent is paid out.
+8. **Last call** tells every team that its next match is its last. When that match ends, both teams are cashed in automatically: the loser gives its chip back first, then each team is paid its chips × the chip value.
+   - A match already **on a table** when last call happens finishes as normal. Those teams then play one more match, which is their last.
+   - Teams **waiting** for a table or for the next round play one more match, then cash in.
+   - Pairing keeps working the same way (winners vs winners, losers vs losers) until every team has played its last match. A team left with no opponent is cashed in right away.
+   - Every team gets a text at last call, and the director's team list shows "last match" or "2 matches left" for each team. Registration closes at last call.
+   - **End now — cash everyone out** is a separate emergency button (for example, if the bar is closing). It stops every match and cashes everyone in at once. The last team paid gets whatever is left in the pot, so every cent is paid out.
 9. If only one team has chips left, it wins the rest of the pot automatically.
 
 ### Decisions the rules didn't specify (easy to change in `chips/engine.py`)
@@ -55,7 +60,8 @@ Run the tests with `python -m pytest`.
 - **Late entries** (after the start) pay the entry fee, get chips for their skill level and join the bottom of the winners list.
 - **Entry fee, added money, chip brackets and the registration cap** lock when the tournament starts.
 - **Skill updates** are entered by the team on its roster page (or by the director) before the start, and each change is written to the activity log (e.g. "Combined skill 10 → 11"). The 10 cap applies only to new registrations, so a team that swaps partners after registering can go up to 11.
-- **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons, so no team gets cashed out by surprise mid-match.
+- **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.
+- **"Started" at last call** means the match has been called to a table. Matches still waiting for a table count as not started.
 
 ## Chip tracking
 

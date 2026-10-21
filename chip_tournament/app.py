@@ -303,7 +303,15 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/last-call")
     @admin_required
     def admin_last_call():
-        act("Last call", lambda t: t.call_last_call(), "Last call — every team has been cashed in. See payouts below.")
+        act("Last call", lambda t: t.call_last_call(),
+            "Last call is on and teams were texted. Each team is cashed in automatically after its last match.")
+        return redirect(url_for("admin"))
+
+    @app.post("/admin/end-now")
+    @admin_required
+    def admin_end_now():
+        act("Cash everyone out now", lambda t: t.cash_out_everyone(),
+            "Tournament ended — every team has been cashed in. See payouts below.")
         return redirect(url_for("admin"))
 
     @app.post("/admin/team/<team_id>/adjust")

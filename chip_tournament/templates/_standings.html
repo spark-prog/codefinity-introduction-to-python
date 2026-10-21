@@ -3,7 +3,7 @@
   <table class="grid">
     <thead><tr><th>Team</th><th>Combined skill</th><th>Chips</th><th>W-L</th><th>Status</th><th>{% if t.status == SETUP %}Starts with{% else %}Worth / Paid{% endif %}</th></tr></thead>
     <tbody>
-    {% for team in t.standings() if team.status != "waitlisted" %}
+    {% for team in t.standings() if team.status not in ("waitlisted", "no_show") %}
       <tr class="status-{{ team.status }}">
         <td><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a></td>
         <td>{{ team.combined_skill }}</td>

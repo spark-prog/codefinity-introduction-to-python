@@ -24,6 +24,14 @@ def register(client, name, skills=(5, 5)):
     )
 
 
+def check_in_and_start(admin):
+    """Check every team in at the desk, then start (as a director would)."""
+    store = admin.application.config["store"]
+    for team in store.load().field_teams:
+        admin.post(f"/admin/team/{team.id}/check-in")
+    return admin.post("/admin/start", follow_redirects=True)
+
+
 def test_full_flow(client):
     assert client.get("/").status_code == 200
     assert client.get("/admin").status_code == 302
@@ -129,7 +137,7 @@ def test_arrived_buttons_set_start_time(client):
     for name in ("Sharks", "Rails"):
         register(client, name)
     client.post("/admin/login", data={"password": "secret"})
-    client.post("/admin/start")
+    check_in_and_start(client)
     store = client.application.config["store"]
     m = store.load().open_matches()[0]
     page = client.get("/admin").data
@@ -145,7 +153,7 @@ def test_undo_of_automatic_forfeit_sticks(client):
     for name in ("Sharks", "Rails"):
         register(client, name)
     client.post("/admin/login", data={"password": "secret"})
-    client.post("/admin/start")
+    check_in_and_start(client)
     store = client.application.config["store"]
     with store.change("make it overdue") as t:
         m = t.open_matches()[0]
@@ -213,7 +221,7 @@ def test_call_next_button(client):
     client.post("/admin/settings", data={"name": "X", "race_to": "2", "tables": "1", "entry_fee": "20",
                                          "added_money": "0", "chip_brackets": "6 = 5\\n8 = 4\\n10 = 3\\n11 = 2",
                                          "registration_cap": "10", "field_cap": "0"})
-    client.post("/admin/start")
+    check_in_and_start(client)
     store = client.application.config["store"]
     t = store.load()
     last = t.queue_order(t.winners_list)[-1]
@@ -282,3 +290,22 @@ def test_phone_numbers_stay_on_the_director_side(client):
     admin.post("/admin/login", data={"password": "secret"})
     assert b"5551234567" in admin.get("/admin").data
     assert b"5551234567" in admin.get(f"/team/{team.id}/roster").data
+
+
+def test_event_check_in_and_no_show(client):
+    for name in ("Sharks", "Rails", "Bankers"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    store = client.application.config["store"]
+    teams = {x.name: x for x in store.load().teams.values()}
+    page = client.get("/admin").data
+    assert b"0 of 3 teams in the field checked in" in page and b"Not checked in yet" in page
+    client.post(f"/admin/team/{teams['Sharks'].id}/check-in")
+    client.post(f"/admin/team/{teams['Rails'].id}/check-in")
+    page = client.post("/admin/start", follow_redirects=True).data
+    assert b"haven&#39;t checked in: Bankers" in page and store.load().status == "setup"
+    client.post("/admin/no-show-rest")
+    assert store.load().teams[teams["Bankers"].id].status == "no_show"
+    assert b"Bankers" not in client.get("/").data  # no-shows aren't listed publicly
+    client.post("/admin/start")
+    assert store.load().status == "running" and len(store.load().active_teams) == 2

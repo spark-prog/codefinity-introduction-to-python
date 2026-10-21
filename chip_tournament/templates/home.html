@@ -4,6 +4,7 @@
 <section class="hero">
   <h1>{{ s.name }}</h1>
   <p class="when">{{ s.date or "Date TBA" }}{% if s.start_time %} · starts {{ s.start_time }}{% endif %}</p>
+  {% if s.checkin_by %}<p class="checkin-note">Check in at the tournament desk by <b>{{ s.checkin_by }}</b>. Teams not checked in may lose their spot to the waiting list.</p>{% endif %}
   {% if s.venue or s.address %}
   <p class="where"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}
     · <a href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}</p>

@@ -39,9 +39,10 @@
 <h2>2. At the venue (about an hour before)</h2>
 <ol class="steps">
   <li><b>Put the Board on the TV</b>: open <code>/board</code> in a browser. It refreshes itself every 15 seconds.</li>
-  <li><b>Check in teams and collect entry fees</b> ({{ s.entry_fee_cents|money }} per team). Use the <i>Teams &amp; chips</i> table on the Director page.</li>
+  <li><b>Check teams in as they arrive{% if s.checkin_by %} (check-in is by {{ s.checkin_by }}){% endif %}, and collect entry fees</b> ({{ s.entry_fee_cents|money }} per team). Press <b>Check in</b> next to the team in the <i>Teams &amp; chips</i> table; the time is recorded and the count at the top updates. Waiting-list teams who show up can be checked in too.</li>
   <li><b>Look for red "needs new partner" notes.</b> A team over a combined {{ t.max_skill }} can't start. Have it swap partners (the new pair must be {{ s.registration_cap }} or less) or remove it.</li>
-  <li><b>Remove no-shows</b> with <i>Remove</i>. The next team on the waiting list moves into the field and gets a text. Raising the field cap does the same.</li>
+  <li><b>Mark no-shows</b> with <b>No-show</b>, or once check-in closes, use <b>Mark all not checked in as no-shows</b>. Each no-show gets a text, and the next team on the waiting list moves into the field and gets a text (check it in when it arrives). <b>Restore</b> undoes a no-show: the team goes back into the field if there's room, otherwise to the end of the waiting list. Raising the field cap also moves waiting teams in.</li>
+  <li><b>Start</b> stays greyed out until every team in the field is checked in or marked a no-show. You can turn that requirement off in Settings.</li>
   <li><b>Roster questions</b>: click <i>Roster</i> next to any team to edit it without a PIN. Each team's PIN is shown under its name if it forgot.</li>
 </ol>
 </section>

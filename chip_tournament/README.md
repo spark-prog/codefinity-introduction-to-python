@@ -83,6 +83,14 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.
 - **"Started" at last call** means the match has been called to a table. Matches still waiting for a table count as not started.
 
+## Event check-in and no-shows
+
+Set **Check in at the desk by** (e.g. 6:30 PM) in Settings. It shows on the home page, the registration page and each team's page. On tournament day:
+- Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in.
+- Press **No-show** for a team that doesn't come, or **Mark all not checked in as no-shows** once check-in closes. The team is taken out of the field and texted, and the next team on the waiting list moves in (and is texted). **Restore** undoes a no-show.
+- **Start tournament** stays disabled until every team in the field is checked in or marked a no-show. That requirement can be turned off in Settings.
+- No-shows don't appear on public pages and don't pay into the pot.
+
 ## Importing teams from a Google Form
 
 On the director page (before the start), click **Import teams from a spreadsheet (CSV)**.

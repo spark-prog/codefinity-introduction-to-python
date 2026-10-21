@@ -2,6 +2,11 @@
 {% block head %}{% if match and match.status == CALLED %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
 {% block content %}
 <h1>{{ team.name }}</h1>
+{% if team.status == "no_show" %}<div class="banner danger">{{ team.name }} was marked as a no-show and isn't in the tournament. If this is a mistake, see the tournament desk.</div>
+{% elif team.status in ("registered", "waitlisted") and t.status == SETUP %}
+  <div class="banner">{% if team.checked_in_at %}✓ Checked in at {{ team.checked_in_at|clock }}.
+  {% else %}Not checked in yet.{% if t.settings.checkin_by %} Check in at the tournament desk by <b>{{ t.settings.checkin_by }}</b>.{% endif %}{% endif %}</div>
+{% endif %}
 {% set spot = t.waitlist_position(team) %}
 {% if spot %}<div class="banner">{{ team.name }} is <b>#{{ spot }} on the waiting list</b>. We'll text you if a spot in the field opens.</div>{% endif %}
 {% if match %}

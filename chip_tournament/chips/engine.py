@@ -7,6 +7,10 @@ How the format works
 --------------------
 * The director sets a field cap. Teams that register once the field is full go
   on a waiting list and move into the field, in order, as spots open.
+* Event check-in: the director checks teams in as they arrive at the venue.
+  The tournament can't start while a team in the field isn't checked in; a
+  team that doesn't show is marked a no-show, which frees its spot for the
+  next team on the waiting list.
 * A team is two partners. Their combined skill level sets the team's starting
   chips (e.g. 6 or less = 5 chips, 7-8 = 4, 9-10 = 3, 11 = 2). Combined skill
   is capped at registration (10). If the same partners' skill levels go up,
@@ -56,6 +60,7 @@ from datetime import datetime, timedelta
 # Team statuses
 REGISTERED = "registered"
 WAITLISTED = "waitlisted"
+NO_SHOW = "no_show"
 ACTIVE = "active"
 ELIMINATED = "eliminated"
 CASHED_OUT = "cashed_out"
@@ -109,6 +114,7 @@ class Team:
     wins: int = 0
     losses: int = 0
     priority: bool = False  # director pressed "Call next"
+    checked_in_at: str | None = None  # arrived at the venue (event check-in)
     queued_at: str | None = None  # when it joined its current list
     # Set at last call: matches this team still plays before it is cashed in.
     matches_left: int | None = None
@@ -184,6 +190,8 @@ class Settings:
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     cash_in_time: str = ""
     last_call_time: str = ""
+    checkin_by: str = ""  # event check-in time shown to players, e.g. "6:30 PM"
+    require_checkin: bool = True  # every team in the field must be checked in to start
     sms_name: str = ""  # starts every text, e.g. "First Coast APA"
     contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
 
@@ -290,8 +298,8 @@ class Tournament:
 
     @property
     def field_teams(self) -> list[Team]:
-        """Teams with a spot in the event (everyone except the waiting list)."""
-        return [t for t in self.teams.values() if t.status != WAITLISTED]
+        """Teams with a spot in the event (not on the waiting list, not no-shows)."""
+        return [t for t in self.teams.values() if t.status not in (WAITLISTED, NO_SHOW)]
 
     @property
     def field_full(self) -> bool:
@@ -301,7 +309,7 @@ class Tournament:
         return self.waitlist.index(team.id) + 1 if team.id in self.waitlist else None
 
     def standings(self) -> list[Team]:
-        order = {ACTIVE: 0, CASHED_OUT: 1, ELIMINATED: 2, REGISTERED: 3, WAITLISTED: 4}
+        order = {ACTIVE: 0, CASHED_OUT: 1, ELIMINATED: 2, REGISTERED: 3, WAITLISTED: 4, NO_SHOW: 5}
         return sorted(
             self.teams.values(),
             key=lambda t: (order.get(t.status, 9), -t.chips, -t.payout_cents, t.name.lower()),
@@ -516,11 +524,62 @@ class Tournament:
             del self.teams[team_id]
             self._say(f"Removed {team.name} from the waiting list.")
             return
-        if team.status != REGISTERED:
+        if team.status not in (REGISTERED, NO_SHOW):
             raise TournamentError("Teams in the field can only be removed before the tournament starts.")
         del self.teams[team_id]
         self._say(f"Removed {team.name}.")
         self._fill_from_waitlist()
+
+    # ------------------------------------------------------------ event check-in
+
+    @property
+    def not_checked_in(self) -> list[Team]:
+        return [t for t in self.field_teams if t.status == REGISTERED and not t.checked_in_at]
+
+    def check_in_team(self, team_id: str) -> None:
+        """The team has arrived at the venue."""
+        team = self.team(team_id)
+        if team.status not in (REGISTERED, WAITLISTED):
+            raise TournamentError(f"{team.name} can't be checked in ({team.status.replace('_', ' ')}).")
+        if team.checked_in_at:
+            raise TournamentError(f"{team.name} is already checked in.")
+        team.checked_in_at = now()
+        self._say(f"{team.name} checked in at the venue.")
+
+    def mark_no_show(self, team_id: str) -> None:
+        """Take a team that didn't arrive out of the field; the waiting list moves up."""
+        team = self.team(team_id)
+        if self.status != SETUP:
+            raise TournamentError("No-shows are marked before the tournament starts.")
+        if team.status not in (REGISTERED, WAITLISTED):
+            raise TournamentError(f"{team.name} can't be marked a no-show.")
+        if team.id in self.waitlist:
+            self.waitlist.remove(team.id)
+        team.status = NO_SHOW
+        team.checked_in_at = None
+        self._say(f"{team.name} marked as a no-show.")
+        self._text_team(team, f"{team.name} was marked as a no-show and removed from {self.settings.name}. "
+                              "If this is a mistake, see the tournament desk.")
+        self._fill_from_waitlist()
+
+    def no_show_everyone_not_checked_in(self) -> int:
+        teams = self.not_checked_in
+        for team in teams:
+            self.mark_no_show(team.id)
+        return len(teams)
+
+    def restore_team(self, team_id: str) -> None:
+        """Undo a no-show: back into the field if there's room, otherwise the end of the waiting list."""
+        team = self.team(team_id)
+        if team.status != NO_SHOW or self.status != SETUP:
+            raise TournamentError(f"{team.name} isn't a no-show.")
+        if self.field_full:
+            team.status = WAITLISTED
+            self.waitlist.append(team.id)
+            self._say(f"{team.name} restored to the waiting list (#{len(self.waitlist)}); the field is full.")
+        else:
+            team.status = REGISTERED
+            self._say(f"{team.name} restored to the field.")
 
     # ----------------------------------------------------------------- running
 
@@ -532,6 +591,11 @@ class Tournament:
             raise TournamentError("At least two teams are needed to start.")
         if not self.settings.tables:
             raise TournamentError("Add at least one table before starting.")
+        if self.settings.require_checkin and self.not_checked_in:
+            raise TournamentError(
+                "These teams haven't checked in: " + ", ".join(t.name for t in self.not_checked_in)
+                + ". Check them in or mark them as no-shows before starting."
+            )
         too_high = [f"{t.name} ({t.combined_skill})" for t in teams if self.chips_preview(t) is None]
         if too_high:
             raise TournamentError(

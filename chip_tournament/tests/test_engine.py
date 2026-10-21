@@ -31,6 +31,7 @@ def make(n_teams=4, skills=None, tables=None, fee=2000):
     skills = skills or [10] * n_teams
     for i, skill in enumerate(skills):
         t.register_team(f"Team {i}", partners(skill, f"555000000{i}"))
+    t.settings.require_checkin = False  # event check-in has its own tests
     return t
 
 
@@ -125,6 +126,7 @@ def test_swap_keeps_waiting_list_spot():
 
 def test_waitlisted_teams_do_not_play():
     t = Tournament()
+    t.settings.require_checkin = False
     t.set_field_cap(2)
     for n in "ABC":
         t.register_team(n, partners(8))
@@ -556,6 +558,7 @@ def test_double_forfeit_chips_count_as_returned():
 
 def test_texts_carry_sender_name_and_questions_phone():
     t = Tournament()
+    t.settings.require_checkin = False
     t.settings.sms_name = "First Coast APA"
     t.settings.contact_phone = "904-528-7657"
     t.register_team("Sharks", partners(8))
@@ -580,6 +583,7 @@ def scenario(names, played=(), playing=(), winners=(), losers=(), tables=("1", "
     """
     t = Tournament()
     t.settings.tables = list(tables)
+    t.settings.require_checkin = False
     ids = {n: t.register_team(n, partners(8)).id for n in names}
     t.start(random.Random(0))
     t.matches.clear(); t.winners_list.clear(); t.losers_list.clear(); t.round = 0
@@ -691,3 +695,40 @@ def test_call_next_overrides_a_held_team():
     t.call_next(ids["Dynamic Duo"])
     (m,) = [m for m in t.matches if m.status in ("waiting", "called") and m.id[0] not in "mp"]
     assert {m.team_a, m.team_b} == {ids["Sharks"], ids["Dynamic Duo"]} and m.rematch  # only option: rematch
+
+
+# ------------------------------------------------------------ event check-in
+
+def test_start_needs_everyone_checked_in():
+    t = Tournament()
+    a, b, c = (t.register_team(n, partners(8)) for n in "ABC")
+    t.check_in_team(a.id); t.check_in_team(b.id)
+    with pytest.raises(TournamentError, match="haven't checked in: C"):
+        t.start(random.Random(1))
+    with pytest.raises(TournamentError, match="already checked in"):
+        t.check_in_team(a.id)
+    t.mark_no_show(c.id)
+    assert c.status == "no_show" and c not in t.field_teams
+    t.start(random.Random(1))
+    assert len(t.active_teams) == 2 and t.pot_cents == 2 * 2000
+
+
+def test_no_show_lets_the_waiting_list_move_up():
+    t = Tournament()
+    t.set_field_cap(2)
+    a, b, w1, w2 = (t.register_team(n, partners(8)) for n in ("A", "B", "W1", "W2"))
+    t.mark_no_show(b.id)
+    assert w1.status == "registered" and t.waitlist == [w2.id]
+    assert any("marked as a no-show" in m.body for m in t.outbox if m.team_id == b.id)
+    t.restore_team(b.id)  # field is full again, so B goes to the end of the waiting list
+    assert b.status == "waitlisted" and t.waitlist == [w2.id, b.id]
+
+
+def test_no_show_everyone_not_checked_in():
+    t = Tournament()
+    teams = [t.register_team(n, partners(8)) for n in "ABCD"]
+    t.check_in_team(teams[0].id); t.check_in_team(teams[2].id)
+    assert t.no_show_everyone_not_checked_in() == 2
+    assert [x.status for x in teams] == ["registered", "no_show", "registered", "no_show"]
+    t.start(random.Random(2))
+    assert t.status == "running"

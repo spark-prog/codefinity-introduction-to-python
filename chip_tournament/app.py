@@ -351,6 +351,9 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.date, s.start_time = f.get("date", ""), f.get("start_time", "")
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.cash_in_time, s.last_call_time = f.get("cash_in_time", ""), f.get("last_call_time", "")
+            s.checkin_by = f.get("checkin_by", s.checkin_by).strip()
+            if t.status == SETUP:
+                s.require_checkin = f.get("require_checkin") == "1"
             s.sms_name = f.get("sms_name", s.sms_name).strip()
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
@@ -522,6 +525,31 @@ def create_app(data_dir: str | None = None) -> Flask:
         except ValueError:
             change = 0
         act("Adjust chips", lambda t: t.adjust_chips(team_id, change, request.form.get("reason", "")), "Chips adjusted.")
+        return redirect(url_for("admin") + "#teams")
+
+    @app.post("/admin/team/<team_id>/check-in")
+    @admin_required
+    def admin_team_check_in(team_id):
+        act("Check in team", lambda t: t.check_in_team(team_id))
+        return redirect(url_for("admin") + "#teams")
+
+    @app.post("/admin/team/<team_id>/no-show")
+    @admin_required
+    def admin_no_show(team_id):
+        act("Mark no-show", lambda t: t.mark_no_show(team_id), "Marked as a no-show.")
+        return redirect(url_for("admin") + "#teams")
+
+    @app.post("/admin/team/<team_id>/restore")
+    @admin_required
+    def admin_restore(team_id):
+        act("Restore team", lambda t: t.restore_team(team_id), "Team restored.")
+        return redirect(url_for("admin") + "#teams")
+
+    @app.post("/admin/no-show-rest")
+    @admin_required
+    def admin_no_show_rest():
+        act("Mark remaining teams no-show", lambda t: t.no_show_everyone_not_checked_in(),
+            "Marked {result} team(s) as no-shows.")
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/team/<team_id>/remove")

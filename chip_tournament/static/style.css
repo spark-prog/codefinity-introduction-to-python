@@ -168,3 +168,5 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--card); bo
   .score-btn { font-size: 1.4rem; padding: 4px 12px; min-width: 46px; }
   .big-score { font-size: 1.9rem; min-width: 34px; }
 }
+.checkin-cell { white-space: nowrap; }
+.checkin-note { background: #fff5d1; border-radius: 6px; padding: 8px 12px; }

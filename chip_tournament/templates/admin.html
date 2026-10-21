@@ -10,9 +10,21 @@
     <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
       {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
       {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw the first matches.</p>
+    {% set unchecked = t.not_checked_in %}
+    {% set checked = t.field_teams|selectattr("checked_in_at")|list|length %}
+    <p class="checkin-summary"><b>Check-in{% if s.checkin_by %} (by {{ s.checkin_by }}){% endif %}:</b>
+      {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
+      {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
+      Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
     <p><a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a></p>
-    <form method="post" action="{{ url_for('admin_start') }}" onsubmit="return confirm('Start the tournament and call the first matches?')">
-      <button class="button big">Start tournament</button></form>
+    {% if s.require_checkin and unchecked %}
+    <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
+    <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"
+          onsubmit="return confirm('Mark all {{ unchecked|length }} team(s) that haven\'t checked in as no-shows? Waiting-list teams will move up and get a text.')">
+      <button class="button danger">Mark all {{ unchecked|length }} not checked in as no-shows</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('Start the tournament and call the first matches?')">
+      <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first"{% endif %}>Start tournament</button></form>
   {% elif t.status == RUNNING %}
     {% if not t.cash_in_open %}
     <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
@@ -89,7 +101,7 @@
 <section id="teams">
   <h2>Teams & chips</h2>
   <table class="grid">
-    <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Played</th><th>Status</th><th>Value / paid</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Played</th><th>Status</th>{% if t.status == SETUP %}<th>Check-in</th>{% endif %}<th>Value / paid</th><th>Actions</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}">
@@ -104,6 +116,18 @@
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
       <td>{{ team.matches_played }}{% if t.is_behind(team) %} <span class="tag behind">behind</span>{% endif %}</td>
       <td>{{ team.status.replace("_", " ") }}{% if team.status == "waitlisted" %} #{{ t.waitlist_position(team) }}{% endif %}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
+      {% if t.status == SETUP %}
+      <td class="checkin-cell">
+        {% if team.status == "no_show" %}
+          <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"><button class="link">Restore</button></form>
+        {% elif team.checked_in_at %}<span class="arrived">✓ {{ team.checked_in_at|clock }}</span>
+        {% else %}
+          <form method="post" action="{{ url_for('admin_team_check_in', team_id=team.id) }}" class="inline"><button class="button small checkin">Check in</button></form>
+          <form method="post" action="{{ url_for('admin_no_show', team_id=team.id) }}" class="inline"
+                onsubmit="return confirm('Mark {{ team.name|e }} as a no-show?')"><button class="link danger">No-show</button></form>
+        {% endif %}
+      </td>
+      {% endif %}
       <td>{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</td>
       <td class="actions">
         <a href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
@@ -180,6 +204,9 @@
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
     <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
     <label>Questions phone (ends every text) <input name="contact_phone" value="{{ s.contact_phone }}" placeholder="904-528-7657"></label>
+    <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>
+    <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if t.status != SETUP %}disabled{% endif %}>
+      Every team must be checked in (or marked a no-show) before the start</label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
     <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
     <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>

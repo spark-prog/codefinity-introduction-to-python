@@ -178,7 +178,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     def globals_():
         bg = custom_background()
         return {
-            "background_url": url_for("background", v=int(bg.stat().st_mtime) if bg else 0),
+            # Versioned by file time so browsers pick up a new photo (or a new default) right away.
+            "background_url": url_for("background", v=int((bg or Path(app.static_folder) / "img" / "billiard-room.jpg").stat().st_mtime)),
             "has_custom_background": bg is not None,
             "is_admin": session.get("admin", False),
             "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
@@ -543,7 +544,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         if request.form.get("reset") == "1":
             for ext in ("jpg", "png", "webp"):
                 (data_path / f"background.{ext}").unlink(missing_ok=True)
-            flash("Using the default billiard-room background.", "ok")
+            flash("Using the default background (the Control Table glow).", "ok")
             return redirect(url_for("admin") + "#settings")
         upload = request.files.get("photo")
         data = upload.read() if upload and upload.filename else b""

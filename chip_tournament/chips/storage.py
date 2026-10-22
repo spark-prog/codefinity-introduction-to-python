@@ -74,9 +74,50 @@ class Store:
             return entry["label"]
 
     def archive_and_reset(self) -> None:
+        """Start over, keeping the old tournament (and its texts) as an archive."""
         with self.lock:
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             if self.path.exists():
-                stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
                 self.path.rename(self.dir / f"tournament-{stamp}.json")
-            if self.history_path.exists():
-                self.history_path.unlink()
+            texts = self.dir / "texts.log"
+            if texts.exists():
+                texts.rename(self.dir / f"texts-{stamp}.log")
+            self._clear_working_files()
+
+    def delete_and_reset(self) -> None:
+        """Start over, permanently deleting the current tournament and its texts."""
+        with self.lock:
+            self.path.unlink(missing_ok=True)
+            (self.dir / "texts.log").unlink(missing_ok=True)
+            self._clear_working_files()
+
+    def _clear_working_files(self) -> None:
+        self.history_path.unlink(missing_ok=True)  # undo steps hold full copies of the roster
+        (self.dir / "import.csv").unlink(missing_ok=True)
+
+    def archives(self) -> list[dict]:
+        """Past tournaments kept on disk, newest first."""
+        out = []
+        for path in sorted(self.dir.glob("tournament-*.json"), reverse=True):
+            stamp = path.stem[len("tournament-"):]
+            try:
+                data = json.loads(path.read_text())
+                name, teams = data.get("settings", {}).get("name", ""), len(data.get("teams", {}))
+            except (OSError, ValueError):
+                name, teams = "", 0
+            try:
+                archived = datetime.strptime(stamp, "%Y%m%d-%H%M%S")
+            except ValueError:
+                archived = None
+            out.append({"stamp": stamp, "name": name or "Tournament", "teams": teams, "archived": archived})
+        return out
+
+    def delete_archive(self, stamp: str) -> bool:
+        if not stamp or not all(c.isdigit() or c == "-" for c in stamp):
+            return False
+        with self.lock:
+            path = self.dir / f"tournament-{stamp}.json"
+            found = path.exists()
+            path.unlink(missing_ok=True)
+            (self.dir / f"texts-{stamp}.log").unlink(missing_ok=True)
+            return found

@@ -8,6 +8,7 @@ from app import create_app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "secret")
+    monkeypatch.setenv("VIEWER_PASSWORD", "lookonly")
     for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"):
         monkeypatch.delenv(var, raising=False)
     app = create_app(str(tmp_path))
@@ -391,3 +392,86 @@ def test_header_has_league_logo_and_home_icon(client):
     assert "img/apa-first-coast-logo.png" in html
     assert 'class="home-icon"' in html and "brand-mark" not in html
     assert client.get("/static/img/apa-first-coast-logo.png").status_code == 200
+
+
+def wrong_pins(client, team, n):
+    for _ in range(n):
+        client.post(f"/team/{team.id}/login", data={"pin": "0000" if team.pin != "0000" else "1111"})
+
+
+def test_wrong_pin_guesses_lock_out(client):
+    register(client, "Sharks")
+    team = client.application.config["store"].load().field_teams[0]
+    guesser = client.application.test_client()
+    wrong_pins(guesser, team, 10)
+    page = guesser.post(f"/team/{team.id}/login", data={"pin": team.pin}, follow_redirects=True)
+    assert b"Too many wrong PINs" in page.data
+    with guesser.session_transaction() as s:
+        assert not s.get(f"team_{team.id}")
+    # A different phone isn't blocked until the team itself has had 20 wrong guesses.
+    other = client.application.test_client()
+    other.environ_base["REMOTE_ADDR"] = "10.0.0.2"
+    other.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    with other.session_transaction() as s:
+        assert s.get(f"team_{team.id}")
+    for i in range(3):
+        c = client.application.test_client()
+        c.environ_base["REMOTE_ADDR"] = f"10.0.1.{i}"
+        wrong_pins(c, team, 5)
+    late = client.application.test_client()
+    late.environ_base["REMOTE_ADDR"] = "10.0.2.1"
+    page = late.post(f"/team/{team.id}/roster", data={"pin": team.pin}, follow_redirects=True)
+    assert b"Too many wrong PINs" in page.data
+
+
+def test_wrong_password_guesses_lock_out(client):
+    for _ in range(5):
+        assert b"Wrong password" in client.post("/admin/login", data={"password": "nope"}, follow_redirects=True).data
+    page = client.post("/admin/login", data={"password": "secret"}, follow_redirects=True)
+    assert b"Too many wrong passwords" in page.data
+    assert client.get("/admin").status_code == 302
+
+
+def test_view_only_login(client):
+    register(client, "Sharks")
+    team = client.application.config["store"].load().field_teams[0]
+    viewer = client.application.test_client()
+    viewer.post("/admin/login", data={"password": "lookonly"})
+    page = viewer.get("/admin").get_data(as_text=True)
+    assert "view-only" in page
+    assert f"PIN {team.pin}" not in page and "PIN ••••" in page and "5551234567" not in page and "+15551234567" not in page
+    assert "ending in 4567" in page
+    assert viewer.get("/guide").status_code == 200
+    assert viewer.get("/admin/import").status_code == 302
+    assert viewer.get("/admin/rules").status_code == 302
+    viewer.post("/admin/settings", data={"name": "Hacked", "tables": "1"})
+    viewer.post(f"/admin/team/{team.id}/check-in")
+    viewer.post("/admin/reset", data={"confirm": "RESET", "mode": "delete"})
+    t = client.application.config["store"].load()
+    assert t.settings.name != "Hacked" and t.teams
+    # The view-only login doesn't unlock team pages either.
+    assert b"5551234567" not in viewer.get(f"/team/{team.id}/roster").data
+    director = client.application.test_client()
+    director.post("/admin/login", data={"password": "secret"})
+    page = director.get("/admin").get_data(as_text=True)
+    assert f"PIN {team.pin}" in page and "view-only" not in page
+
+
+def test_delete_permanently_and_past_tournaments(client, tmp_path):
+    client.post("/admin/login", data={"password": "secret"})
+    store = client.application.config["store"]
+    register(client, "Sharks")
+    client.post("/admin/reset", data={"confirm": "RESET", "mode": "archive"})
+    assert len(store.archives()) == 1 and not store.load().teams
+    assert list(tmp_path.glob("texts-*.log")) and not (tmp_path / "texts.log").exists()
+    assert "Past tournaments" in client.get("/admin").get_data(as_text=True)
+    register(client, "Hustlers")
+    client.post("/admin/reset", data={"confirm": "RESET", "mode": "delete"})
+    assert len(store.archives()) == 1 and not store.load().teams
+    assert not (tmp_path / "texts.log").exists() and not (tmp_path / "history.json").exists()
+    assert "Hustlers" not in "".join(p.read_text() for p in tmp_path.glob("*.json"))
+    client.post("/admin/archives/delete", data={"stamp": "../rules"})
+    assert len(store.archives()) == 1
+    client.post("/admin/archives/delete", data={"all": "1"})
+    assert store.archives() == [] and not list(tmp_path.glob("texts-*.log"))
+    assert "Sharks" not in "".join(p.read_text() for p in tmp_path.iterdir() if p.is_file() and p.suffix in (".json", ".log"))

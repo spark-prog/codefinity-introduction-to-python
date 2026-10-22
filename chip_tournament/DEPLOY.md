@@ -24,6 +24,7 @@ Cost: the Hobby plan is about $5/month, and that includes usage credit that shou
    | Variable | Value |
    |---|---|
    | `ADMIN_PASSWORD` | The director password, at least 8 characters. The app refuses to start without it. |
+   | `VIEWER_PASSWORD` | Optional. A second, **view-only** director login (at least 8 characters, different from the director password), e.g. for the league office to look around. It sees the director page and guide but can't change anything, and phone numbers, PINs and text messages are hidden. |
    | `TZ` | Your venue's time zone, e.g. `America/Chicago`, `America/New_York`, `America/Denver`, `America/Los_Angeles`. Without it, every time shows in UTC. |
    | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Optional, for real texts (see below). |
 
@@ -47,7 +48,7 @@ Until Twilio is set up, everything else works, and texts are only logged under *
 
 ## Backups
 
-Everything is in one file, `/data/tournament.json`, plus `history.json` (undo) and `texts.log`. Railway can snapshot volumes, and you can also copy the file down after each tournament. **Archive and start over** keeps old tournaments in `/data` as `tournament-<date>.json`.
+Everything is in one file, `/data/tournament.json`, plus `history.json` (undo) and `texts.log`. Railway can snapshot volumes, and you can also copy the file down after each tournament. **Archive and start over** keeps old tournaments in `/data` as `tournament-<date>.json` (with their texts). They're listed under **Past tournaments** on the director page, where you can delete them permanently; **Delete permanently and start over** skips the archive.
 
 ## Updating the app later
 

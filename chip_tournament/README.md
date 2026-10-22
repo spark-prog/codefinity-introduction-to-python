@@ -31,6 +31,8 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 | `/team/<id>` | a team | Status, chips, where to play now, what its chips would cash in for, results. With its PIN, the team checks in at its table and keeps score here |
 | `/team/<id>/roster` | a team (with PIN) | Update partners, skill levels (before the start), team name and cell numbers |
 | `/admin/import` | director | Import teams from a CSV file, such as Google Form responses (before the start) |
+| `/rules` | everyone | League rule sets (8-Ball, 9-Ball, Fast 8, Fast Saratoga…) as tabs, with a search box that finds and highlights matching rules across every game |
+| `/admin/rules` | director | Add, edit, reorder and delete rule sets by pasting plain text |
 | `/guide` | director | Step-by-step guide for tournament night (printable) |
 | `/admin` | director | Settings, start, scoring, cash-in, last call, chip adjustments, texts, undo, chip ledger and activity log |
 
@@ -105,6 +107,12 @@ On the director page (before the start), click **Import teams from a spreadsheet
 3. Check the preview, which shows every row's result before anything is saved: added (with its chips), waiting list, or skipped and why.
 
 Rows are added top to bottom (sign-up order), so the earliest teams get the field spots and the rest fill the waiting list in order. Every row goes through the normal registration rules. Teams already registered are skipped, so importing an updated sheet again only adds the new sign-ups. You can choose whether each imported team gets its PIN by text.
+
+## Rules page
+
+Players open **Rules** in the menu: each game is a tab, and the search box looks through every rule set at once, showing only the matching rules with the words highlighted.
+
+Directors edit the rules from the director page (**Edit rules**). Paste each game's rules as plain text. Each line becomes a paragraph, and a few simple marks add structure: `# Heading`, `## Smaller heading`, `- bullet`, `1. numbered step`, `**bold**`. Rules are saved in `rules.json` in the data folder, separate from the tournament, so starting a new tournament keeps them.
 
 ## Background photo
 

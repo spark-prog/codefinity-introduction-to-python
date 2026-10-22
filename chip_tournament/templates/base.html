@@ -20,6 +20,7 @@
       <nav class="nav">
         <a href="{{ url_for('home') }}" class="{{ 'active' if ep == 'home' }}">Home</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">Board</a>
+        <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">Director</a>
         <a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>
         {% if is_admin %}

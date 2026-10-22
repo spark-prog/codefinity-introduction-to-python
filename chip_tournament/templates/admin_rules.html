@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Edit rules — {{ t.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Director · rules</p>
+    <h1>Edit rules</h1>
+    <p class="lede">Paste each game's rules in plain text. Players see them on the Rules page, with search.</p>
+  </div>
+  <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('rules_page') }}">View the Rules page</a>
+    <a class="button secondary" href="{{ url_for('admin') }}">← Back to the director page</a>
+  </div>
+</header>
+
+<div class="split">
+  <div class="card">
+    <p class="eyebrow">Formatting</p>
+    <h2>Paste it as it is</h2>
+    <p>Each line becomes its own paragraph. A few simple marks add structure:</p>
+    <div class="table-wrap"><table class="grid small">
+      <tr><td><code># Fouls</code></td><td>a section heading</td></tr>
+      <tr><td><code>## Ball in hand</code></td><td>a smaller heading</td></tr>
+      <tr><td><code>- Scratch on the break</code></td><td>a bullet point</td></tr>
+      <tr><td><code>1. Rack the balls</code></td><td>a numbered step</td></tr>
+      <tr><td><code>**must**</code></td><td>bold words</td></tr>
+    </table></div>
+    <p class="muted" style="margin-top: 16px">Rules are saved separately from the tournament, so starting a new tournament doesn't erase them.</p>
+  </div>
+  <form method="post" action="{{ url_for('admin_rules_new') }}" class="card form">
+    <p class="eyebrow">New</p>
+    <h2>Add a rule set</h2>
+    <label>Title <input name="title" placeholder="e.g. 10-Ball Rules" required></label>
+    <button class="button">Add rule set</button>
+  </form>
+</div>
+
+{% for r in rule_sets %}
+<section class="card" id="edit-{{ r.id }}">
+  <div class="section-head">
+    <h2>{{ r.title }}</h2>
+    <div class="button-row">
+      {% if not loop.first %}<form method="post" action="{{ url_for('admin_rules_move', rule_id=r.id) }}"><input type="hidden" name="dir" value="up"><button class="button small secondary">Move up</button></form>{% endif %}
+      {% if not loop.last %}<form method="post" action="{{ url_for('admin_rules_move', rule_id=r.id) }}"><input type="hidden" name="dir" value="down"><button class="button small secondary">Move down</button></form>{% endif %}
+      <form method="post" action="{{ url_for('admin_rules_delete', rule_id=r.id) }}" onsubmit="return confirm('Delete {{ r.title|e }}? This can\'t be undone.')"><button class="button small danger-outline">Delete</button></form>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('admin_rules_save', rule_id=r.id) }}" class="form">
+    <label>Title <input name="title" value="{{ r.title }}" required></label>
+    <label>Rules <textarea name="body" rows="16" placeholder="Paste the {{ r.title }} here…">{{ r.body }}</textarea></label>
+    <button class="button big">Save {{ r.title }}</button>
+  </form>
+</section>
+{% endfor %}
+{% endblock %}

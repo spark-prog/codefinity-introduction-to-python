@@ -9,6 +9,7 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
+    <a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>
     {% if t.status == SETUP %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
   </div>
 </header>

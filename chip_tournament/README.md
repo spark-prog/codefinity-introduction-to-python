@@ -114,6 +114,10 @@ Players open **Rules** in the menu: each game is a tab, and the search box looks
 
 Directors edit the rules from the director page (**Edit rules**). Paste each game's rules as plain text. Each line becomes a paragraph, and a few simple marks add structure: `# Heading`, `## Smaller heading`, `- bullet`, `1. numbered step`, `**bold**`. Rules are saved in `rules.json` in the data folder, separate from the tournament, so starting a new tournament keeps them.
 
+## Header
+
+The APA Pool Leagues – First Coast logo sits in the top-left corner and opens the league website (https://firstcoast.poolplayers.com/) in a new tab. Next to it, the house icon and event name go back to this app's home page. The logo file is `static/img/apa-first-coast-logo.png` (white on transparent).
+
 ## Background photo
 
 Every page shows a faded billiard-room photo behind the content. To use a photo of your own venue, go to the director page, **Settings → Background photo**, and upload a wide JPG or PNG (up to 10 MB). It's stored with the tournament data (not in the code), and **Use the default photo** switches back. The default (`static/img/billiard-room.jpg`) is an illustration drawn for this app.

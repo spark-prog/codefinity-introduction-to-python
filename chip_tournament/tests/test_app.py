@@ -383,3 +383,11 @@ def test_background_photo_upload_and_reset(client):
     assert custom.mimetype == "image/png" and custom.data == png
     client.post("/admin/background", data={"reset": "1"})
     assert client.get("/background").mimetype == "image/jpeg"
+
+
+def test_header_has_league_logo_and_home_icon(client):
+    html = client.get("/").get_data(as_text=True)
+    assert 'href="https://firstcoast.poolplayers.com/"' in html
+    assert "img/apa-first-coast-logo.png" in html
+    assert 'class="home-icon"' in html and "brand-mark" not in html
+    assert client.get("/static/img/apa-first-coast-logo.png").status_code == 200

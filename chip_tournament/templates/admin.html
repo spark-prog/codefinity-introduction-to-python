@@ -27,6 +27,13 @@
       {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
       {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
       Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
+    {% set solos = t.teams_needing_partner %}
+    {% if solos or t.partner_deadline is none %}
+    <p class="checkin-summary"><b>Partner deadline{% if t.partner_deadline %} ({{ t.partner_deadline_text() }}){% endif %}:</b>
+      {% if t.partner_deadline is none %}<span class="warn">set the tournament date and start time in Settings (e.g. 9:00 PM) so it can be enforced.</span>
+      {% else %}{{ solos|length }} team(s) still need a partner: {{ solos|map(attribute="name")|join(", ") }}.
+        {% if t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
+    {% endif %}
     {% if s.require_checkin and unchecked %}
     <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
     {% endif %}
@@ -133,11 +140,13 @@
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}">
       <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ "••••" if is_viewer else team.pin }}</span></td>
-      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}</td>
+      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}
+        {% if team.needs_partner %}<div><span class="tag solo" style="margin-left: 0">Needs partner</span>{% if team.list_seeking %} <span class="muted">· on public list</span>{% endif %}</div>{% endif %}</td>
       <td>{{ team.combined_skill }}
         {% if t.status == SETUP %}
           {% set c = t.chips_preview(team) %}
-          <br>{% if c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
+          <br>{% if team.needs_partner %}<span class="muted">partner up to {{ [s.registration_cap - team.combined_skill, 9]|min }}</span>
+          {% elif c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
         {% endif %}
       </td>
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
@@ -164,6 +173,16 @@
       </td>
       <td class="actions">
         <a class="button small secondary" href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
+        {% if team.needs_partner and t.status == SETUP and team.status in ("registered", "waitlisted") %}
+          {% set others = t.teams_needing_partner|rejectattr("id", "equalto", team.id)|list %}
+          {% if others %}
+          <form method="post" action="{{ url_for('admin_pair', team_id=team.id) }}" class="pair-form">
+            <select name="other" aria-label="Pair {{ team.players[0].name }} with">
+              {% for o in others %}<option value="{{ o.id }}">{{ o.players[0].name }} ({{ o.players[0].skill }}){% if team.combined_skill + o.combined_skill > s.registration_cap %} — over cap{% endif %}</option>{% endfor %}
+            </select>
+            <button class="button small">Pair</button></form>
+          {% endif %}
+        {% endif %}
         {% if team.status == "no_show" and t.status == RUNNING and not t.last_call and not t.entries_locked %}
         <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"
               onsubmit="return confirm('{{ team.name|e }} arrived late? They pay the entry fee and join as a late entry.')">

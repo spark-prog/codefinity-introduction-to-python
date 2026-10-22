@@ -10,6 +10,10 @@
       {% set locked = team.status not in ("registered", "waitlisted") %}
       {% if locked %}
       <p class="lede">The tournament has started, so partners and skill levels are locked. You can still change the team name and cell numbers.</p>
+      {% elif team.needs_partner %}
+      <p class="lede">Add your partner here by <b>{{ t.partner_deadline_text() }}</b>{% if team.status == "registered" %}, or your spot goes to the waiting list{% endif %}.
+        Adding a partner counts as registering, so your combined skill can't be over {{ t.settings.registration_cap }}.</p>
+      <div class="stack" style="margin-top: 32px">{% include "_chip_table.html" %}</div>
       {% else %}
       <p class="lede">If a partner's skill level has gone up since registration, update it here. With the same two partners, your combined skill can go up to {{ t.max_skill }}.</p>
       <div class="stack" style="margin-top: 32px">
@@ -31,6 +35,10 @@
     {% set swap_cap = t.settings.registration_cap %}
     {% set original_names = t._names(team.players)|list %}
     {% set hide_phones = not is_admin %}
+    {% set solo_allowed = not locked and (team.needs_partner or not t.partner_deadline_passed()) %}
+    {% set solo_checked = team.needs_partner %}
+    {% set list_checked = team.list_seeking %}
+    {% set solo_label = none if team.needs_partner else "My partner dropped out. Hold our spot while I find a new one." %}
     {% include "_roster_fields.html" %}
     <div class="button-row">
       <button class="button big">Save roster</button>

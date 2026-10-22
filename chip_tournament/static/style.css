@@ -449,3 +449,16 @@ mark { background: var(--gold); color: #12100a; border-radius: 3px; padding: 0 2
   .home-icon { width: 36px; height: 36px; }
   .brand-name { font-size: 1.05rem; }
 }
+
+/* ---------- Registering without a partner ---------- */
+[hidden] { display: none !important; }
+.solo-box { display: grid; gap: 12px; padding: 16px 18px; border: 1px dashed rgba(212, 175, 90, .45); border-radius: 10px; }
+.solo-only { display: grid; gap: 12px; }
+.solo-only p { margin: 0; }
+.tag.solo { background: var(--gold-tint); color: var(--gold-2); }
+.pair-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pair-form select {
+  max-width: 180px; height: 36px; border: 1.5px solid var(--line-strong); border-radius: 8px; padding: 0 8px;
+  font: inherit; font-size: .88rem; background: rgba(0, 0, 0, .25); color: var(--ink);
+}
+.pair-form select option { background: var(--surface-solid); color: var(--ink); }

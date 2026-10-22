@@ -83,6 +83,8 @@ FINISHED = "finished"
 DEFAULT_CHIP_BRACKETS = [[6, 5], [8, 4], [10, 3], [11, 2]]
 DEFAULT_REGISTRATION_CAP = 10
 TEAM_SIZE = 2
+MIN_PLAYER_SKILL, MAX_PLAYER_SKILL = 1, 9  # covers both 8-Ball and 9-Ball skill levels
+PARTNER_DEADLINE_HOURS = 24  # a team registered without a partner must add one this long before the start
 
 
 class TournamentError(Exception):
@@ -122,6 +124,7 @@ class Team:
     # Set at last call: matches this team still plays before it is cashed in.
     matches_left: int | None = None
     registered_at: str = field(default_factory=now)
+    list_seeking: bool = False  # registered alone and chose to be on the public "looking for a partner" list
 
     @property
     def phones(self) -> list[str]:
@@ -140,8 +143,12 @@ class Team:
         return sum(p.skill for p in self.players)
 
     @property
+    def needs_partner(self) -> bool:
+        return len(self.players) < TEAM_SIZE
+
+    @property
     def partners(self) -> str:
-        return " & ".join(p.name for p in self.players)
+        return " & ".join([p.name for p in self.players] + (["partner TBD"] if self.needs_partner else []))
 
 
 @dataclass
@@ -366,7 +373,9 @@ class Tournament:
         )
 
     def chips_preview(self, team: Team) -> int | None:
-        """Starting chips for a team, or None if its combined skill is too high."""
+        """Starting chips for a team, or None if its combined skill is too high (or it has no partner yet)."""
+        if team.needs_partner:
+            return None
         try:
             return self.chips_for_skill(team.combined_skill)
         except TournamentError:
@@ -386,18 +395,132 @@ class Tournament:
             low = top + 1
         return labels
 
-    def _check_players(self, players: list[Player]) -> None:
-        if len(players) != TEAM_SIZE:
+    # ------------------------------------------------- registering without a partner
+
+    @property
+    def event_start(self) -> datetime | None:
+        """The tournament's start from Settings, or None if the date or time can't be read."""
+        try:
+            day = datetime.strptime(self.settings.date.strip(), "%Y-%m-%d")
+        except ValueError:
+            return None
+        text = " ".join(self.settings.start_time.upper().replace(".", "").split())
+        for fmt in ("%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M"):
+            try:
+                t = datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+            return day.replace(hour=t.hour, minute=t.minute)
+        return None
+
+    @property
+    def partner_deadline(self) -> datetime | None:
+        start = self.event_start
+        return start - timedelta(hours=PARTNER_DEADLINE_HOURS) if start else None
+
+    def partner_deadline_text(self) -> str:
+        d = self.partner_deadline
+        if d is None:
+            return f"{PARTNER_DEADLINE_HOURS} hours before the tournament"
+        return f"{d.strftime('%A, %B')} {d.day} at {d.strftime('%I:%M %p').lstrip('0').replace(':00 ', ' ')}"
+
+    def partner_deadline_passed(self, at: datetime | None = None) -> bool:
+        if self.status != SETUP:
+            return True
+        d = self.partner_deadline
+        return d is not None and (at or datetime.now()) >= d
+
+    @property
+    def seeking_partner(self) -> list[Team]:
+        """The public "looking for a partner" list."""
+        teams = [t for t in self.teams.values()
+                 if t.needs_partner and t.list_seeking and t.status in (REGISTERED, WAITLISTED)]
+        return sorted(teams, key=lambda t: t.registered_at)
+
+    @property
+    def teams_needing_partner(self) -> list[Team]:
+        return [t for t in self.teams.values() if t.needs_partner and t.status in (REGISTERED, WAITLISTED)]
+
+    def _check_solo(self, players: list[Player]) -> None:
+        """One player holding a spot: their partner must still fit under the registration cap."""
+        most = self.settings.registration_cap - MIN_PLAYER_SKILL
+        if players[0].skill > most:
+            raise TournamentError(
+                f"With skill level {players[0].skill}, no partner would keep the team at or under the "
+                f"registration cap of {self.settings.registration_cap}. Register alone only with skill {most} or less."
+            )
+
+    def enforce_partner_deadline(self, at: datetime | None = None) -> int:
+        """At the deadline, teams in the field still without a partner move to the end of the waiting list."""
+        if self.status != SETUP or not self.partner_deadline_passed(at):
+            return 0
+        moved = [t for t in self.field_teams if t.needs_partner]
+        for team in moved:
+            team.status = WAITLISTED
+            team.checked_in_at = None
+            self.waitlist.append(team.id)
+            spot = len(self.waitlist)
+            self._say(f"{team.name} had no partner by the deadline and moved to the waiting list (#{spot}).")
+            self._text_team(
+                team,
+                f"{team.name} didn't add a partner by the deadline, so its spot in {self.settings.name} went to the "
+                f"waiting list. You're #{spot} on the waiting list. Add your partner with your PIN, and you'll move "
+                f"back in if a spot opens.{self._questions()}",
+            )
+        if moved:
+            self._fill_from_waitlist()
+        return len(moved)
+
+    def pair_solo_teams(self, team_id: str, other_id: str) -> Team:
+        """Director: put two players who registered alone on one team. The better-placed spot is kept."""
+        a, b = self.team(team_id), self.team(other_id)
+        if a.id == b.id or not (a.needs_partner and b.needs_partner):
+            raise TournamentError("Pick two different teams that are each still looking for a partner.")
+        if self.status != SETUP or a.status not in (REGISTERED, WAITLISTED) or b.status not in (REGISTERED, WAITLISTED):
+            raise TournamentError("Players can only be paired before the tournament starts.")
+        combined = a.combined_skill + b.combined_skill
+        if combined > self.settings.registration_cap:
+            raise TournamentError(
+                f"{a.players[0].name} and {b.players[0].name} have combined skill {combined}, over the "
+                f"registration cap of {self.settings.registration_cap}."
+            )
+
+        def place(t: Team):
+            in_line = self.waitlist.index(t.id) if t.id in self.waitlist else -1
+            return (t.status == WAITLISTED, in_line, t.registered_at)
+
+        keep, fold = sorted((a, b), key=place)
+        if fold.id in self.waitlist:
+            self.waitlist.remove(fold.id)
+        del self.teams[fold.id]
+        keep.players = keep.players + fold.players
+        keep.list_seeking = False
+        self._say(f"Paired {keep.partners} as {keep.name} (combined skill {combined}); {fold.name}'s spot is open.")
+        self._text_team(
+            keep,
+            f"You're partnered up! {keep.partners} are {keep.name} for {self.settings.name}, combined skill "
+            f"{combined} ({self.chips_for_skill(combined)} chips). Your team PIN is {keep.pin}.",
+        )
+        self._fill_from_waitlist()
+        return keep
+
+    def _check_players(self, players: list[Player], solo_ok: bool = False) -> None:
+        if len(players) != TEAM_SIZE and not (solo_ok and len(players) == 1):
             raise TournamentError(f"A team needs exactly {TEAM_SIZE} partners.")
         for p in players:
             if not p.name.strip():
-                raise TournamentError("Enter both partners' names.")
+                raise TournamentError("Enter both partners' names." if len(players) > 1 else "Enter your name.")
             if p.skill < 1:
                 raise TournamentError(f"Enter a skill level for {p.name}.")
+            if p.skill > MAX_PLAYER_SKILL:
+                raise TournamentError(
+                    f"{p.name}'s skill level {p.skill} isn't valid. Skill levels go from {MIN_PLAYER_SKILL} to {MAX_PLAYER_SKILL}."
+                )
         if not any(p.phone for p in players):
             raise TournamentError("Enter at least one cell number for text alerts.")
 
-    def register_team(self, name: str, players: list[Player]) -> Team:
+    def register_team(self, name: str, players: list[Player], list_seeking: bool = False) -> Team:
+        """Register a team. With just one player, the team holds a spot until it adds a partner."""
         name = name.strip()
         if not name:
             raise TournamentError("Team name is required.")
@@ -409,14 +532,24 @@ class Tournament:
             raise TournamentError("Registration is closed after last call.")
         if self.entries_locked:
             raise TournamentError("Registration is closed: every team has already played a match.")
-        self._check_players(players)
+        solo = len(players) == 1
+        if solo and self.partner_deadline_passed():
+            raise TournamentError(
+                "Registering without a partner closed "
+                + ("when the tournament started." if self.status != SETUP else
+                   f"{PARTNER_DEADLINE_HOURS} hours before the tournament. Register with your partner.")
+            )
+        self._check_players(players, solo_ok=True)
         combined = sum(p.skill for p in players)
-        if combined > self.settings.registration_cap:
+        if solo:
+            self._check_solo(players)
+        elif combined > self.settings.registration_cap:
             raise TournamentError(
                 f"Combined skill level {combined} is over the registration cap of "
                 f"{self.settings.registration_cap}. Register with a different partner."
             )
-        self.chips_for_skill(combined)
+        else:
+            self.chips_for_skill(combined)
 
         full = self.field_full
         team = Team(
@@ -424,8 +557,11 @@ class Tournament:
             name=name,
             players=players,
             pin=f"{secrets.randbelow(10000):04d}",
+            list_seeking=solo and list_seeking,
         )
         self.teams[team.id] = team
+        need = (f" You still need a partner: add them on your team page with your PIN by "
+                f"{self.partner_deadline_text()}, or your spot goes to the waiting list.") if solo else ""
         if full:
             team.status = WAITLISTED
             self.waitlist.append(team.id)
@@ -434,14 +570,14 @@ class Tournament:
             self._text_team(
                 team,
                 f"{self.settings.name} is full. {team.name} is #{spot} on the waiting list; we'll text you "
-                f"if a spot opens. Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.{self._questions()}",
+                f"if a spot opens. Your team PIN for roster changes is {team.pin}.{need} Reply STOP to opt out.{self._questions()}",
             )
             return team
         self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
         self._text_team(
             team,
             f"{team.name} is registered for {self.settings.name}. "
-            f"Your team PIN for roster changes is {team.pin}. Reply STOP to opt out.{self._questions()}",
+            f"Your team PIN for roster changes is {team.pin}.{need} Reply STOP to opt out.{self._questions()}",
         )
         if self.status == RUNNING:
             self._join_running(team)
@@ -451,8 +587,13 @@ class Tournament:
         """Move waiting teams into the field, in order, while there is room."""
         if self.status == FINISHED or self.last_call or self.entries_locked:
             return
-        while self.waitlist and not self.field_full:
-            team = self.teams[self.waitlist.pop(0)]
+        while not self.field_full:
+            # After the partner deadline, a team still without a partner can't take an open spot.
+            team = next((self.teams[i] for i in self.waitlist
+                         if not (self.teams[i].needs_partner and self.partner_deadline_passed())), None)
+            if team is None:
+                return
+            self.waitlist.remove(team.id)
             team.status = REGISTERED
             self._say(f"{team.name} moved from the waiting list into the field.")
             self._text_team(team, f"Good news: a spot opened and {team.name} is now in the field for {self.settings.name}.")
@@ -489,38 +630,64 @@ class Tournament:
     def _names(players: list[Player]) -> set[str]:
         return {" ".join(p.name.lower().split()) for p in players}
 
-    def update_roster(self, team_id: str, players: list[Player], name: str | None = None) -> Team:
+    def update_roster(self, team_id: str, players: list[Player], name: str | None = None,
+                      list_seeking: bool | None = None) -> Team:
         """Change partners, phones or skill levels.
 
         With the same two partners, skill levels can rise after registration
         (up to the top chip bracket). Swapping in a new partner counts as a new
         registration, so the registration cap applies, but the team keeps its
         place (in the field or on the waiting list). Partners and skill levels
-        lock once the team has been given its chips.
+        lock once the team has been given its chips. A team registered without a
+        partner adds one here (that counts as a new registration too).
         """
         team = self.team(team_id)
-        self._check_players(players)
+        was_solo, solo = team.needs_partner, len(players) == 1
+        if solo and not was_solo and self.partner_deadline_passed():
+            raise TournamentError(
+                f"A partner can't be removed within {PARTNER_DEADLINE_HOURS} hours of the tournament. "
+                "Swap in a new partner instead, or see the director."
+            )
+        self._check_players(players, solo_ok=was_solo or solo)
         old_skill, new_skill = team.combined_skill, sum(p.skill for p in players)
         swap = self._names(players) != self._names(team.players)
         if team.status not in (REGISTERED, WAITLISTED) and [(p.name, p.skill) for p in players] != [
             (p.name, p.skill) for p in team.players
         ]:
             raise TournamentError("Partners and skill levels are locked once the tournament starts.")
-        if swap and new_skill > self.settings.registration_cap:
+        if solo:
+            self._check_solo(players)
+        elif swap and new_skill > self.settings.registration_cap:
             raise TournamentError(
-                f"A partner swap counts as a new registration, so combined skill can't be over "
-                f"{self.settings.registration_cap}. With the new partner it's {new_skill}."
+                f"A {'new partner' if was_solo else 'partner swap'} counts as a new registration, so combined skill "
+                f"can't be over {self.settings.registration_cap}. With the new partner it's {new_skill}."
             )
-        self.chips_for_skill(new_skill)
+        else:
+            self.chips_for_skill(new_skill)
         if name is not None and name.strip() and name.strip() != team.name:
             if any(t.name.lower() == name.strip().lower() for t in self.teams.values() if t.id != team_id):
                 raise TournamentError(f"A team named '{name.strip()}' is already registered.")
             team.name = name.strip()
         team.players = players
+        if list_seeking is not None:
+            team.list_seeking = solo and list_seeking
+        if not solo:
+            team.list_seeking = False
         change = f" Combined skill {old_skill} → {new_skill}." if new_skill != old_skill else ""
-        if swap:
+        if was_solo and not solo:
+            change = f" Partner added, now {team.partners}." + change
+            self._text_team(
+                team,
+                f"{team.name} is all set for {self.settings.name}: {team.partners}, combined skill {new_skill} "
+                f"({self.chips_for_skill(new_skill)} chips). Your team PIN is {team.pin}.",
+            )
+        elif solo and not was_solo:
+            change = f" Partner removed; {team.name} needs a partner by {self.partner_deadline_text()}."
+        elif swap:
             change = f" Partner swap, now {team.partners}." + change
         self._say(f"Roster updated for {team.name}.{change}")
+        if was_solo and not solo and team.status == WAITLISTED:
+            self._fill_from_waitlist()  # a spot may have been held open for a complete team
         return team
 
     def remove_team(self, team_id: str) -> None:
@@ -607,6 +774,11 @@ class Tournament:
             raise TournamentError("At least two teams are needed to start.")
         if not self.settings.tables:
             raise TournamentError("Add at least one table before starting.")
+        if any(t.needs_partner for t in teams):
+            raise TournamentError(
+                "These teams still need a partner: " + ", ".join(t.name for t in teams if t.needs_partner)
+                + ". Add a partner on their roster, pair them up, or remove them before starting."
+            )
         if self.settings.require_checkin and self.not_checked_in:
             raise TournamentError(
                 "These teams haven't checked in: " + ", ".join(t.name for t in self.not_checked_in)
@@ -968,6 +1140,8 @@ class Tournament:
 
     def check_clock(self, at: datetime | None = None) -> int:
         """Start grace periods and record forfeits that are due. Returns how many things changed."""
+        if self.status == SETUP:
+            return self.enforce_partner_deadline(at)
         if self.status != RUNNING:
             return 0
         at = at or datetime.now()

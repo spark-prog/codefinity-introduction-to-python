@@ -10,7 +10,7 @@
         <td>{% if team.status == ACTIVE %}<b>{{ team.chips }}</b>{% else %}–{% endif %}</td>
         <td class="hide-sm nowrap">{{ team.wins }}-{{ team.losses }}</td>
         <td class="hide-sm">{{ team.status.replace("_", " ") }}</td>
-        <td>{% if t.status == SETUP %}{% set c = t.chips_preview(team) %}{% if c %}{{ c }} chips{% else %}<span class="warn">needs new partner</span>{% endif %}
+        <td>{% if t.status == SETUP %}{% set c = t.chips_preview(team) %}{% if team.needs_partner %}<span class="warn">needs a partner</span>{% elif c %}{{ c }} chips{% else %}<span class="warn">needs new partner</span>{% endif %}
             {% elif team.status == ACTIVE %}{{ t.payout_for(team)|money }}
             {% else %}{{ team.payout_cents|money }}{% endif %}</td>
       </tr>

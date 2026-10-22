@@ -1,11 +1,23 @@
 <label>Team name <input name="name" required value="{{ v.name }}"></label>
+{% if solo_allowed %}
+<div class="solo-box">
+  <label class="checkbox"><input type="checkbox" name="solo" value="1" id="solo" {% if solo_checked %}checked{% endif %}>
+    {{ solo_label or "I don't have a partner yet. Hold a spot for me." }}</label>
+  <div class="solo-only">
+    <p class="muted">Add your partner on your team page with your PIN by <b>{{ t.partner_deadline_text() }}</b>,
+      or your spot goes to the waiting list. To leave room for a partner, your skill level can be up to {{ t.settings.registration_cap - 1 }}.</p>
+    <label class="checkbox"><input type="checkbox" name="list_seeking" value="1" {% if list_checked %}checked{% endif %}>
+      List me on the public "Looking for a partner" list (shows only my name and skill level)</label>
+  </div>
+</div>
+{% endif %}
 <div class="partners">
   {% for i in range(TEAM_SIZE) %}
   {% set p = v.players[i] if v.players and i < v.players|length else none %}
-  <fieldset class="partner">
+  <fieldset class="partner{% if i %} partner-extra{% endif %}">
     <legend>Partner {{ i + 1 }}</legend>
     <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if locked %}readonly{% endif %}></label>
-    <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" step="1" required
+    <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" max="9" step="1" required
       value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
     {% if hide_phones and p and p.phone %}
     <label>Cell for text alerts <span class="muted">(on file: ending in {{ p.phone|last4 }})</span>
@@ -28,6 +40,21 @@
   var original = {{ (original_names or none)|tojson }}, swapCap = {{ (swap_cap or cap)|tojson }};
   var inputs = document.querySelectorAll("input.skill"), out = document.getElementById("skill-check");
   var names = document.querySelectorAll("input[name^=player_name_]");
+  // "I don't have a partner yet": hide partner 2 and stop requiring it.
+  var solo = document.getElementById("solo"), extra = document.querySelectorAll(".partner-extra");
+  var soloOnly = document.querySelectorAll(".solo-only");
+  function applySolo() {
+    var on = !!(solo && solo.checked);
+    extra.forEach(function (fs) {
+      fs.hidden = on;
+      fs.querySelectorAll("input").forEach(function (el) {
+        if (el.dataset.required === undefined) el.dataset.required = el.required ? "1" : "";
+        el.required = !on && el.dataset.required === "1";
+      });
+    });
+    soloOnly.forEach(function (el) { el.hidden = !on; });
+  }
+  if (solo) { solo.addEventListener("change", function () { applySolo(); update(); }); applySolo(); }
   function norm(v) { return v.trim().toLowerCase().split(/\s+/).join(" "); }
   function isSwap() {
     if (!original) return false;
@@ -36,6 +63,14 @@
   }
   function update() {
     var total = 0, filled = 0;
+    if (solo && solo.checked) {
+      var mine = parseInt(inputs[0].value, 10) || 0, room = {{ t.settings.registration_cap|tojson }} - mine;
+      if (!mine) { out.textContent = ""; out.className = "skill-check"; return; }
+      out.textContent = room >= 1 ? "Your partner's skill level can be up to " + Math.min(room, 9) + "."
+        : "With skill level " + mine + " no partner fits under the cap of " + {{ t.settings.registration_cap|tojson }} + ".";
+      out.className = "skill-check " + (room >= 1 ? "good" : "bad");
+      return;
+    }
     inputs.forEach(function (el) { if (el.value) { total += parseInt(el.value, 10) || 0; filled++; } });
     if (filled < inputs.length) { out.textContent = ""; out.className = "skill-check"; return; }
     var chips = null;

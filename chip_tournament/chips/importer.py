@@ -112,6 +112,18 @@ def build_rows(rows: list[list[str]], mapping: dict[str, int]) -> list[Row]:
         names = [cell(r, f"name{s}") for s in (1, 2)]
         skills = [_skill(cell(r, f"skill{s}")) for s in (1, 2)]
         phones = [cell(r, f"phone{s}") for s in (1, 2)]
+        # Signed up alone (no partner name, skill or cell): holds a spot until a partner is added.
+        solo = bool(names[0]) and not names[1] and skills[1] is None and not phones[1]
+        if solo:
+            if skills[0] is None and "combined" in mapping:
+                skills[0] = _skill(cell(r, "combined"))
+            row.team_name = cell(r, "team") or names[0]
+            row.players = [Player(name=names[0], phone=phones[0], skill=skills[0] or 0)]
+            row.note = "No partner yet: holds a spot until a partner is added."
+            if skills[0] is None:
+                row.error = "Missing or unreadable skill level."
+            out.append(row)
+            continue
         if None in skills and "combined" in mapping:
             combined = _skill(cell(r, "combined"))
             if combined:
@@ -147,7 +159,8 @@ def apply(t: Tournament, rows: list[Row], send_texts: bool = True) -> tuple[int,
             row.result = f"Waiting list #{t.waitlist_position(team)}"
         else:
             added += 1
-            row.result = "Added" + (f" ({team.chips} chips)" if team.chips else f" ({t.chips_preview(team)} chips)")
+            row.result = "Added" + (" (needs a partner)" if team.needs_partner else
+                                    f" ({team.chips} chips)" if team.chips else f" ({t.chips_preview(team)} chips)")
     return added, waitlisted
 
 

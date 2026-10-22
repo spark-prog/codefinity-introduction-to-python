@@ -10,6 +10,7 @@
       {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}<a class="button big" href="{{ url_for('register') }}">Register a team</a>{% endif %}
       {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
     </div>
+    {% if t.status == SETUP and t.seeking_partner %}<p class="muted"><a href="{{ url_for('register') }}#looking">{{ t.seeking_partner|length }} player(s) looking for a partner</a></p>{% endif %}
   </div>
   <div class="card">
     <p class="eyebrow">Event details</p>

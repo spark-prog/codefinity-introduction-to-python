@@ -293,9 +293,11 @@ def create_app(data_dir: str | None = None) -> Flask:
         t = store.load()
         if request.method == "POST":
             f = request.form
+            solo = f.get("solo") == "1"
             team = act(
                 "Register team",
-                lambda t: t.register_team(f.get("name", ""), players_from_form(f)),
+                lambda t: t.register_team(f.get("name", ""), players_from_form(f)[:1 if solo else TEAM_SIZE],
+                                          list_seeking=f.get("list_seeking") == "1"),
             )
             if team:
                 session[f"team_{team.id}"] = True
@@ -377,10 +379,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             return redirect(url_for("roster", team_id=team_id))
         if request.method == "POST":
             f = request.form
+            solo = f.get("solo") == "1"
             if act(
                 "Update roster",
-                lambda t: t.update_roster(team_id, players_from_form(f, None if session.get("admin") else t.teams[team_id]),
-                                          name=f.get("name")),
+                lambda t: t.update_roster(
+                    team_id,
+                    players_from_form(f, None if session.get("admin") else t.teams[team_id])[:1 if solo else TEAM_SIZE],
+                    name=f.get("name"), list_seeking=f.get("list_seeking") == "1"),
                 "Roster saved.",
             ):
                 return redirect(url_for("team_page", team_id=team_id))
@@ -726,6 +731,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(f"Auto-forfeit is paused on {paused} match(es) that are past their deadline. "
                   "Tap Arrived, or pick the Winner to record the forfeit yourself.", "ok")
         return redirect(url_for("admin"))
+
+    @app.post("/admin/team/<team_id>/pair")
+    @admin_required
+    def admin_pair(team_id):
+        act("Pair players", lambda t: t.pair_solo_teams(team_id, request.form.get("other", "")),
+            "Paired: {result.partners} are {result.name}.")
+        return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/reset")
     @admin_required

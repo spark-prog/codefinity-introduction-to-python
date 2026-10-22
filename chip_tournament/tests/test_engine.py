@@ -72,7 +72,9 @@ def test_registration_cap_is_10():
 def test_team_needs_two_named_partners_with_skill_and_a_phone():
     t = Tournament()
     with pytest.raises(TournamentError):
-        t.register_team("Solo", [Player("A", "555", 3)])
+        t.register_team("Three", [Player("A", "555", 3), Player("B", "", 3), Player("C", "", 3)])
+    with pytest.raises(TournamentError, match="1 to 9"):
+        t.register_team("Too high", [Player("A", "555", 10), Player("B", "", 0 + 1)])
     with pytest.raises(TournamentError):
         t.register_team("No skill", [Player("A", "555", 3), Player("B", "", 0)])
     with pytest.raises(TournamentError):
@@ -785,3 +787,91 @@ def test_table_call_text_has_no_league_prefix_but_others_do():
     assert all(m.body.startswith("New match: Table 1:") for m in t.outbox)
     play(t, called(t)[0])
     assert any(m.body.startswith("First Coast APA: ") for m in t.outbox)
+
+
+# ---------------------------------------------------- registering without a partner
+
+from datetime import datetime  # noqa: E402
+
+from chips.engine import REGISTERED, WAITLISTED  # noqa: E402
+
+
+def solo_event(cap=3):
+    t = Tournament()
+    t.settings.date, t.settings.start_time = "2026-10-31", "9:00 PM"
+    t.settings.field_cap = cap
+    return t
+
+
+def test_partner_deadline_is_24_hours_before_the_start():
+    t = solo_event()
+    assert t.partner_deadline == datetime(2026, 10, 30, 21, 0)
+    assert t.partner_deadline_text() == "Friday, October 30 at 9 PM"
+    t.settings.start_time = "7:30pm"
+    assert t.partner_deadline == datetime(2026, 10, 30, 19, 30)
+    t.settings.start_time = "whenever"
+    assert t.partner_deadline is None and not t.partner_deadline_passed()
+
+
+def test_solo_player_holds_a_real_spot_and_must_fit_under_the_cap():
+    t = solo_event(cap=2)
+    t.settings.registration_cap = 8
+    with pytest.raises(TournamentError, match="skill 7 or less"):
+        t.register_team("Too high", [Player("Al", "5551110000", 8)])
+    t.settings.registration_cap = 10
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 9)], list_seeking=True)
+    assert solo.status == REGISTERED and solo.needs_partner and solo.partners == "Ann & partner TBD"
+    assert t.chips_preview(solo) is None and t.seeking_partner == [solo]
+    assert "add them on your team page" in t.outbox[-1].body and "October 30" in t.outbox[-1].body
+    t.register_team("Full", partners(8))
+    late = t.register_team("Late", partners(8))
+    assert late.status == WAITLISTED
+    with pytest.raises(TournamentError, match="still need a partner"):
+        t.start()
+    # A partner with skill 1 fits; the cap applies to the new pair.
+    with pytest.raises(TournamentError, match="can't be over 10"):
+        t.update_roster(solo.id, [Player("Ann", "5551110000", 9), Player("Bo", "", 2)])
+    t.update_roster(solo.id, [Player("Ann", "5551110000", 9), Player("Bo", "", 1)])
+    assert not solo.needs_partner and not solo.list_seeking and t.seeking_partner == []
+    assert t.chips_preview(solo) == 3 and "all set" in t.outbox[-1].body
+
+
+def test_deadline_moves_solo_teams_to_the_waiting_list():
+    t = solo_event(cap=2)
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4)])
+    t.register_team("Full", partners(8))
+    waiting = t.register_team("Waiting", partners(8))
+    other_solo = t.register_team("Cy's team", [Player("Cy", "5552220000", 3)])
+    assert t.waitlist == [waiting.id, other_solo.id]
+    assert t.check_clock(datetime(2026, 10, 30, 20, 59)) == 0
+    assert t.check_clock(datetime(2026, 10, 30, 21, 0)) == 1
+    assert solo.status == WAITLISTED and waiting.status == REGISTERED
+    assert t.waitlist == [other_solo.id, solo.id]
+    assert "waiting list" in t.outbox[-2].body or "waiting list" in t.outbox[-1].body
+    # After the deadline, no registering alone and no removing a partner.
+    t.settings.date = "2020-10-31"  # "now" is past the deadline from here on
+    with pytest.raises(TournamentError, match="24 hours"):
+        t.register_team("Dee", [Player("Dee", "5553330000", 3)])
+    with pytest.raises(TournamentError, match="can't be removed"):
+        t.update_roster(waiting.id, [Player("A", "5550000000", 4)])
+    # A spot opens: a solo team can't take it; a complete team can.
+    t.remove_team(waiting.id)
+    assert solo.status == WAITLISTED and other_solo.status == WAITLISTED
+    t.update_roster(solo.id, [Player("Ann", "5551110000", 4), Player("Bo", "", 4)])
+    assert solo.status == REGISTERED and t.waitlist == [other_solo.id]
+
+
+def test_director_pairs_two_solo_players():
+    t = solo_event(cap=2)
+    ann = t.register_team("Ann's team", [Player("Ann", "5551110000", 4)], list_seeking=True)
+    t.register_team("Full", partners(8))
+    cy = t.register_team("Cy's team", [Player("Cy", "5552220000", 7)])
+    late = t.register_team("Late", partners(8))
+    with pytest.raises(TournamentError, match="registration cap"):
+        t.pair_solo_teams(cy.id, ann.id)
+    cy.players[0].skill = 6
+    team = t.pair_solo_teams(cy.id, ann.id)
+    assert team is ann and ann.partners == "Ann & Cy" and cy.id not in t.teams
+    assert not ann.list_seeking and late.status == WAITLISTED
+    assert "partnered up" in t.outbox[-1].body and ann.pin in t.outbox[-1].body
+    assert set(ann.phones) == {"5551110000", "5552220000"}

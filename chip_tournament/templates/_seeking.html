@@ -1,0 +1,18 @@
+{% set seeking = t.seeking_partner %}
+{% if seeking and t.status == SETUP %}
+<section class="card" id="looking">
+  <p class="eyebrow">Find a partner</p>
+  <h2>Looking for a partner</h2>
+  <p class="muted">These players registered alone and are holding a spot. To team up, get in touch with them at league play{% if t.settings.contact_phone %} or contact the tournament director at {{ t.settings.contact_phone }}{% else %} or ask the tournament director{% endif %}.
+    Your combined skill can't be over {{ t.settings.registration_cap }}.</p>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>Player</th><th>Skill level</th><th>Partner's skill can be up to</th></tr></thead>
+    {% for team in seeking %}
+    <tr><td>{{ team.players[0].name }}</td><td>{{ team.players[0].skill }}</td>
+      <td>{{ [t.settings.registration_cap - team.players[0].skill, 9]|min }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endif %}

@@ -102,7 +102,8 @@ A player who doesn't have a partner yet can register alone to **hold a real spot
 ## Event check-in and no-shows
 
 Set **Check in at the desk by** (e.g. 6:30 PM) in Settings. It shows on the home page, the registration page and each team's page. On tournament day:
-- Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in.
+- Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in. To find a team fast, type part of its name, a player's name or the last 4 digits of a cell in the search box above the team list. Tick **Not checked in only** to see who's still missing. The search stays in place after each check-in, so you can type the next team.
+- The buttons across the top of the director page (Summary, Tables, Teams & chips, Texts & log, Settings, New tournament) jump straight to each section and stay on screen as you scroll.
 - Press **No-show** for a team that doesn't come, or **Mark all not checked in as no-shows** once check-in closes. The team is taken out of the field and texted, and the next team on the waiting list moves in (and is texted). **Restore** undoes a no-show. If a no-show team walks in after the start, **Arrived late: restore** adds it as a late entry (it pays the fee and gets its chips), up until last call.
 - **Start tournament** stays disabled until every team in the field is checked in or marked a no-show. That requirement can be turned off in Settings.
 - No-shows don't appear on public pages and don't pay into the pot.

@@ -523,3 +523,16 @@ def test_director_pairs_solo_players(client):
     client.post(f"/admin/team/{ann.id}/pair", data={"other": cy.id})
     teams = list(store.load().teams.values())
     assert len(teams) == 1 and teams[0].partners == "Ann & Cy"
+
+
+def test_director_page_has_section_buttons_and_team_search(client):
+    register(client, "Sharks")
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.get("/admin").get_data(as_text=True)
+    for target in ("summary", "teams", "texts", "settings", "new-tournament"):
+        assert f'href="#{target}"' in page and f'id="{target}"' in page
+    assert 'href="#matches"' not in page  # Tables only once the tournament is running
+    assert 'id="team-search"' in page and 'data-search="sharks ann bob 4567"' in page
+    viewer = client.application.test_client()
+    viewer.post("/admin/login", data={"password": "lookonly"})
+    assert 'data-search="sharks ann bob"' in viewer.get("/admin").get_data(as_text=True)  # no phone digits

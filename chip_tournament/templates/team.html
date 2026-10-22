@@ -69,8 +69,10 @@
     {% else %}
       <div class="card">
         <p class="eyebrow">Roster</p>
-        <ul>{% for p in team.players %}<li>{{ p.name }} — skill {{ p.skill }}</li>{% endfor %}</ul>
-        {% if team.status == "registered" %}
+        <ul>{% for p in team.players %}<li>{{ p.name }} — skill {{ p.skill }}</li>{% endfor %}{% if team.needs_partner %}<li class="muted">Partner to be added</li>{% endif %}</ul>
+        {% if team.needs_partner %}
+          <p class="banner">{{ team.name }} still needs a partner. Add them with <b>Update roster</b> by <b>{{ t.partner_deadline_text() }}</b>{% if team.status == "registered" %}, or your spot goes to the waiting list{% endif %}.</p>
+        {% elif team.status == "registered" %}
           {% set chips = t.chips_preview(team) %}
           {% if chips %}<p>Combined skill {{ team.combined_skill }} → starts with <b>{{ chips }} chips</b>.</p>
           {% else %}<p class="banner danger">Combined skill {{ team.combined_skill }} is over {{ t.max_skill }}. You need a new partner before the tournament starts.</p>{% endif %}

@@ -449,3 +449,48 @@ mark { background: var(--gold); color: #12100a; border-radius: 3px; padding: 0 2
   .home-icon { width: 36px; height: 36px; }
   .brand-name { font-size: 1.05rem; }
 }
+
+/* ---------- Registering without a partner ---------- */
+[hidden] { display: none !important; }
+.solo-box { display: grid; gap: 12px; padding: 16px 18px; border: 1px dashed rgba(212, 175, 90, .45); border-radius: 10px; }
+.solo-only { display: grid; gap: 12px; }
+.solo-only p { margin: 0; }
+.tag.solo { background: var(--gold-tint); color: var(--gold-2); }
+.pair-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pair-form select {
+  max-width: 180px; height: 36px; border: 1.5px solid var(--line-strong); border-radius: 8px; padding: 0 8px;
+  font: inherit; font-size: .88rem; background: rgba(0, 0, 0, .25); color: var(--ink);
+}
+.pair-form select option { background: var(--surface-solid); color: var(--ink); }
+
+/* ---------- Director page: section buttons and team search ---------- */
+.jump-nav {
+  position: sticky; top: var(--topbar-h, 84px); z-index: 9; display: flex; gap: 8px; overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-1)) var(--space-3); padding: 10px var(--space-1);
+  background: rgba(7, 11, 18, .88); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line); scrollbar-width: none;
+}
+.jump-nav::-webkit-scrollbar { display: none; }
+.jump-nav a {
+  flex: none; padding: 9px 16px; border: 1.5px solid var(--line-strong); border-radius: 99px;
+  color: var(--ink-2); text-decoration: none; font-weight: 700; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase;
+}
+.jump-nav a:hover { color: #fff; border-color: var(--gold); }
+.jump-nav a.active { background: var(--gold); border-color: var(--gold); color: #12100a; }
+.jump-target { scroll-margin-top: var(--jump-offset, 160px); }
+.team-search { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: var(--space-2); }
+.team-search input[type=search] {
+  flex: 1 1 280px; max-width: 420px; height: 48px; border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 0 16px;
+  font: inherit; background: rgba(0, 0, 0, .25); color: var(--ink);
+}
+.team-search input[type=search]:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(212, 175, 90, .18); }
+@media (max-width: 560px) { .jump-nav a { padding: 8px 12px; font-size: .72rem; } }
+@media (max-width: 560px) {
+  /* Signed in, the menu gets Log out; the house icon already goes home, so drop the Home word to fit. */
+  .nav.signed-in .nav-home { display: none; }
+  .nav.signed-in a, .nav.signed-in .link { padding-left: 6px; padding-right: 6px; }
+  .page-head .button-row { justify-content: flex-start !important; }
+  .page-head .button, .button.big, .reset-row .button { white-space: normal; text-align: center; }
+  details { overflow-x: auto; }
+  .split > * { min-width: 0; }
+}

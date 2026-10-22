@@ -19,6 +19,7 @@
         <div>
           <h3>Starting chips</h3>
           <p>Your partners' <b>combined skill level can't be over {{ s.registration_cap }}</b> to register.</p>
+          {% if not t.partner_deadline_passed() %}<p><b>No partner yet?</b> Register alone to hold a spot, and add your partner by {{ t.partner_deadline_text() }}.</p>{% endif %}
           {% include "_chip_table.html" %}
         </div>
       </div>
@@ -28,9 +29,13 @@
   <form method="post" class="card form">
     {% set v = {"name": form.get("name", ""), "players": players} %}
     {% set cap = s.registration_cap %}
+    {% set solo_allowed = not t.partner_deadline_passed() %}
+    {% set solo_checked = form.get("solo") == "1" %}
+    {% set list_checked = form.get("list_seeking") == "1" %}
     {% include "_roster_fields.html" %}
     <button class="button big block">Register</button>
   </form>
   {% endif %}
 </div>
+{% include "_seeking.html" %}
 {% endblock %}

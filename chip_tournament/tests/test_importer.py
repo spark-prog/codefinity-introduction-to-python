@@ -85,3 +85,20 @@ def test_texts_can_be_turned_off():
     _, _, rows = mapped(YOUR_PARTNER)
     importer.apply(t, rows, send_texts=False)
     assert len(t.teams) == 1 and t.outbox == []
+
+
+SOLO = """Timestamp,Team Name,Player 1 Name,Player 1 Skill Level,Player 1 Cell Phone,Player 2 Name,Player 2 Skill Level,Player 2 Cell Phone
+10/1/2026 9:00:00,,Ann Lee,5,(555) 111-0001,,,
+10/1/2026 9:05:00,Rails,Cy Doe,6,555-111-0002,Di Fox,4,
+"""
+
+
+def test_single_players_hold_a_spot():
+    t = Tournament()
+    t.settings.date, t.settings.start_time = "2099-10-31", "9:00 PM"
+    _, _, rows = mapped(SOLO)
+    assert len(rows[0].players) == 1 and rows[0].team_name == "Ann Lee" and not rows[0].error
+    importer.apply(t, rows)
+    assert rows[0].result == "Added (needs a partner)" and rows[1].result.startswith("Added")
+    solo = next(team for team in t.teams.values() if team.name == "Ann Lee")
+    assert solo.needs_partner and not solo.list_seeking

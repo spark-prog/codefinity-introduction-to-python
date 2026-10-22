@@ -26,8 +26,8 @@
           <span class="brand-name">{{ t.settings.name if t else "Chip Tournament" }}<span class="sr-only"> — home</span></span>
         </a>
       </div>
-      <nav class="nav">
-        <a href="{{ url_for('home') }}" class="{{ 'active' if ep == 'home' }}">Home</a>
+      <nav class="nav{% if is_admin or is_viewer %} signed-in{% endif %}">
+        <a href="{{ url_for('home') }}" class="nav-home {{ 'active' if ep == 'home' }}">Home</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">Board</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">Director</a>

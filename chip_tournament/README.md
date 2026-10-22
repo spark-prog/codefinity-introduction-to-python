@@ -88,10 +88,22 @@ New director? Read the **Director's guide** in the app (`/guide`, linked from th
 - **Cash-in and last-call times** show to players and on the director's buttons, but the director clicks the buttons.
 - **"Started" at last call** means the match has been called to a table. Matches still waiting for a table count as not started.
 
+## Registering without a partner
+
+A player who doesn't have a partner yet can register alone to **hold a real spot** in the field (or on the waiting list if it's full). They tick **"I don't have a partner yet"** on the Register page.
+
+- **Skill check.** Skill levels go from 1 to 9. A player registering alone can be up to the registration cap minus 1 (9 with a cap of 10), so a partner can still fit.
+- **Adding the partner.** The team adds its partner on its roster page with its PIN. That counts as a new registration, so the pair must be at or under the registration cap. The team keeps its spot and gets a text with its starting chips.
+- **Deadline: 24 hours before the start** (from the date and start time in Settings). At the deadline, teams in the field that still have no partner move to the end of the waiting list and get a text. Their spots go to the waiting list in order. Teams without a partner can't move into the field after the deadline. If they add a partner later, they move in when a spot opens. Registering alone closes at the deadline.
+- **Public "Looking for a partner" list.** A player registering alone can tick a box to be listed on the Register page. The list shows only their name and skill level (never phone numbers). It disappears once they have a partner.
+- **Director.** The director page shows the partner deadline and which teams still need a partner. A **Pair** button next to each one puts two players who registered alone on one team. The team with the better spot is kept, and the other spot opens up for the waiting list. The tournament can't start while a team in the field has no partner.
+- **Google Form import.** A row with Partner 1 filled in and Partner 2 left blank (name, skill and cell) is imported as a player holding a spot.
+
 ## Event check-in and no-shows
 
 Set **Check in at the desk by** (e.g. 6:30 PM) in Settings. It shows on the home page, the registration page and each team's page. On tournament day:
-- Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in.
+- Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in. To find a team fast, type part of its name, a player's name or the last 4 digits of a cell in the search box above the team list. Tick **Not checked in only** to see who's still missing. The search stays in place after each check-in, so you can type the next team.
+- The buttons across the top of the director page (Summary, Tables, Teams & chips, Texts & log, Settings, New tournament) jump straight to each section and stay on screen as you scroll.
 - Press **No-show** for a team that doesn't come, or **Mark all not checked in as no-shows** once check-in closes. The team is taken out of the field and texted, and the next team on the waiting list moves in (and is texted). **Restore** undoes a no-show. If a no-show team walks in after the start, **Arrived late: restore** adds it as a late entry (it pays the fee and gets its chips), up until last call.
 - **Start tournament** stays disabled until every team in the field is checked in or marked a no-show. That requirement can be turned off in Settings.
 - No-shows don't appear on public pages and don't pay into the pot.
@@ -104,6 +116,7 @@ On the director page (before the start), click **Import teams from a spreadsheet
 2. The app guesses which column is the team name, each partner's name, skill level and cell. Fix any guesses that are wrong.
    - A team name column is optional. Without one, teams are named after their partners.
    - If the form only asked for a combined skill, map that instead. It's split between the partners, and teams can correct it on their roster page.
+   - A row with no partner 2 (name, skill and cell all blank) is a player registering alone. It holds a spot until a partner is added.
 3. Check the preview, which shows every row's result before anything is saved: added (with its chips), waiting list, or skipped and why.
 
 Rows are added top to bottom (sign-up order), so the earliest teams get the field spots and the rest fill the waiting list in order. Every row goes through the normal registration rules. Teams already registered are skipped, so importing an updated sheet again only adds the new sign-ups. You can choose whether each imported team gets its PIN by text.

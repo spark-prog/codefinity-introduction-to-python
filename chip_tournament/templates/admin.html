@@ -14,6 +14,15 @@
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. You can look around, but buttons are turned off, and phone numbers, team PINs and text messages are hidden.</p>{% endif %}
+<nav class="jump-nav" aria-label="Director sections">
+  <a href="#summary">Summary</a>
+  {% if t.status == RUNNING %}<a href="#matches">Tables</a>{% endif %}
+  <a href="#teams">Teams &amp; chips</a>
+  <a href="#texts">Texts &amp; log</a>
+  <a href="#settings">Settings</a>
+  <a href="#new-tournament">New tournament</a>
+</nav>
+<div id="summary" class="jump-target">
 {% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
 
 <section class="card controls" style="margin-top: 0">
@@ -27,6 +36,13 @@
       {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
       {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
       Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
+    {% set solos = t.teams_needing_partner %}
+    {% if solos or t.partner_deadline is none %}
+    <p class="checkin-summary"><b>Partner deadline{% if t.partner_deadline %} ({{ t.partner_deadline_text() }}){% endif %}:</b>
+      {% if t.partner_deadline is none %}<span class="warn">set the tournament date and start time in Settings (e.g. 9:00 PM) so it can be enforced.</span>
+      {% else %}{{ solos|length }} team(s) still need a partner: {{ solos|map(attribute="name")|join(", ") }}.
+        {% if t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
+    {% endif %}
     {% if s.require_checkin and unchecked %}
     <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
     {% endif %}
@@ -65,8 +81,10 @@
   </div>
 </section>
 
+</div>
+
 {% if t.status == RUNNING %}
-<section id="matches">
+<section id="matches" class="jump-target">
   <div class="section-head"><h2>Tables</h2><span class="muted">Timers turn amber after {{ s.match_minutes }} min and red at {{ s.long_match_minutes }} min.</span></div>
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min since the start):
@@ -124,20 +142,30 @@
 </section>
 {% endif %}
 
-<section id="teams">
+<section id="teams" class="jump-target">
   <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span></div>
+  {% if t.teams %}
+  <div class="team-search">
+    <input type="search" id="team-search" placeholder="Search a team, player{% if not is_viewer %} or last 4 of a cell{% endif %}" aria-label="Search teams" autocomplete="off">
+    {% if t.status == SETUP %}<label class="checkbox"><input type="checkbox" id="only-unchecked"> Not checked in only</label>{% endif %}
+    <span class="muted" id="team-count" aria-live="polite"></span>
+  </div>
+  {% endif %}
   <div class="table-wrap">
   <table class="grid">
     <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Played</th><th>Status</th>{% if t.status == SETUP %}<th>Check-in</th>{% endif %}<th>Value / paid</th><th>Actions</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
-    <tr class="status-{{ team.status }}">
+    <tr class="status-{{ team.status }}" data-search="{{ ([team.name] + team.players|map(attribute='name')|list + ([] if is_viewer else team.players|map(attribute='phone')|map('last4')|select|list))|join(' ')|lower }}"
+        data-unchecked="{{ '1' if t.status == SETUP and team.status in ('registered', 'waitlisted') and not team.checked_in_at else '' }}">
       <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ "••••" if is_viewer else team.pin }}</span></td>
-      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}</td>
+      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}
+        {% if team.needs_partner %}<div><span class="tag solo" style="margin-left: 0">Needs partner</span>{% if team.list_seeking %} <span class="muted">· on public list</span>{% endif %}</div>{% endif %}</td>
       <td>{{ team.combined_skill }}
         {% if t.status == SETUP %}
           {% set c = t.chips_preview(team) %}
-          <br>{% if c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
+          <br>{% if team.needs_partner %}<span class="muted">partner up to {{ [s.registration_cap - team.combined_skill, 9]|min }}</span>
+          {% elif c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
         {% endif %}
       </td>
       <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
@@ -164,6 +192,16 @@
       </td>
       <td class="actions">
         <a class="button small secondary" href="{{ url_for('roster', team_id=team.id) }}">Roster</a>
+        {% if team.needs_partner and t.status == SETUP and team.status in ("registered", "waitlisted") %}
+          {% set others = t.teams_needing_partner|rejectattr("id", "equalto", team.id)|list %}
+          {% if others %}
+          <form method="post" action="{{ url_for('admin_pair', team_id=team.id) }}" class="pair-form">
+            <select name="other" aria-label="Pair {{ team.players[0].name }} with">
+              {% for o in others %}<option value="{{ o.id }}">{{ o.players[0].name }} ({{ o.players[0].skill }}){% if team.combined_skill + o.combined_skill > s.registration_cap %} — over cap{% endif %}</option>{% endfor %}
+            </select>
+            <button class="button small">Pair</button></form>
+          {% endif %}
+        {% endif %}
         {% if team.status == "no_show" and t.status == RUNNING and not t.last_call and not t.entries_locked %}
         <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"
               onsubmit="return confirm('{{ team.name|e }} arrived late? They pay the entry fee and join as a late entry.')">
@@ -198,7 +236,7 @@
   {% endif %}
 </section>
 
-<section class="split" id="texts">
+<section class="split jump-target" id="texts">
 <div class="card">
   <h2>Text alerts</h2>
   {% if not sms_enabled %}<p class="banner">Texting is not set up, so alerts are only logged below. See the README to connect Twilio.</p>{% endif %}
@@ -208,9 +246,9 @@
     <button class="button">Send text</button>
   </form>
   <details><summary>Recent texts ({{ texts|length }})</summary>
-    <table class="grid small">
+    <div class="table-wrap"><table class="grid small">
       {% for x in texts %}<tr><td>{{ x.at[11:] }}</td>{% if is_viewer %}<td>ending in {{ x.to|last4 }}</td><td class="muted">(hidden in view-only)</td>{% else %}<td>{{ x.to }}</td><td>{{ x.body }}</td>{% endif %}<td>{{ x.status }}</td></tr>{% endfor %}
-    </table>
+    </table></div>
   </details>
 </div>
 
@@ -218,17 +256,17 @@
   <h2>Activity log</h2>
   <ol class="log" reversed>{% for line in t.log|reverse %}<li>{{ line }}</li>{% endfor %}</ol>
   <details><summary>Chip ledger ({{ t.ledger|length }} entries)</summary>
-    <table class="grid small">
+    <div class="table-wrap"><table class="grid small">
       <thead><tr><th>Time</th><th>Team</th><th>Change</th><th>After</th><th>Reason</th><th>Chip value after</th></tr></thead>
       {% for e in t.ledger|reverse %}<tr><td>{{ e.at[11:] }}</td><td>{{ e.team_name }}</td><td>{{ "%+d"|format(e.change) }}</td><td>{{ e.chips_after }}</td><td>{{ e.reason }}</td><td>{{ e.chip_value_cents|money }}</td></tr>{% endfor %}
-    </table>
+    </table></div>
   </details>
 </div>
 
 </section>
 
 {% set money_locked = t.entries_locked or t.status == FINISHED %}
-<section class="card" id="settings">
+<section class="card jump-target" id="settings">
   <h2>Tournament details & settings</h2>
   <div class="settings-group" style="margin-top: 8px">Background photo</div>
   <div class="photo-row">
@@ -291,7 +329,7 @@
   </form>
 </section>
 
-<section class="card">
+<section class="card jump-target" id="new-tournament">
   <p class="eyebrow">Danger zone</p>
   <h2>New tournament</h2>
   <p class="muted">Starts a fresh tournament. <b>Archive</b> keeps this one under Past tournaments (you can delete it later).
@@ -303,7 +341,7 @@
   </form>
 </section>
 
-<section class="card" id="past">
+<section class="card jump-target" id="past">
   <h2>Past tournaments</h2>
   {% if archives %}
   <p class="muted">Archived tournaments still hold player names and phone numbers. Delete them once you no longer need them.</p>
@@ -334,4 +372,57 @@ document.querySelectorAll("main form").forEach(function (f) {
 });
 </script>
 {% endif %}
+<script>
+(function () {
+  // Keep the section buttons just under the menu bar, and land sections below both.
+  var topbar = document.querySelector(".topbar"), jump = document.querySelector(".jump-nav");
+  function offsets() {
+    var h = topbar ? topbar.offsetHeight : 0;
+    document.documentElement.style.setProperty("--topbar-h", h + "px");
+    document.documentElement.style.setProperty("--jump-offset", (h + jump.offsetHeight + 16) + "px");
+  }
+  offsets(); window.addEventListener("resize", offsets);
+  // Underline the section on screen.
+  var links = {}, targets = [];
+  jump.querySelectorAll("a").forEach(function (a) {
+    var el = document.getElementById(a.getAttribute("href").slice(1));
+    if (el) { links[el.id] = a; targets.push(el); }
+  });
+  function mark() {
+    var line = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--jump-offset"), 10) + 8, current = targets[0];
+    targets.forEach(function (el) { if (el.getBoundingClientRect().top <= line) current = el; });
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) current = targets[targets.length - 1];
+    targets.forEach(function (el) { links[el.id].classList.toggle("active", el === current); });
+    var a = links[current.id];  // on a phone, keep the highlighted button in view
+    if (a.offsetLeft < jump.scrollLeft || a.offsetLeft + a.offsetWidth > jump.scrollLeft + jump.clientWidth) {
+      jump.scrollLeft = a.offsetLeft - 16;
+    }
+  }
+  mark(); window.addEventListener("scroll", mark, { passive: true });
+
+  // Team search: filter the list as you type. The search is kept after a check-in reloads the page.
+  var box = document.getElementById("team-search");
+  if (!box) return;
+  var only = document.getElementById("only-unchecked"), count = document.getElementById("team-count");
+  var rows = document.querySelectorAll("#teams tbody tr[data-search]");
+  function store(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return sessionStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function filter() {
+    var words = box.value.toLowerCase().split(/\s+/).filter(Boolean), shown = 0;
+    rows.forEach(function (tr) {
+      var hit = words.every(function (w) { return tr.dataset.search.indexOf(w) !== -1; })
+        && (!only || !only.checked || tr.dataset.unchecked);
+      tr.hidden = !hit; if (hit) shown++;
+    });
+    var filtered = words.length || (only && only.checked);
+    count.textContent = filtered ? (shown ? "Showing " + shown + " of " + rows.length : "No teams match") : "";
+    store("team-search", box.value); if (only) store("only-unchecked", only.checked ? "1" : "");
+  }
+  box.value = load("team-search"); if (only) only.checked = !!load("only-unchecked");
+  box.addEventListener("input", filter); if (only) only.addEventListener("change", filter);
+  box.addEventListener("keydown", function (e) { if (e.key === "Escape") { box.value = ""; filter(); } });
+  filter();
+  if (location.hash === "#teams" && box.value) { box.focus(); box.select(); }  // ready to type the next team
+})();
+</script>
 {% endblock %}

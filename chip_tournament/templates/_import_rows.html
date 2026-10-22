@@ -5,7 +5,7 @@
     <tr class="{% if r.result.startswith('Skipped') %}skipped{% elif r.result.startswith('Waiting') %}waiting{% endif %}">
       <td>{{ r.line }}</td>
       <td>{{ r.team_name or "—" }}</td>
-      {% for p in r.players %}<td>{{ p.name or "—" }}{% if p.skill %} ({{ p.skill }}){% endif %}{% if p.phone %}<br><span class="muted">{{ p.phone }}</span>{% endif %}</td>{% endfor %}
+      {% for p in r.players %}<td>{{ p.name or "—" }}{% if p.skill %} ({{ p.skill }}){% endif %}{% if p.phone %}<br><span class="muted">{{ p.phone }}</span>{% endif %}</td>{% endfor %}{% if r.players|length == 1 %}<td class="muted">Needs partner</td>{% endif %}
       <td>{{ r.players|sum(attribute="skill") or "—" }}</td>
       <td>{{ r.result }}{% if r.note %}<br><span class="muted">{{ r.note }}</span>{% endif %}</td>
     </tr>

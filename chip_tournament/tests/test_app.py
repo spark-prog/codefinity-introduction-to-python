@@ -475,3 +475,64 @@ def test_delete_permanently_and_past_tournaments(client, tmp_path):
     client.post("/admin/archives/delete", data={"all": "1"})
     assert store.archives() == [] and not list(tmp_path.glob("texts-*.log"))
     assert "Sharks" not in "".join(p.read_text() for p in tmp_path.iterdir() if p.is_file() and p.suffix in (".json", ".log"))
+
+
+def test_register_alone_public_list_and_add_partner(client):
+    store = client.application.config["store"]
+    with store.change("dates") as t:
+        t.settings.date, t.settings.start_time = "2099-10-31", "9:00 PM"
+    page = client.post("/register", data={
+        "name": "Ann's team", "solo": "1", "list_seeking": "1",
+        "player_name_0": "Ann", "player_skill_0": "4", "player_phone_0": "5551110000",
+        "player_name_1": "", "player_skill_1": "", "player_phone_1": ""}, follow_redirects=True)
+    assert b"still needs a partner" in page.data
+    team = store.load().field_teams[0]
+    assert team.needs_partner and team.list_seeking
+    reg = client.application.test_client().get("/register").get_data(as_text=True)
+    assert 'id="looking"' in reg and "<td>Ann</td>" in reg and "5551110000" not in reg
+    assert "looking for a partner" in client.application.test_client().get("/").get_data(as_text=True)
+    # Not listed unless they tick the box.
+    client.application.test_client().post("/register", data={
+        "name": "Cy's team", "solo": "1", "player_name_0": "Cy", "player_skill_0": "3",
+        "player_phone_0": "5552220000"})
+    assert ">Cy<" not in client.get("/register").get_data(as_text=True)
+    # Add the partner from the roster page (the registering browser is signed in).
+    client.post(f"/team/{team.id}/roster", data={
+        "name": "Ann's team", "player_name_0": "Ann", "player_skill_0": "4", "player_phone_0": "",
+        "player_name_1": "Bo", "player_skill_1": "5", "player_phone_1": ""})
+    team = store.load().teams[team.id]
+    assert team.partners == "Ann & Bo" and not team.list_seeking
+    assert team.players[0].phone == "5551110000"  # blank cell keeps the number on file
+    assert 'id="looking"' not in client.get("/register").get_data(as_text=True)
+
+
+def test_director_pairs_solo_players(client):
+    store = client.application.config["store"]
+    for name, skill, phone in (("Ann", "4", "5551110000"), ("Cy", "5", "5552220000")):
+        client.application.test_client().post("/register", data={
+            "name": f"{name}'s team", "solo": "1", "player_name_0": name, "player_skill_0": skill,
+            "player_phone_0": phone})
+    ann, cy = sorted(store.load().teams.values(), key=lambda t: t.registered_at)
+    viewer = client.application.test_client()
+    viewer.post("/admin/login", data={"password": "lookonly"})
+    viewer.post(f"/admin/team/{ann.id}/pair", data={"other": cy.id})
+    assert len(store.load().teams) == 2
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.get("/admin").get_data(as_text=True)
+    assert "Needs partner" in page and "Partner deadline" in page
+    client.post(f"/admin/team/{ann.id}/pair", data={"other": cy.id})
+    teams = list(store.load().teams.values())
+    assert len(teams) == 1 and teams[0].partners == "Ann & Cy"
+
+
+def test_director_page_has_section_buttons_and_team_search(client):
+    register(client, "Sharks")
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.get("/admin").get_data(as_text=True)
+    for target in ("summary", "teams", "texts", "settings", "new-tournament"):
+        assert f'href="#{target}"' in page and f'id="{target}"' in page
+    assert 'href="#matches"' not in page  # Tables only once the tournament is running
+    assert 'id="team-search"' in page and 'data-search="sharks ann bob 4567"' in page
+    viewer = client.application.test_client()
+    viewer.post("/admin/login", data={"password": "lookonly"})
+    assert 'data-search="sharks ann bob"' in viewer.get("/admin").get_data(as_text=True)  # no phone digits

@@ -138,7 +138,7 @@ When someone shares a link to the app (in a text, Facebook, etc.), the preview s
 
 ## Background photo
 
-Every page shows a faded billiard-room photo behind the content. To use a photo of your own venue, go to the director page, **Settings → Background photo**, and upload a wide JPG or PNG (up to 10 MB). It's stored with the tournament data (not in the code), and **Use the default photo** switches back. The default (`static/img/billiard-room.jpg`) is an illustration drawn for this app.
+Every page shows a faded photo behind the content. To use a photo of your own venue, go to the director page, **Settings → Background photo**, and upload a wide JPG or PNG (up to 10 MB). It's stored with the tournament data (not in the code), and **Use the default photo** switches back. The default (`static/img/billiard-room.jpg`) is the Control Table artwork, blurred into a soft blue glow.
 
 ## Privacy
 

@@ -301,7 +301,7 @@
   <div class="photo-row">
     <div class="photo-preview" style="background-image: url('{{ background_url }}')"></div>
     <div>
-      <p>Shown faded behind every page. {% if has_custom_background %}You're using your own photo.{% else %}You're using the default billiard room; upload a photo of your venue to replace it.{% endif %}
+      <p>Shown faded behind every page. {% if has_custom_background %}You're using your own photo.{% else %}You're using the default (a soft blue glow from the Control Table artwork); upload a photo of your venue to replace it.{% endif %}
         <span class="muted">A wide (landscape) JPG or PNG works best, up to 10 MB.</span></p>
       <form method="post" action="{{ url_for('admin_background') }}" enctype="multipart/form-data" class="form button-row">
         <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required style="max-width: 320px; margin: 0">

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Rules — {{ t.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">{{ t.settings.sms_name or "League" }} rules</p>
+    <h1>Rules</h1>
+    <p class="lede">Pick a game, or search every rule set at once.</p>
+  </div>
+  <div class="card rules-search">
+    <label for="rule-search" class="eyebrow">Search the rules</label>
+    <input id="rule-search" type="search" placeholder="e.g. scratch, foul, ball in hand" autocomplete="off">
+    <p id="rule-count" class="muted" aria-live="polite"></p>
+  </div>
+</header>
+
+{% if rule_sets %}
+<nav class="rule-tabs" role="tablist">
+  {% for r in rule_sets %}
+  <button type="button" class="rule-tab" data-target="r-{{ r.id }}" role="tab">{{ r.title }}<span class="rule-hits"></span></button>
+  {% endfor %}
+</nav>
+
+{% for r in rule_sets %}
+<article class="card ruleset" id="r-{{ r.id }}">
+  <p class="eyebrow">{{ t.settings.sms_name or "League" }}</p>
+  <h2>{{ r.title }}</h2>
+  {% if r.html %}<div class="rule-body">{{ r.html|safe }}</div>
+  {% else %}<p class="muted">These rules are coming soon.</p>{% endif %}
+</article>
+{% endfor %}
+<p id="rule-none" class="banner" hidden></p>
+{% else %}
+<p class="muted">No rules have been posted yet.</p>
+{% endif %}
+
+<script>
+(function () {
+  var input = document.getElementById("rule-search");
+  if (!input) return;
+  var sets = Array.prototype.slice.call(document.querySelectorAll(".ruleset"));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".rule-tab"));
+  var count = document.getElementById("rule-count"), none = document.getElementById("rule-none");
+  var blocks = Array.prototype.slice.call(document.querySelectorAll(".rule-block"));
+  blocks.forEach(function (b) { b.dataset.html = b.innerHTML; });
+  var active = (location.hash && document.getElementById(location.hash.slice(1))) ? location.hash.slice(1) : (sets[0] && sets[0].id);
+
+  function showTab(id, remember) {
+    active = id;
+    sets.forEach(function (a) { a.hidden = a.id !== id; });
+    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.target === id); t.setAttribute("aria-selected", t.dataset.target === id); });
+    if (remember && history.replaceState) history.replaceState(null, "", "#" + id);
+  }
+
+  function highlight(el, re) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (node) {
+      var text = node.nodeValue;
+      if (!re.test(text)) return;
+      re.lastIndex = 0;
+      var frag = document.createDocumentFragment(), last = 0, m;
+      while ((m = re.exec(text))) {
+        frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        var mark = document.createElement("mark"); mark.textContent = m[0]; frag.appendChild(mark);
+        last = m.index + m[0].length;
+      }
+      frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+
+  function search() {
+    var q = input.value.trim();
+    blocks.forEach(function (b) { b.innerHTML = b.dataset.html; b.hidden = false; });
+    tabs.forEach(function (t) { t.querySelector(".rule-hits").textContent = ""; });
+    none.hidden = true;
+    if (q.length < 2) { count.textContent = ""; document.body.classList.remove("searching"); showTab(active); return; }
+    document.body.classList.add("searching");
+    var re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), total = 0;
+    sets.forEach(function (a) {
+      var hits = 0;
+      a.querySelectorAll(".rule-block").forEach(function (b) {
+        re.lastIndex = 0;
+        var match = re.test(b.textContent);
+        b.hidden = !match;
+        if (match) { hits++; highlight(b, re); }
+      });
+      a.hidden = hits === 0;
+      var tab = tabs.filter(function (t) { return t.dataset.target === a.id; })[0];
+      if (tab && hits) tab.querySelector(".rule-hits").textContent = hits;
+      total += hits;
+    });
+    tabs.forEach(function (t) { t.classList.remove("active"); });
+    count.textContent = total ? total + (total === 1 ? " rule matches" : " rules match") + " “" + q + "”" : "";
+    if (!total) { none.hidden = false; none.textContent = "No rules mention “" + q + "”. Try a shorter word."; }
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () { input.value = ""; search(); showTab(t.dataset.target, true); });
+  });
+  input.addEventListener("input", search);
+  showTab(active);
+})();
+</script>
+{% endblock %}

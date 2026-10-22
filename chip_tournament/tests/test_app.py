@@ -166,10 +166,45 @@ def test_undo_of_automatic_forfeit_sticks(client):
     assert restored.status == "called" and restored.clock_paused and restored.forfeit is None
 
 
-def test_guide_page(client):
+def test_guide_is_for_directors_only(client):
     page = client.get("/guide")
-    assert page.status_code == 200
-    assert b"Last call" in page.data and b"Fixing mistakes" in page.data
+    assert page.status_code == 302 and "/admin/login" in page.headers["Location"]
+    assert b"Director&#39;s guide" not in client.get("/admin/login?next=/admin").data
+    assert b"/guide" not in client.get("/admin/login?next=/admin").data
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.get("/guide")
+    assert page.status_code == 200 and b"Fixing mistakes" in page.data
+
+
+def test_home_shows_the_date_in_words(client):
+    client.post("/admin/login", data={"password": "secret"})
+    client.post("/admin/settings", data={"name": "Halloween", "date": "2026-10-31", "start_time": "9:00 PM",
+                                         "race_to": "3", "tables": "1", "entry_fee": "20", "added_money": "0",
+                                         "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2", "registration_cap": "10"})
+    assert b"October 31, 2026 beginning at 9 PM" in client.get("/").data
+
+
+def test_rules_editor_and_page(client):
+    page = client.get("/rules").data
+    for title in (b"8-Ball Rules", b"9-Ball Rules", b"Fast 8 Rules", b"Fast Saratoga Rules"):
+        assert title in page
+    assert b"coming soon" in page and b'id="rule-search"' in page
+    assert client.get("/admin/rules").status_code == 302  # director only
+    client.post("/admin/login", data={"password": "secret"})
+    body = "# The break\n- A scratch on the break is a **foul**\n1. Rack the balls\n<script>alert(1)</script>"
+    page = client.post("/admin/rules/8-ball-rules", data={"title": "8-Ball Rules", "body": body}, follow_redirects=True).data
+    assert b"Saved 8-Ball Rules" in page
+    page = client.get("/rules").data
+    assert b'<h3 class="rule-block">The break</h3>' in page
+    assert b"<b>foul</b>" in page and b"<ol>" in page
+    assert b"<script>alert(1)</script>" not in page and b"&lt;script&gt;" in page
+    client.post("/admin/rules/new", data={"title": "10-Ball Rules"})
+    client.post("/admin/rules/10-ball-rules/move", data={"dir": "up"})
+    from chips.rules import RuleBook
+    ids = [r["id"] for r in RuleBook(client.application.config["store"].dir).load()]
+    assert ids[-2:] == ["10-ball-rules", "fast-saratoga-rules"]
+    client.post("/admin/rules/10-ball-rules/delete")
+    assert "10-ball-rules" not in [r["id"] for r in RuleBook(client.application.config["store"].dir).load()]
 
 
 def test_production_refuses_default_password(tmp_path, monkeypatch):

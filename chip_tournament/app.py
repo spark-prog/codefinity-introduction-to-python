@@ -19,7 +19,7 @@ from urllib.parse import quote_plus
 from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from chips import importer
+from chips import importer, rules as rulebook
 from chips.alerts import SmsSender
 from chips.engine import (
     ACTIVE,
@@ -74,6 +74,19 @@ def parse_chip_brackets(text: str) -> list[list[int]]:
     return sorted(brackets)
 
 
+def event_when(date: str, start_time: str) -> str:
+    """'2026-10-31', '9:00 PM' -> 'October 31, 2026 beginning at 9 PM'."""
+    try:
+        d = datetime.strptime((date or "").strip(), "%Y-%m-%d")
+        day = f"{d.strftime('%B')} {d.day}, {d.year}"
+    except ValueError:
+        day = (date or "").strip()  # typed in some other way: show it as entered
+    when = (start_time or "").strip().replace(":00 ", " ").replace(":00", "")
+    if day and when:
+        return f"{day} beginning at {when}"
+    return day or (f"Beginning at {when}" if when else "")
+
+
 def last4(phone: str) -> str:
     digits = "".join(c for c in phone or "" if c.isdigit())
     return digits[-4:]
@@ -101,6 +114,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app = Flask(__name__)
     data_path = Path(data_dir or os.environ.get("CHIPS_DATA_DIR", Path(__file__).parent / "data"))
     store = Store(data_path)
+    rule_book = rulebook.RuleBook(data_path)
     sms = SmsSender(data_path / "texts.log")
 
     key_file = data_path / "secret_key"
@@ -126,6 +140,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["urlquote"] = quote_plus
     app.jinja_env.filters["clock"] = clock
     app.jinja_env.filters["last4"] = last4
+    app.jinja_env.globals["event_when"] = event_when
 
     # Background photo: the director can upload their own; otherwise the bundled billiard room.
     photo_types = {b"\xff\xd8\xff": ("jpg", "image/jpeg"), b"\x89PNG": ("png", "image/png"), b"RIFF": ("webp", "image/webp")}
@@ -255,6 +270,8 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     @app.get("/guide")
     def guide():
+        if not session.get("admin"):  # the director's guide is for directors only
+            return redirect(url_for("admin_login", next=request.path))
         return render_template("guide.html", t=store.load())
 
     @app.get("/team/<team_id>")
@@ -431,6 +448,49 @@ def create_app(data_dir: str | None = None) -> Flask:
         (data_path / f"background.{kind[0]}").write_bytes(data)
         flash("Background photo updated.", "ok")
         return redirect(url_for("admin") + "#settings")
+
+    # ------------------------------------------------------------------ rules
+
+    @app.get("/rules")
+    def rules_page():
+        sets = [{**r, "html": rulebook.render(r["body"])} for r in rule_book.load()]
+        return render_template("rules.html", t=store.load(), rule_sets=sets)
+
+    @app.get("/admin/rules")
+    @admin_required
+    def admin_rules():
+        return render_template("admin_rules.html", t=store.load(), rule_sets=rule_book.load())
+
+    @app.post("/admin/rules/new")
+    @admin_required
+    def admin_rules_new():
+        rule = rule_book.add(request.form.get("title", ""))
+        flash(f"Added {rule['title']}. Paste the rules in below and save.", "ok")
+        return redirect(url_for("admin_rules") + f"#edit-{rule['id']}")
+
+    @app.post("/admin/rules/<rule_id>")
+    @admin_required
+    def admin_rules_save(rule_id):
+        try:
+            rule = rule_book.save(rule_id, request.form.get("title", ""), request.form.get("body", ""))
+            flash(f"Saved {rule['title']}.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_rules") + f"#edit-{rule_id}")
+
+    @app.post("/admin/rules/<rule_id>/move")
+    @admin_required
+    def admin_rules_move(rule_id):
+        rule_book.move(rule_id, -1 if request.form.get("dir") == "up" else 1)
+        return redirect(url_for("admin_rules") + f"#edit-{rule_id}")
+
+    @app.post("/admin/rules/<rule_id>/delete")
+    @admin_required
+    def admin_rules_delete(rule_id):
+        rule = rule_book.get(rule_id)
+        rule_book.delete(rule_id)
+        flash(f"Deleted {rule['title'] if rule else 'the rule set'}.", "ok")
+        return redirect(url_for("admin_rules"))
 
     import_file = data_path / "import.csv"
 

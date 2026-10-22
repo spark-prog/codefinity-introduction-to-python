@@ -241,6 +241,9 @@ class Tournament:
     matches: list[Match] = field(default_factory=list)
     status: str = SETUP
     site_url: str = ""  # e.g. https://chip-tournament.onrender.com, for links in the welcome text
+    # Set when the director undoes the partner-deadline move: the deadline (ISO time) it no longer
+    # applies to automatically, so the clock doesn't redo it. A new date or start time resumes it.
+    partner_deadline_paused_for: str | None = None
     round: int = 0
     winners_list: list[str] = field(default_factory=list)
     losers_list: list[str] = field(default_factory=list)
@@ -491,9 +494,30 @@ class Tournament:
                 f"registration cap of {self.settings.registration_cap}. Register alone only with skill {most} or less."
             )
 
-    def enforce_partner_deadline(self, at: datetime | None = None) -> int:
-        """At the deadline, teams in the field still without a partner move to the end of the waiting list."""
+    @property
+    def partner_deadline_paused(self) -> bool:
+        d = self.partner_deadline
+        return d is not None and self.partner_deadline_paused_for == d.isoformat()
+
+    @property
+    def solo_teams_in_field(self) -> list[Team]:
+        return [t for t in self.field_teams if t.needs_partner]
+
+    def pause_partner_deadline(self) -> int:
+        """After an Undo: stop the clock from moving teams without a partner again. Returns how many are affected."""
+        teams = self.solo_teams_in_field
+        if self.status == SETUP and teams and self.partner_deadline_passed() and not self.partner_deadline_paused:
+            self.partner_deadline_paused_for = self.partner_deadline.isoformat()
+            return len(teams)
+        return 0
+
+    def enforce_partner_deadline(self, at: datetime | None = None, force: bool = False) -> int:
+        """At the deadline, teams in the field still without a partner move to the end of the waiting list.
+
+        Paused after the director undoes it; force=True is the director's "move them now" button."""
         if self.status != SETUP or not self.partner_deadline_passed(at):
+            return 0
+        if self.partner_deadline_paused and not force:
             return 0
         moved = [t for t in self.field_teams if t.needs_partner]
         for team in moved:
@@ -753,6 +777,9 @@ class Tournament:
         team = self.team(team_id)
         if team.status not in (REGISTERED, WAITLISTED):
             raise TournamentError(f"{team.name} can't be checked in ({team.status.replace('_', ' ')}).")
+        if team.needs_partner:
+            raise TournamentError(f"{team.name} needs a partner before it can check in. "
+                                  "Add one on the roster, or use Pair to team up two single players.")
         if team.checked_in_at:
             raise TournamentError(f"{team.name} is already checked in.")
         team.checked_in_at = now()
@@ -798,7 +825,8 @@ class Tournament:
             self._say(f"{team.name} restored to the waiting list (#{len(self.waitlist)}); the field is full.")
             return
         team.status = REGISTERED
-        team.checked_in_at = now()  # restoring means they're here
+        if not team.needs_partner:
+            team.checked_in_at = now()  # restoring means they're here
         self._say(f"{team.name} restored to the field.")
         if self.status == RUNNING:
             self._join_running(team)

@@ -216,10 +216,14 @@ def create_app(data_dir: str | None = None) -> Flask:
             return None
 
     def tick() -> None:
-        """Start grace periods and record no-show forfeits that are due."""
-        if store.load().check_clock() == 0:  # cheap check first, so idle ticks don't fill the undo history
+        """Start grace periods, record no-show forfeits, and apply the partner deadline when due."""
+        probe = store.load()
+        solos = [x.name for x in probe.solo_teams_in_field]
+        if probe.check_clock() == 0:  # cheap check first, so idle ticks don't fill the undo history
             return
-        with store.change("Check-in clock (grace / forfeit)") as t:
+        label = (f"Partner deadline: moved {', '.join(solos)} to the waiting list" if probe.status == SETUP
+                 else "Check-in clock (grace / forfeit)")
+        with store.change(label) as t:
             t.check_clock()
             send_texts(t)
 
@@ -314,7 +318,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                     players[0].sms_consent, players[0].sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
                 return t.register_team(f.get("name", ""), players, list_seeking=f.get("list_seeking") == "1")
 
-            team = act("Register team", register_team)
+            team = act(f"Registration: {f.get('name', '').strip()}", register_team)
             if team:
                 session[f"team_{team.id}"] = True
                 flash(f"{team.name} is registered! Your team PIN is {team.pin} — keep it to edit your roster.", "ok")
@@ -382,7 +386,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             return redirect(url_for("team_page", team_id=team_id))
         index = request.form.get("player", "")
         if index.isdigit() and request.form.get("sms_consent") == "1":
-            player = act("Text alerts opt-in", lambda t: t.opt_in(team_id, int(index)))
+            player = act(f"Text alerts on: {store.load().name_of(team_id)}", lambda t: t.opt_in(team_id, int(index)))
             if player:
                 flash(f"Text alerts are on for {player.name}. A welcome text is on its way.", "ok")
         else:
@@ -535,7 +539,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             if t.status == RUNNING:
                 t._advance()  # new tables may be free now
 
-        act("Update settings", update, "Settings saved.")
+        if act("Update settings", lambda t: update(t) or True, "Settings saved."):
+            t = store.load()
+            solos = t.solo_teams_in_field
+            if t.status == SETUP and solos and t.partner_deadline_passed() and not t.partner_deadline_paused:
+                flash(f"Heads up: with this date and start time, the partner deadline ({t.partner_deadline_text()}) has "
+                      f"passed, so {', '.join(x.name for x in solos)} will move to the waiting list. "
+                      "Press Undo to keep them in the field.", "error")
         return redirect(url_for("admin"))
 
     @app.post("/admin/background")
@@ -749,19 +759,19 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/team/<team_id>/check-in")
     @admin_required
     def admin_team_check_in(team_id):
-        act("Check in team", lambda t: t.check_in_team(team_id))
+        act(f"Check in {store.load().name_of(team_id)}", lambda t: t.check_in_team(team_id))
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/team/<team_id>/no-show")
     @admin_required
     def admin_no_show(team_id):
-        act("Mark no-show", lambda t: t.mark_no_show(team_id), "Marked as a no-show.")
+        act(f"Mark no-show: {store.load().name_of(team_id)}", lambda t: t.mark_no_show(team_id), "Marked as a no-show.")
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/team/<team_id>/restore")
     @admin_required
     def admin_restore(team_id):
-        act("Restore team", lambda t: t.restore_team(team_id), "Team restored.")
+        act(f"Restore: {store.load().name_of(team_id)}", lambda t: t.restore_team(team_id), "Team restored.")
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/no-show-rest")
@@ -774,7 +784,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/team/<team_id>/remove")
     @admin_required
     def admin_remove(team_id):
-        act("Remove team", lambda t: t.remove_team(team_id), "Team removed.")
+        act(f"Remove: {store.load().name_of(team_id)}", lambda t: t.remove_team(team_id), "Team removed.")
         return redirect(url_for("admin") + "#teams")
 
     @app.post("/admin/broadcast")
@@ -792,18 +802,30 @@ def create_app(data_dir: str | None = None) -> Flask:
             label = store.undo()
             t = store.load()
             paused = t.pause_overdue_forfeits()
-            if paused:
+            deadline_paused = t.pause_partner_deadline()
+            if paused or deadline_paused:
                 store.save(t)
         flash(f"Undid: {label}." if label else "Nothing to undo.", "ok" if label else "error")
         if paused:
             flash(f"Auto-forfeit is paused on {paused} match(es) that are past their deadline. "
                   "Tap Arrived, or pick the Winner to record the forfeit yourself.", "ok")
+        if deadline_paused:
+            flash(f"The partner deadline is paused: {deadline_paused} team(s) without a partner stay in the field. "
+                  "Use \"Move them to the waiting list now\" at the top when you're ready.", "ok")
+        return redirect(url_for("admin"))
+
+    @app.post("/admin/partner-deadline")
+    @admin_required
+    def admin_partner_deadline():
+        names = ", ".join(x.name for x in store.load().solo_teams_in_field)
+        act(f"Partner deadline: moved {names} to the waiting list",
+            lambda t: t.enforce_partner_deadline(force=True), "Moved {result} team(s) to the waiting list.")
         return redirect(url_for("admin"))
 
     @app.post("/admin/team/<team_id>/pair")
     @admin_required
     def admin_pair(team_id):
-        act("Pair players", lambda t: t.pair_solo_teams(team_id, request.form.get("other", "")),
+        act(f"Pair players: {store.load().name_of(team_id)}", lambda t: t.pair_solo_teams(team_id, request.form.get("other", "")),
             "Paired: {result.partners} are {result.name}.")
         return redirect(url_for("admin") + "#teams")
 

@@ -954,3 +954,28 @@ def test_fix_result_refused_once_a_later_match_has_started():
     first_winner = m1.winner
     t.fix_result(m1.id)
     assert nxt.status == "cancelled" and m1.winner != first_winner
+
+
+def test_single_player_without_a_partner_cant_check_in():
+    t = solo_event()
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4, sms_consent=True)])
+    with pytest.raises(TournamentError, match="needs a partner before it can check in"):
+        t.check_in_team(solo.id)
+    t.update_roster(solo.id, [Player("Ann", "5551110000", 4), Player("Bo", "", 4)])
+    t.check_in_team(solo.id)
+    assert solo.checked_in_at
+
+
+def test_undone_partner_deadline_stays_paused_until_the_date_changes():
+    t = solo_event(cap=0)
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4, sms_consent=True)])
+    t.settings.date = "2020-10-31"  # deadline passed
+    assert t.pause_partner_deadline() == 1 and t.partner_deadline_paused
+    assert t.check_clock() == 0 and solo.status == REGISTERED  # the clock leaves them alone
+    assert t.enforce_partner_deadline(force=True) == 1 and solo.status == WAITLISTED  # director's button
+    t2 = solo_event(cap=0)
+    s2 = t2.register_team("Cy's team", [Player("Cy", "5552220000", 4, sms_consent=True)])
+    t2.settings.date = "2020-10-31"
+    t2.pause_partner_deadline()
+    t2.settings.date = "2021-10-31"  # a new date: the deadline applies again
+    assert not t2.partner_deadline_paused and t2.check_clock() == 1 and s2.status == WAITLISTED

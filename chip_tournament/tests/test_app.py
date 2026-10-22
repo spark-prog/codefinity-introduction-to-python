@@ -612,3 +612,35 @@ def test_director_fixes_a_wrong_result(client):
     page = client.post(f"/admin/match/{m.id}/fix", follow_redirects=True).get_data(as_text=True)
     assert "Result corrected on match #" in page
     assert store.load().match(m.id).winner == m.team_b
+
+
+def test_partner_deadline_undo_sticks_and_labels_name_the_teams(client):
+    store = client.application.config["store"]
+    with store.change("dates") as t:
+        t.settings.date, t.settings.start_time = "2099-10-31", "9:00 PM"
+    client.application.test_client().post("/register", data={
+        "name": "Ann's team", "solo": "1", "agree_terms": "1", "player_name_0": "Ann", "player_skill_0": "4",
+        "player_phone_0": "5551110000"})
+    register(client, "Sharks")
+    client.post("/admin/login", data={"password": "secret"})
+    page = client.get("/admin").get_data(as_text=True)
+    assert "Registration: Sharks" in page and "use Remove next to it instead" in page  # Undo names what it removes
+    assert "Needs a partner to check in" in page
+    ann = next(x for x in store.load().teams.values() if x.name == "Ann's team")
+    page = client.post(f"/admin/team/{ann.id}/check-in", follow_redirects=True).get_data(as_text=True)
+    assert "needs a partner before it can check in" in page and not store.load().teams[ann.id].checked_in_at
+    # Move the tournament to the past: saving warns, then the clock moves Ann to the waiting list.
+    page = client.post("/admin/settings", data={
+        "name": "Test", "date": "2020-10-31", "start_time": "9:00 PM", "tables": "1, 2", "race_to": "3",
+        "entry_fee": "20", "added_money": "0", "registration_cap": "10", "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2",
+        "field_cap": "0"}, follow_redirects=True).get_data(as_text=True)
+    assert "Heads up" in page and "Ann&#39;s team will move to the waiting list" in page
+    assert store.load().teams[ann.id].status == "waitlisted"
+    assert "Partner deadline: moved Ann&#39;s team to the waiting list" in page  # the Undo button says what it undoes
+    page = client.post("/admin/undo", follow_redirects=True).get_data(as_text=True)
+    assert "partner deadline is paused" in page and "Move them to the waiting list now" in page
+    client.get("/admin")
+    client.application.config["tick"]()
+    assert store.load().teams[ann.id].status == "registered"  # it stuck
+    client.post("/admin/partner-deadline")
+    assert store.load().teams[ann.id].status == "waitlisted"

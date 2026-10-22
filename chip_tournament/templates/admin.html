@@ -41,7 +41,19 @@
     <p class="checkin-summary"><b>Partner deadline{% if t.partner_deadline %} ({{ t.partner_deadline_text() }}){% endif %}:</b>
       {% if t.partner_deadline is none %}<span class="warn">set the tournament date and start time in Settings (e.g. 9:00 PM) so it can be enforced.</span>
       {% else %}{{ solos|length }} team(s) still need a partner: {{ solos|map(attribute="name")|join(", ") }}.
-        {% if t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
+        {% if t.partner_deadline_paused and t.solo_teams_in_field %}The automatic move is paused because you pressed Undo.
+        {% elif t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
+    {% endif %}
+    {% if t.partner_deadline_paused and t.solo_teams_in_field %}
+    <div class="banner">
+      <p style="margin: 0 0 12px"><b>Partner deadline paused:</b> {{ t.solo_teams_in_field|map(attribute="name")|join(", ") }}
+        {{ "is" if t.solo_teams_in_field|length == 1 else "are" }} still in the field without a partner. The app won't move them again on its own.</p>
+      <form method="post" action="{{ url_for('admin_partner_deadline') }}" class="inline"
+            data-dialog-title="Move to the waiting list?"
+            data-dialog-text="{{ t.solo_teams_in_field|map(attribute='name')|join(', ') }} will go to the end of the waiting list and be texted. Teams on the waiting list move into their spots."
+            data-dialog-ok="Move them">
+        <button class="button small">Move them to the waiting list now</button></form>
+    </div>
     {% endif %}
     {% if s.require_checkin and unchecked %}
     <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
@@ -76,7 +88,10 @@
       <button class="button danger-outline">End now — cash everyone out</button></form>
   {% endif %}
   {% if t.status == FINISHED %}<div class="button-row">{% endif %}
-  <form method="post" action="{{ url_for('admin_undo') }}" class="inline">
+  <form method="post" action="{{ url_for('admin_undo') }}" class="inline"
+        data-dialog-title="Undo: {{ undo_label }}?"
+        data-dialog-text="Undo takes back the most recent action, for everyone.{% if undo_label and undo_label.startswith('Registration:') %} This removes that team's registration, even if a player registered themselves (they were already texted their PIN). To take out one team without undoing anything else, use Remove next to it instead.{% endif %} Texts already sent can't be recalled."
+        data-dialog-ok="Undo">
     <button class="button secondary{% if t.status == SETUP %} big{% endif %}" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
   </div>
 </section>
@@ -205,6 +220,9 @@
         {% if team.status == "no_show" %}
           <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"><button class="button small secondary">Restore</button></form>
         {% elif team.checked_in_at %}<span class="arrived">✓ {{ team.checked_in_at|clock }}</span>
+        {% elif team.needs_partner %}<span class="muted">Needs a partner to check in</span>
+          <form method="post" action="{{ url_for('admin_no_show', team_id=team.id) }}" class="inline"
+                onsubmit="return confirm('Mark {{ team.name|e }} as a no-show?')"><button class="button small danger-outline">No-show</button></form>
         {% else %}
           <form method="post" action="{{ url_for('admin_team_check_in', team_id=team.id) }}" class="inline"><button class="button small checkin">Check in</button></form>
           <form method="post" action="{{ url_for('admin_no_show', team_id=team.id) }}" class="inline"

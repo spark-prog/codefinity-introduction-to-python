@@ -536,3 +536,15 @@ def test_director_page_has_section_buttons_and_team_search(client):
     viewer = client.application.test_client()
     viewer.post("/admin/login", data={"password": "lookonly"})
     assert 'data-search="sharks ann bob"' in viewer.get("/admin").get_data(as_text=True)  # no phone digits
+
+
+def test_share_preview_tags(client):
+    with client.application.config["store"].change("details") as t:
+        t.settings.name, t.settings.date, t.settings.start_time, t.settings.venue = "Fall Classic", "2026-10-31", "9:00 PM", "Ace's"
+    page = client.get("/register").get_data(as_text=True)
+    assert '<meta property="og:image" content="http://localhost/static/img/share.jpg">' in page
+    assert '<meta property="og:title" content="Fall Classic">' in page
+    assert "October 31, 2026 beginning at 9 PM at Ace&#39;s." in page
+    assert '<meta property="og:url" content="http://localhost/register">' in page
+    for path in ("share.jpg", "favicon.png", "apple-touch-icon.png"):
+        assert client.get(f"/static/img/{path}").status_code == 200

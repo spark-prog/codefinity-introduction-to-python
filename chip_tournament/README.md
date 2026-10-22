@@ -131,6 +131,10 @@ Directors edit the rules from the director page (**Edit rules**). Paste each gam
 
 The APA Pool Leagues – First Coast logo sits in the top-left corner and opens the league website (https://firstcoast.poolplayers.com/) in a new tab. Next to it, the house icon and event name go back to this app's home page. The logo file is `static/img/apa-first-coast-logo.png` (white on transparent).
 
+## Link previews and icon
+
+When someone shares a link to the app (in a text, Facebook, etc.), the preview shows the **Control Table** image (`static/img/share.jpg`, 1200×630) with the event name, date and venue. The same artwork is the browser-tab icon and the phone home-screen icon (`favicon.png`, `apple-touch-icon.png`). To change the preview image, replace `share.jpg` with another 1200×630 image.
+
 ## Background photo
 
 Every page shows a faded billiard-room photo behind the content. To use a photo of your own venue, go to the director page, **Settings → Background photo**, and upload a wide JPG or PNG (up to 10 MB). It's stored with the tournament data (not in the code), and **Use the default photo** switches back. The default (`static/img/billiard-room.jpg`) is an illustration drawn for this app.

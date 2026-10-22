@@ -310,6 +310,11 @@ def create_app(data_dir: str | None = None) -> Flask:
         ]
         return render_template("register.html", t=t, form=request.form, players=players)
 
+    @app.get("/favicon.ico")
+    def favicon():
+        # Browsers and search engines look for the icon here even without a <link> tag.
+        return send_file(Path(app.static_folder) / "favicon.ico", mimetype="image/x-icon", max_age=86400)
+
     @app.get("/healthz")
     def healthz():
         return {"ok": True}

@@ -133,7 +133,7 @@ The APA Pool Leagues – First Coast logo sits in the top-left corner and opens 
 
 ## Link previews and icon
 
-When someone shares a link to the app (in a text, Facebook, etc.), the preview shows the **Control Table** image (`static/img/share.jpg`, 1200×630) with the event name, date and venue. The same artwork is the browser-tab icon and the phone home-screen icon (`favicon.png`, `apple-touch-icon.png`). To change the preview image, replace `share.jpg` with another 1200×630 image.
+When someone shares a link to the app (in a text, Facebook, etc.), the preview shows the **Control Table** image (`static/img/share.jpg`, 1200×630) with the event name, date and venue. The browser-tab icon is a blue **CT** tile (`static/favicon.ico`, also served at `/favicon.ico`, plus `img/favicon-32.png` and `img/favicon.png`). The phone home-screen icon (`apple-touch-icon.png`) is a square crop of the Control Table artwork. To change the preview image, replace `share.jpg` with another 1200×630 image.
 
 ## Background photo
 

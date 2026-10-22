@@ -20,7 +20,9 @@
   <meta property="og:image:alt" content="Control Table: pool tables under a tournament bracket">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="{{ url_for('static', filename='img/share.jpg', _external=True) }}">
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="icon" href="{{ url_for('favicon') }}" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -546,5 +546,8 @@ def test_share_preview_tags(client):
     assert '<meta property="og:title" content="Fall Classic">' in page
     assert "October 31, 2026 beginning at 9 PM at Ace&#39;s." in page
     assert '<meta property="og:url" content="http://localhost/register">' in page
-    for path in ("share.jpg", "favicon.png", "apple-touch-icon.png"):
+    icon = client.get("/favicon.ico")
+    assert icon.status_code == 200 and icon.mimetype == "image/x-icon"
+    assert 'href="/favicon.ico"' in page
+    for path in ("share.jpg", "favicon.png", "favicon-32.png", "apple-touch-icon.png"):
         assert client.get(f"/static/img/{path}").status_code == 200

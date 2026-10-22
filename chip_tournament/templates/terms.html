@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Terms & Conditions — {{ legal.brand }}{% endblock %}
+{% block content %}
+<article class="card legal">
+  <p class="eyebrow">{{ legal.brand }}</p>
+  <h1>Terms &amp; Conditions</h1>
+  <p class="muted">Last updated {{ legal.updated }}</p>
+
+  <p>These terms cover this tournament website and the <b>{{ legal.brand }} Tournament Alerts</b> text program, run by
+    <b>{{ legal.company }} dba {{ legal.brand }}</b>, the local franchise of the American Poolplayers Association (APA) pool league.</p>
+
+  <h2>{{ legal.brand }} Tournament Alerts (text messages)</h2>
+  <ul>
+    <li><b>What you'll get:</b> texts about the tournament you registered for: your registration and team PIN, waiting-list updates,
+      reminders to add a partner, table assignments when your match is called, check-in and no-show notices, match results and chip counts,
+      cash-in and last-call announcements, and event-day announcements from the tournament director. We don't send marketing texts.</li>
+    <li><b>How you sign up:</b> by checking the text-alert box for your own number when you register, or on your team page.
+      Agreeing to texts is not required to register.</li>
+    <li><b>Message frequency varies</b> with tournament activity, typically more on tournament day.</li>
+    <li><b>Message and data rates may apply.</b></li>
+    <li><b>Reply STOP to opt out</b> at any time. You'll get one confirmation text and no further messages. Reply START to sign up again.</li>
+    <li><b>Reply HELP for help</b>, or contact us at <a href="mailto:{{ legal.email }}">{{ legal.email }}</a> or {{ legal.phone }}.</li>
+    <li>Carriers are not liable for delayed or undelivered messages.</li>
+  </ul>
+
+  <h2>Tournament website</h2>
+  <ul>
+    <li>Keep your team PIN private. Anyone with it can update your roster and enter scores for your team.</li>
+    <li>Entry fees, payouts and tournament rules are set by the tournament director. Results and chip counts recorded by the director are final.</li>
+    <li>Team names, player names, skill levels, chip counts and results are shown publicly on the tournament pages.</li>
+  </ul>
+
+  <h2>Privacy</h2>
+  <p>See our <a href="{{ url_for('privacy') }}">Privacy Policy</a> for what we collect and how we use it.</p>
+
+  <h2>Contact us</h2>
+  <p>{{ legal.brand }} ({{ legal.company }})<br>
+    Email: <a href="mailto:{{ legal.email }}">{{ legal.email }}</a><br>
+    Phone/text: <a href="tel:{{ legal.phone|replace('-', '') }}">{{ legal.phone }}</a></p>
+</article>
+{% endblock %}

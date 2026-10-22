@@ -52,14 +52,32 @@
           {% endif %}
           <b class="big-score">{{ sc }}</b>
           {% if is_team %}
-          <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline"
-                {% if sc + 1 >= t.settings.race_to %}onsubmit="return confirm('This is the winning game: {{ t.name_of(tid)|e }} wins the match. Correct?')"{% endif %}>
+          <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
             <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
-            <button class="button score-btn">+</button></form>
+            <button class="button score-btn" {% if t.race_winner(match) %}disabled{% endif %}>+</button></form>
           {% endif %}
         </div>
         {% endfor %}
-        {% if is_team %}<p class="muted" style="margin-top: 16px">Either team can keep score. Tap + each time a team wins a game. The match ends automatically when a team reaches {{ t.settings.race_to }}.</p>{% endif %}
+        {% set won = t.race_winner(match) %}
+        {% if won %}
+          {% set won_side = "a" if won == match.team_a else "b" %}
+          <div class="banner await-banner" style="margin-top: 16px">
+            <p style="margin: 0 0 12px"><b>{{ t.name_of(won) }} won the match</b> ({{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}).
+              {% if is_team %}Submit the result, or go back if a game was entered by mistake.{% else %}Waiting for the result to be submitted.{% endif %}</p>
+            {% if is_team %}{% include "_submit_forms.html" %}{% endif %}
+          </div>
+          {% if is_team %}
+          <dialog class="result-dialog" id="result-dialog">
+            <h2>{{ t.name_of(won) }} won the match</h2>
+            <p>Final score {{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}, race to {{ t.settings.race_to }}.
+              Once you submit, only the tournament director can change the result.</p>
+            {% include "_submit_forms.html" %}
+          </dialog>
+          <script>
+          (function () { var d = document.getElementById("result-dialog"); if (d && d.showModal) d.showModal(); })();
+          </script>
+          {% endif %}
+        {% elif is_team %}<p class="muted" style="margin-top: 16px">Either team can keep score. Tap + each time a team wins a game. When a team reaches {{ t.settings.race_to }}, you'll be asked to submit the result.</p>{% endif %}
       </section>
       {% else %}
       <div class="card"><p class="eyebrow">Next match</p><h2>vs {{ t.name_of(opp) }}</h2><p>You're paired with {{ t.name_of(opp) }} and waiting for a table.</p></div>
@@ -91,6 +109,37 @@
       <span class="value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}</span></div>
   </div>
 </div>
+
+{% if team.players|selectattr("phone")|list %}
+<section class="card" id="text-alerts">
+  <p class="eyebrow">Text alerts</p>
+  <h2>Get tournament texts</h2>
+  <p class="muted">Table calls, results, cash-in and last call, sent to each partner who turns them on. Msg frequency varies. Msg &amp; data rates may apply.
+    Reply HELP for help, STOP to opt out. <a href="{{ url_for('terms') }}">Terms</a> · <a href="{{ url_for('privacy') }}">Privacy</a></p>
+  {% for p in team.players if p.phone %}
+    {% if p.sms_consent %}
+      <p><span class="arrived">✓ Text alerts on</span> for {{ p.name }} (cell ending in {{ p.phone|last4 }})</p>
+    {% elif session.get("team_" ~ team.id) %}
+      <form method="post" action="{{ url_for('team_texts', team_id=team.id) }}" class="consent-box" style="margin-bottom: 16px">
+        <input type="hidden" name="player" value="{{ loop.index0 }}">
+        <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
+          <span>I'm {{ p.name }}. Yes, text me tournament alerts at my cell ending in {{ p.phone|last4 }}. I agree to receive text messages from
+            {{ legal.brand }} ({{ legal.company }}) about this tournament: table calls, results, cash-in and last call.
+            Message frequency varies. Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out.</span></label>
+        <div><button class="button">Turn on text alerts for {{ p.name }}</button></div>
+      </form>
+    {% else %}
+      <p>{{ p.name }}: text alerts are off.</p>
+    {% endif %}
+  {% endfor %}
+  {% if not session.get("team_" ~ team.id) and team.awaiting_texts %}
+    <form method="post" action="{{ url_for('team_login', team_id=team.id) }}" class="form" style="max-width: 360px">
+      <label>Enter your team PIN to turn on text alerts <input name="pin" inputmode="numeric" maxlength="4" required></label>
+      <button class="button">Continue</button>
+    </form>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if match or team.status == ACTIVE or history %}
 <section class="split">

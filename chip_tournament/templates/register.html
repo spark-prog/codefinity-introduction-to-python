@@ -32,6 +32,7 @@
     {% set solo_allowed = not t.partner_deadline_passed() %}
     {% set solo_checked = form.get("solo") == "1" %}
     {% set list_checked = form.get("list_seeking") == "1" %}
+    {% set consent_form = true %}
     {% include "_roster_fields.html" %}
     <button class="button big block">Register</button>
   </form>

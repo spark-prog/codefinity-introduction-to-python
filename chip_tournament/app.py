@@ -146,6 +146,15 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["clock"] = clock
     app.jinja_env.filters["last4"] = last4
     app.jinja_env.globals["event_when"] = event_when
+    # Who runs the text program, shown on the Terms and Privacy pages (they must match the
+    # carrier registration). Override with environment variables if they ever change.
+    app.jinja_env.globals["legal"] = {
+        "company": os.environ.get("LEGAL_NAME", "Maximum English LLC"),
+        "brand": os.environ.get("BRAND_NAME", "First Coast APA"),
+        "email": os.environ.get("SUPPORT_EMAIL", "firstcoast@apaleagues.com"),
+        "phone": os.environ.get("SUPPORT_PHONE", "904-528-7657"),
+        "updated": "October 22, 2026",
+    }
 
     # Background photo: the director can upload their own; otherwise the bundled billiard room.
     photo_types = {b"\xff\xd8\xff": ("jpg", "image/jpeg"), b"\x89PNG": ("png", "image/png"), b"RIFF": ("webp", "image/webp")}
@@ -195,6 +204,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         """Apply one change to the tournament; show rule errors instead of crashing."""
         try:
             with store.change(label) as t:
+                t.site_url = request.url_root.rstrip("/")  # for the team-page link in welcome texts
                 result = fn(t)
                 send_texts(t)
             if success:
@@ -294,11 +304,16 @@ def create_app(data_dir: str | None = None) -> Flask:
         if request.method == "POST":
             f = request.form
             solo = f.get("solo") == "1"
-            team = act(
-                "Register team",
-                lambda t: t.register_team(f.get("name", ""), players_from_form(f)[:1 if solo else TEAM_SIZE],
-                                          list_seeking=f.get("list_seeking") == "1"),
-            )
+
+            def register_team(t):
+                if f.get("agree_terms") != "1":
+                    raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
+                players = players_from_form(f)[:1 if solo else TEAM_SIZE]
+                if f.get("sms_consent") == "1" and players[0].phone:  # the person registering, for their own number
+                    players[0].sms_consent, players[0].sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
+                return t.register_team(f.get("name", ""), players, list_seeking=f.get("list_seeking") == "1")
+
+            team = act("Register team", register_team)
             if team:
                 session[f"team_{team.id}"] = True
                 flash(f"{team.name} is registered! Your team PIN is {team.pin} — keep it to edit your roster.", "ok")
@@ -314,6 +329,14 @@ def create_app(data_dir: str | None = None) -> Flask:
     def favicon():
         # Browsers and search engines look for the icon here even without a <link> tag.
         return send_file(Path(app.static_folder) / "favicon.ico", mimetype="image/x-icon", max_age=86400)
+
+    @app.get("/privacy")
+    def privacy():
+        return render_template("privacy.html", t=store.load())
+
+    @app.get("/terms")
+    def terms():
+        return render_template("terms.html", t=store.load())
 
     @app.get("/healthz")
     def healthz():
@@ -348,6 +371,32 @@ def create_app(data_dir: str | None = None) -> Flask:
     def team_login(team_id):
         team = store.load().teams.get(team_id) or abort(404)
         check_pin(team)
+        return redirect(url_for("team_page", team_id=team_id))
+
+    @app.post("/team/<team_id>/texts")
+    def team_texts(team_id):
+        # Only someone signed in with the team PIN can opt in, for their own number (not the director).
+        if not session.get(f"team_{team_id}"):
+            flash("Enter your team PIN first.", "error")
+            return redirect(url_for("team_page", team_id=team_id))
+        index = request.form.get("player", "")
+        if index.isdigit() and request.form.get("sms_consent") == "1":
+            player = act("Text alerts opt-in", lambda t: t.opt_in(team_id, int(index)))
+            if player:
+                flash(f"Text alerts are on for {player.name}. A welcome text is on its way.", "ok")
+        else:
+            flash("Tick the box to agree to text alerts.", "error")
+        return redirect(url_for("team_page", team_id=team_id))
+
+    @app.post("/team/<team_id>/submit")
+    def team_submit(team_id):
+        try:
+            m, _ = team_match(team_id)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        else:
+            if act("Submit result (team)", lambda t: t.submit_result(m.id)):
+                flash("Result submitted. Only the tournament director can change it now.", "ok")
         return redirect(url_for("team_page", team_id=team_id))
 
     @app.post("/team/<team_id>/arrived")
@@ -645,6 +694,19 @@ def create_app(data_dir: str | None = None) -> Flask:
     @admin_required
     def admin_winner(match_id):
         act("Record result", lambda t: t.record_result(match_id, request.form.get("winner", "")), "Result recorded.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/admin/match/<match_id>/submit")
+    @admin_required
+    def admin_submit(match_id):
+        act("Submit result", lambda t: t.submit_result(match_id), "Result recorded.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/admin/match/<match_id>/fix")
+    @admin_required
+    def admin_fix(match_id):
+        act("Fix result", lambda t: t.fix_result(match_id),
+            "Result corrected on match #{result.round}. Both teams were texted.")
         return redirect(url_for("admin") + "#matches")
 
     @app.post("/admin/cash-in/open")

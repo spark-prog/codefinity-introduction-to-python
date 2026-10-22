@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy — {{ legal.brand }}{% endblock %}
+{% block content %}
+<article class="card legal">
+  <p class="eyebrow">{{ legal.brand }}</p>
+  <h1>Privacy Policy</h1>
+  <p class="muted">Last updated {{ legal.updated }}</p>
+
+  <p>This policy explains how <b>{{ legal.company }} dba {{ legal.brand }}</b> ("we", "us"), the local franchise of the
+    American Poolplayers Association (APA) pool league, collects and uses information on this tournament website and through
+    our tournament text alerts.</p>
+
+  <h2>Information we collect</h2>
+  <ul>
+    <li><b>Registration details:</b> team name, each player's name and APA skill level, and the cell phone numbers you enter.</li>
+    <li><b>Text alert consent:</b> whether each player agreed to receive text alerts, and when.</li>
+    <li><b>Tournament activity:</b> check-ins, scores, match results, chip counts and payouts.</li>
+    <li><b>Technical data:</b> a cookie that keeps you signed in to your team page or the director page. We don't use advertising or tracking cookies.</li>
+  </ul>
+
+  <h2>How we use it</h2>
+  <ul>
+    <li>To run the tournament: registration, the waiting list, pairings, table assignments, scoring, chip counts and payouts.</li>
+    <li>To send tournament text alerts to players who agreed to receive them (see the <a href="{{ url_for('terms') }}">Terms &amp; Conditions</a>).</li>
+    <li>To answer your questions and keep accurate tournament records.</li>
+  </ul>
+  <p>Team names, player names, skill levels, chip counts and results are shown on the public tournament pages. Phone numbers are never shown publicly;
+    only the tournament director can see them.</p>
+
+  <h2>Text messaging and your phone number</h2>
+  <p><b>We do not sell or share your SMS opt-in data or personal information with third parties for marketing purposes.</b>
+    Mobile numbers and text consent collected for tournament alerts are used only to send those alerts. We share phone numbers only with our
+    text message provider (Twilio) to deliver the messages, and as required by law.</p>
+  <p>You can stop text alerts at any time by replying <b>STOP</b>. Reply <b>HELP</b> for help.</p>
+
+  <h2>Service providers</h2>
+  <p>This website is hosted by Render, and text messages are delivered by Twilio. They process information only to provide those services to us.</p>
+
+  <h2>How long we keep it</h2>
+  <p>We keep a tournament's information while it's running and for as long as needed to settle payouts and records afterward, then delete it.</p>
+
+  <h2>Your choices</h2>
+  <p>You can update your roster and cell number on your team page with your team PIN, or ask us to correct or delete your information by
+    contacting us below.</p>
+
+  <h2>Contact us</h2>
+  <p>{{ legal.brand }} ({{ legal.company }})<br>
+    Email: <a href="mailto:{{ legal.email }}">{{ legal.email }}</a><br>
+    Phone/text: <a href="tel:{{ legal.phone|replace('-', '') }}">{{ legal.phone }}</a></p>
+</article>
+{% endblock %}

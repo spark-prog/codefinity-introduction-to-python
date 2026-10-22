@@ -81,7 +81,7 @@
     <tr><td>The team arrives during grace</td><td>Nothing if it checks in itself; otherwise tap <b>Arrived</b>.</td><td>Cancels the forfeit. The start is {{ s.warmup_minutes }} min later.</td></tr>
     <tr><td>Grace runs out</td><td>Nothing.</td><td>Records a forfeit: the no-show gives a chip back and the opponent wins. If neither team showed, both give a chip back and go to the losers list.</td></tr>
     <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Entering a score also counts both teams as checked in.</td></tr>
-    <tr><td>A team reaches the race</td><td>Nothing, or tap <b>Winner</b> to end a match early.</td><td>Ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
+    <tr><td>A team reaches the race</td><td>Nothing: the players get a "won the match" pop-up and tap <b>Submit</b> (or <b>Go back</b> to fix the score). If they walk away, tap <b>Submit result</b> on the card. Tap <b>Winner</b> to end a match early.</td><td>Once submitted: ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
 </table></div>
 <p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when they're called.</p>
@@ -134,7 +134,8 @@
 <div class="table-wrap"><table class="grid">
   <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
   <tbody>
-    <tr><td>Wrong winner, wrong score, or any button pressed by mistake</td><td><b>Undo</b> reverses the most recent action; press again to go further back (up to 100 steps). The button shows what it will undo. Texts already sent can't be recalled, so send a correction with <i>Text every team</i>.</td></tr>
+    <tr><td>The wrong team was recorded as the winner</td><td>Open <i>Recent results</i> under Tables and press <b>Fix result</b>. It swaps the winner, corrects both teams' chips and records, redoes any pairing made since, and texts both teams. It only works while neither team has started a later match; after that, use <b>Adjust</b>.</td></tr>
+    <tr><td>Wrong score, or any button pressed by mistake</td><td><b>Undo</b> reverses the most recent action; press again to go further back (up to 100 steps). The button shows what it will undo. Texts already sent can't be recalled, so send a correction with <i>Text every team</i>.</td></tr>
     <tr><td>A forfeit went through but the team was there</td><td>Press <b>Undo</b>. The app pauses the auto-forfeit on that match; then tap <b>Arrived</b>.</td></tr>
     <tr><td>A team's chip count is wrong and Undo would go back too far</td><td>Use <b>Adjust</b> in the team's row (e.g. <code>+1</code> or <code>-1</code>) and enter a reason. Adjusting to 0 eliminates the team.</td></tr>
     <tr><td>A team forgot its PIN</td><td>It's shown under the team name in <i>Teams &amp; chips</i>.</td></tr>

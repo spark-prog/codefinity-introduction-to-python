@@ -104,6 +104,10 @@ class Player:
     name: str
     phone: str = ""
     skill: int = 0
+    # Texts go only to players who ticked the consent box themselves (on the
+    # registration form, or on the team page for a partner).
+    sms_consent: bool = False
+    sms_consent_at: str | None = None
 
 
 @dataclass
@@ -128,11 +132,17 @@ class Team:
 
     @property
     def phones(self) -> list[str]:
+        """Cell numbers that may be texted: only players who opted in."""
         seen = []
-        for number in [p.phone for p in self.players]:
+        for number in [p.phone for p in self.players if p.sms_consent]:
             if number and number not in seen:
                 seen.append(number)
         return seen
+
+    @property
+    def awaiting_texts(self) -> list[Player]:
+        """Players with a cell number on file who haven't opted in to texts yet."""
+        return [p for p in self.players if p.phone and not p.sms_consent]
 
     @property
     def matches_played(self) -> int:
@@ -230,6 +240,7 @@ class Tournament:
     teams: dict[str, Team] = field(default_factory=dict)
     matches: list[Match] = field(default_factory=list)
     status: str = SETUP
+    site_url: str = ""  # e.g. https://chip-tournament.onrender.com, for links in the welcome text
     round: int = 0
     winners_list: list[str] = field(default_factory=list)
     losers_list: list[str] = field(default_factory=list)
@@ -334,6 +345,36 @@ class Tournament:
             body = f"{self.settings.sms_name}: {body}"
         for number in team.phones:
             self.outbox.append(Message(to=number, body=body, team_id=team.id))
+
+    def team_link(self, team: Team) -> str:
+        return f"{self.site_url}/team/{team.id}" if self.site_url else ""
+
+    def _welcome(self, team: Team, opening: str) -> str:
+        """The first text a player gets: who we are, what they'll get, and the required disclosures."""
+        link = self.team_link(team)
+        return (f"{opening} Your team PIN is {team.pin}."
+                + (f" Team page: {link}" if link else "")
+                + " You'll get tournament alerts: registration, table calls, results, cash-in and last call."
+                  " Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out."
+                + self._questions())
+
+    def opt_in(self, team_id: str, index: int) -> Player:
+        """A player ticks the consent box for their own number (on the team page)."""
+        team = self.team(team_id)
+        if not 0 <= index < len(team.players):
+            raise TournamentError("That player isn't on this team.")
+        player = team.players[index]
+        if not player.phone:
+            raise TournamentError(f"There's no cell number on file for {player.name}. Add it on the roster page first.")
+        if player.sms_consent:
+            return player
+        player.sms_consent, player.sms_consent_at = True, now()
+        self._say(f"{player.name} ({team.name}) opted in to text alerts.")
+        body = self._welcome(team, f"{player.name}, you're signed up for {team.name}'s alerts for {self.settings.name}.")
+        if self.settings.sms_name:
+            body = f"{self.settings.sms_name}: {body}"
+        self.outbox.append(Message(to=player.phone, body=body, team_id=team.id))
+        return player
 
     def _questions(self) -> str:
         phone = self.settings.contact_phone
@@ -567,18 +608,12 @@ class Tournament:
             self.waitlist.append(team.id)
             spot = len(self.waitlist)
             self._say(f"{team.name} ({team.partners}, combined skill {combined}) is #{spot} on the waiting list.")
-            self._text_team(
-                team,
-                f"{self.settings.name} is full. {team.name} is #{spot} on the waiting list; we'll text you "
-                f"if a spot opens. Your team PIN for roster changes is {team.pin}.{need} Reply STOP to opt out.{self._questions()}",
-            )
+            self._text_team(team, self._welcome(
+                team, f"{self.settings.name} is full, so {team.name} is #{spot} on the waiting list. "
+                      f"We'll text you if a spot opens.{need}"))
             return team
         self._say(f"Registered {team.name}: {team.partners} (combined skill {combined}).")
-        self._text_team(
-            team,
-            f"{team.name} is registered for {self.settings.name}. "
-            f"Your team PIN for roster changes is {team.pin}.{need} Reply STOP to opt out.{self._questions()}",
-        )
+        self._text_team(team, self._welcome(team, f"{team.name} is registered for {self.settings.name}.{need}"))
         if self.status == RUNNING:
             self._join_running(team)
         return team
@@ -668,6 +703,10 @@ class Tournament:
             if any(t.name.lower() == name.strip().lower() for t in self.teams.values() if t.id != team_id):
                 raise TournamentError(f"A team named '{name.strip()}' is already registered.")
             team.name = name.strip()
+        for p in players:  # consent belongs to a person and their number
+            old = next((o for o in team.players if self._names([o]) == self._names([p]) and o.phone == p.phone), None)
+            if old is not None:
+                p.sms_consent, p.sms_consent_at = old.sms_consent, old.sms_consent_at
         team.players = players
         if list_seeking is not None:
             team.list_seeking = solo and list_seeking
@@ -983,7 +1022,7 @@ class Tournament:
 
             body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
             for team in (a, b):
-                self._text_team(team, body, prefix=False)
+                self._text_team(team, body)
 
     def call_next(self, team_id: str) -> None:
         """Director override: this team's pair (or the team, if not paired yet) goes first."""
@@ -1015,10 +1054,90 @@ class Tournament:
                 setattr(m, "arrived_" + s_, stamp)
         m.start_at = m.start_at or stamp
         attr = "score_a" if side == "a" else "score_b"
+        if delta > 0 and self.race_winner(m):
+            raise TournamentError(f"{self.name_of(self.race_winner(m))} has already reached {self.settings.race_to}. "
+                                  "Submit the result, or go back to fix the score.")
         value = max(0, min(self.settings.race_to, getattr(m, attr) + delta))
         setattr(m, attr, value)
-        if value >= self.settings.race_to:
-            self.record_result(match_id, m.team_a if side == "a" else m.team_b)
+        return m
+
+    def race_winner(self, m: Match) -> str | None:
+        """The team that has reached the race and is waiting for the result to be submitted."""
+        if m.status != CALLED:
+            return None
+        if m.score_a >= self.settings.race_to:
+            return m.team_a
+        if m.score_b >= self.settings.race_to:
+            return m.team_b
+        return None
+
+    def submit_result(self, match_id: str) -> Match:
+        """Confirm the score: the team that reached the race wins."""
+        m = self.match(match_id)
+        winner = self.race_winner(m)
+        if winner is None:
+            raise TournamentError(f"Neither team has reached {self.settings.race_to} yet.")
+        return self.record_result(match_id, winner)
+
+    def fix_result(self, match_id: str) -> Match:
+        """Director: the wrong team was recorded as the winner. Swap the result of that match only.
+
+        Safe only while neither team has started a later match; a pairing or table call made
+        since is cancelled and redone."""
+        m = self.match(match_id)
+        if self.status != RUNNING:
+            raise TournamentError("Results can only be fixed while the tournament is running. Use Undo instead.")
+        if m.status != DONE or not m.winner or not m.loser:
+            raise TournamentError("Only a finished match can be fixed.")
+        if m.forfeit:
+            raise TournamentError("A forfeit can't be swapped. Use Undo, or Adjust the teams' chips.")
+        old_w, old_l = self.teams[m.winner], self.teams[m.loser]
+        for team in (old_w, old_l):
+            if team.status not in (ACTIVE, ELIMINATED):
+                raise TournamentError(f"{team.name} has already cashed in, so this result can't be swapped. "
+                                      "Use Undo, or Adjust the teams' chips.")
+        later = self.matches[self.matches.index(m) + 1:]
+        for x in later:
+            if {x.team_a, x.team_b} & {old_w.id, old_l.id} and (
+                    x.status == DONE or (x.status == CALLED and (x.score_a or x.score_b))):
+                busy = old_w if old_w.id in (x.team_a, x.team_b) else old_l
+                raise TournamentError(f"{busy.name} has already started another match, so this result can't be "
+                                      "swapped. Use Adjust to fix the teams' chips.")
+        # Cancel anything set up for these two teams since; their opponents go back to the front of the line.
+        for team in (old_w, old_l):
+            x = self.current_match_for(team.id)
+            if x is not None:
+                x.status, x.finished_at = CANCELLED, now()
+                other = x.team_b if x.team_a == team.id else x.team_a
+                if other and other not in (old_w.id, old_l.id):
+                    last = [y for y in self.matches if y.status == DONE and other in (y.team_a, y.team_b)]
+                    lost_last = bool(last) and (last[-1].loser == other or last[-1].forfeit == "both")
+                    self._enqueue(other, self.losers_list if lost_last else self.winners_list, front=True)
+            for lst in (self.winners_list, self.losers_list):
+                if team.id in lst:
+                    lst.remove(team.id)
+
+        m.winner, m.loser = old_l.id, old_w.id
+        m.score_a, m.score_b = m.score_b, m.score_a
+        old_w.wins, old_w.losses = old_w.wins - 1, old_w.losses + 1
+        old_l.wins, old_l.losses = old_l.wins + 1, old_l.losses - 1
+        # Both start with "Lost" so the chip check (chips returned to the table) still adds up.
+        self._chip_change(old_l, +1, f"Lost match #{m.round}: result corrected, chip given back")
+        if old_l.status == ELIMINATED:
+            old_l.status = ACTIVE
+        self._chip_change(old_w, -1, f"Lost match #{m.round} to {old_l.name} (result corrected)")
+        self._say(f"Result corrected on match #{m.round}: {old_l.name} beat {old_w.name}.")
+        self._enqueue(old_l.id, self.winners_list)
+        if old_w.chips <= 0:
+            old_w.status = ELIMINATED
+            self._say(f"{old_w.name} is out of chips and eliminated.")
+        else:
+            self._enqueue(old_w.id, self.losers_list)
+        for team in (old_l, old_w):
+            out = " You're out of chips and eliminated." if team.status == ELIMINATED else ""
+            self._text_team(team, f"Result corrected: {old_l.name} won the match on table {m.table}. "
+                                  f"{team.name} now has {team.chips} chip(s).{out}")
+        self._advance()
         return m
 
     def record_result(self, match_id: str, winner_id: str, forfeit: bool = False) -> Match:

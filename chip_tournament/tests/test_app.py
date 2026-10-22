@@ -19,7 +19,8 @@ def client(tmp_path, monkeypatch):
 def register(client, name, skills=(5, 5)):
     return client.post(
         "/register",
-        data={"name": name, "player_name_0": "Ann", "player_phone_0": "5551234567", "player_skill_0": str(skills[0]),
+        data={"name": name, "agree_terms": "1", "sms_consent": "1",
+              "player_name_0": "Ann", "player_phone_0": "5551234567", "player_skill_0": str(skills[0]),
               "player_name_1": "Bob", "player_phone_1": "", "player_skill_1": str(skills[1])},
         follow_redirects=True,
     )
@@ -57,12 +58,14 @@ def test_full_flow(client):
     m = t.open_matches()[0]
     client.post(f"/admin/match/{m.id}/score", data={"side": "a", "delta": "1"})
     client.post(f"/admin/match/{m.id}/score", data={"side": "a", "delta": "1"})
+    assert store.load().match(m.id).status == "called"  # waits for the result to be submitted
+    client.post(f"/admin/match/{m.id}/submit")
     t = store.load()
     assert t.teams[m.team_b].chips == 2
 
     client.post("/admin/undo")
-    assert store.load().teams[m.team_b].chips == 3  # undoing the winning point gives the chip back
-    assert store.load().match(m.id).score_a == 1
+    assert store.load().teams[m.team_b].chips == 3  # undoing the submit gives the chip back
+    assert store.load().match(m.id).score_a == 2 and store.load().match(m.id).status == "called"
 
     client.post("/admin/cash-in/open")
     team = store.load().teams[m.team_b]
@@ -231,23 +234,29 @@ def test_csv_import_flow(client):
     store = client.application.config["store"]
     assert not store.load().teams  # preview saves nothing
 
-    form = {"step": "import", "send_texts": "1"}
+    form = {"step": "import"}
     for key, col in {"team": 1, "name1": 2, "skill1": 3, "phone1": 4, "name2": 5, "skill2": 6}.items():
         form[f"map_{key}"] = str(col)
     page = client.post("/admin/import", data=form, follow_redirects=True)
     assert b"Imported 1 team(s)" in page.data
     assert [x.name for x in store.load().teams.values()] == ["Sharks"]
-    sms = client.application.config["sms"]
-    for _ in range(50):  # texts go out on a background thread
-        if any("PIN" in x["body"] for x in sms.recent()):
-            break
-        time.sleep(0.02)
-    assert any("PIN" in x["body"] for x in sms.recent())
+    # Imported players never ticked the consent box, so nobody is texted until they opt in.
+    time.sleep(0.1)
+    assert not client.application.config["sms"].recent()
+    assert store.load().teams[next(iter(store.load().teams))].phones == []
 
 
 def test_registration_shows_text_consent(client):
-    page = client.get("/register").data
-    assert b"you agree to receive text alerts" in page and b"Reply STOP to opt out" in page
+    page = client.get("/register").get_data(as_text=True)
+    assert 'name="sms_consent" value="1" >' in page or 'name="sms_consent" value="1">' in page  # not pre-checked
+    assert "Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out." in page
+    assert 'name="agree_terms" value="1" required' in page
+    assert 'href="/terms"' in page and 'href="/privacy"' in page
+    for path in ("/terms", "/privacy"):
+        body = client.get(path).get_data(as_text=True)
+        assert "Maximum English LLC dba First Coast APA" in body and "firstcoast@apaleagues.com" in body
+    assert "do not sell or share your SMS opt-in data" in client.get("/privacy").get_data(as_text=True)
+    assert "Carriers are not liable" in client.get("/terms").get_data(as_text=True)
 
 
 def test_call_next_button(client):
@@ -301,7 +310,13 @@ def test_team_checks_in_and_keeps_score(client):
 
     player.post(f"/team/{sharks.id}/score", data={"side": other, "delta": "1"})  # either side can be scored
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})
-    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})  # race to 2: Sharks win
+    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})  # race to 2: Sharks reach it
+    page = player.get(f"/team/{sharks.id}").get_data(as_text=True)
+    assert 'id="result-dialog"' in page and "Sharks won the match" in page and "Go back" in page
+    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "-1"})  # Go back
+    assert store.load().match(m.id).status == "called"
+    player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})
+    player.post(f"/team/{sharks.id}/submit")
     done = store.load().match(m.id)
     assert done.status == "done" and done.winner == sharks.id
     assert any("Sharks entered +1" in line for line in store.load().log)
@@ -481,7 +496,7 @@ def test_register_alone_public_list_and_add_partner(client):
     store = client.application.config["store"]
     with store.change("dates") as t:
         t.settings.date, t.settings.start_time = "2099-10-31", "9:00 PM"
-    page = client.post("/register", data={
+    page = client.post("/register", data={"agree_terms": "1", "sms_consent": "1",
         "name": "Ann's team", "solo": "1", "list_seeking": "1",
         "player_name_0": "Ann", "player_skill_0": "4", "player_phone_0": "5551110000",
         "player_name_1": "", "player_skill_1": "", "player_phone_1": ""}, follow_redirects=True)
@@ -492,7 +507,7 @@ def test_register_alone_public_list_and_add_partner(client):
     assert 'id="looking"' in reg and "<td>Ann</td>" in reg and "5551110000" not in reg
     assert "looking for a partner" in client.application.test_client().get("/").get_data(as_text=True)
     # Not listed unless they tick the box.
-    client.application.test_client().post("/register", data={
+    client.application.test_client().post("/register", data={"agree_terms": "1", "sms_consent": "1",
         "name": "Cy's team", "solo": "1", "player_name_0": "Cy", "player_skill_0": "3",
         "player_phone_0": "5552220000"})
     assert ">Cy<" not in client.get("/register").get_data(as_text=True)
@@ -509,7 +524,7 @@ def test_register_alone_public_list_and_add_partner(client):
 def test_director_pairs_solo_players(client):
     store = client.application.config["store"]
     for name, skill, phone in (("Ann", "4", "5551110000"), ("Cy", "5", "5552220000")):
-        client.application.test_client().post("/register", data={
+        client.application.test_client().post("/register", data={"agree_terms": "1", "sms_consent": "1",
             "name": f"{name}'s team", "solo": "1", "player_name_0": name, "player_skill_0": skill,
             "player_phone_0": phone})
     ann, cy = sorted(store.load().teams.values(), key=lambda t: t.registered_at)
@@ -551,3 +566,49 @@ def test_share_preview_tags(client):
     assert 'href="/favicon.ico"' in page
     for path in ("share.jpg", "favicon.png", "favicon-32.png", "apple-touch-icon.png"):
         assert client.get(f"/static/img/{path}").status_code == 200
+
+
+def test_terms_required_and_partner_opts_in_on_the_team_page(client):
+    store = client.application.config["store"]
+    page = client.post("/register", data={"name": "Sharks", "player_name_0": "Ann", "player_phone_0": "5551234567",
+                                          "player_skill_0": "5", "player_name_1": "Bob", "player_phone_1": "5559990000",
+                                          "player_skill_1": "4"}, follow_redirects=True)
+    assert b"agree to the Terms" in page.data and not store.load().teams
+    client.post("/register", data={"name": "Sharks", "agree_terms": "1", "player_name_0": "Ann",
+                                   "player_phone_0": "5551234567", "player_skill_0": "5", "player_name_1": "Bob",
+                                   "player_phone_1": "5559990000", "player_skill_1": "4"})
+    team = next(iter(store.load().teams.values()))
+    assert team.phones == []  # no box ticked: no texts, still registered
+    # The director can't opt a player in; the partner does it with the team PIN.
+    director = client.application.test_client()
+    director.post("/admin/login", data={"password": "secret"})
+    director.post(f"/team/{team.id}/texts", data={"player": "1", "sms_consent": "1"})
+    assert store.load().teams[team.id].phones == []
+    bob = client.application.test_client()
+    assert b"Enter your team PIN to turn on text alerts" in bob.get(f"/team/{team.id}").data
+    bob.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    assert b"Turn on text alerts for Bob" in bob.get(f"/team/{team.id}").data
+    page = bob.post(f"/team/{team.id}/texts", data={"player": "1", "sms_consent": "1"}, follow_redirects=True)
+    assert b"Text alerts are on for Bob" in page.data
+    assert store.load().teams[team.id].phones == ["5559990000"]
+    sms = client.application.config["sms"]
+    for _ in range(50):
+        if sms.recent():
+            break
+        time.sleep(0.02)
+    assert f"/team/{team.id}" in sms.recent()[0]["body"]  # welcome text links to the team page
+
+
+def test_director_fixes_a_wrong_result(client):
+    for name in ("Sharks", "Rails", "Bankers"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    check_in_and_start(client)
+    store = client.application.config["store"]
+    m = store.load().open_matches()[0]
+    client.post(f"/admin/match/{m.id}/winner", data={"winner": m.team_a})
+    page = client.get("/admin").get_data(as_text=True)
+    assert "Recent results" in page and "Fix result" in page and 'data-dialog-title="Fix match #' in page
+    page = client.post(f"/admin/match/{m.id}/fix", follow_redirects=True).get_data(as_text=True)
+    assert "Result corrected on match #" in page
+    assert store.load().match(m.id).winner == m.team_b

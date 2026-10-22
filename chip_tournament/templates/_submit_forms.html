@@ -1,0 +1,7 @@
+<div class="button-row">
+  <form method="post" action="{{ url_for('team_submit', team_id=team.id) }}" class="inline">
+    <button class="button big">Submit</button></form>
+  <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
+    <input type="hidden" name="side" value="{{ won_side }}"><input type="hidden" name="delta" value="-1">
+    <button class="button big secondary">Go back</button></form>
+</div>

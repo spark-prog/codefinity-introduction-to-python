@@ -23,15 +23,27 @@
     <label>Cell for text alerts <span class="muted">(on file: ending in {{ p.phone|last4 }})</span>
       <input name="player_phone_{{ i }}" type="tel" placeholder="Leave blank to keep the number on file" value=""></label>
     {% else %}
-    <label>Cell for text alerts
+    <label>Cell for text alerts{% if i %} <span class="muted">(optional)</span>{% endif %}
       <input name="player_phone_{{ i }}" type="tel" placeholder="{{ 'Optional' if i else '(555) 123-4567' }}" value="{{ p.phone if p else '' }}" {% if not i %}required{% endif %}></label>
     {% endif %}
+    {% if i and consent_form %}<p class="muted small-note">Your partner turns on their own text alerts on your team page with the team PIN.</p>{% endif %}
   </fieldset>
   {% endfor %}
 </div>
-<p class="muted sms-consent">By entering a cell number, you agree to receive text alerts from {{ t.settings.sms_name or t.settings.name }} about this
-  tournament (registration, table calls, results, cash-in and last call). Message frequency varies; message and data rates may apply.
-  Reply STOP to opt out or HELP for help.</p>
+{% if consent_form %}
+<div class="consent-box">
+  <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" {% if form and form.get("sms_consent") == "1" %}checked{% endif %}>
+    <span>Yes, text me tournament alerts at the Partner 1 cell number above. I agree to receive text messages from
+      {{ legal.brand }} ({{ legal.company }}) about this tournament: registration and team PIN, table calls, results, cash-in and last call.
+      Message frequency varies. Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out. Consent is not required to register.</span></label>
+  <label class="checkbox"><input type="checkbox" name="agree_terms" value="1" required {% if form and form.get("agree_terms") == "1" %}checked{% endif %}>
+    <span>I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms &amp; Conditions</a> and
+      <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</span></label>
+</div>
+{% else %}
+<p class="muted sms-consent">A changed cell number needs to be opted in again on your team page before it gets text alerts.
+  <a href="{{ url_for('terms') }}" target="_blank">Terms</a> · <a href="{{ url_for('privacy') }}" target="_blank">Privacy</a></p>
+{% endif %}
 <p class="skill-check" id="skill-check"></p>
 <script>
 (function () {

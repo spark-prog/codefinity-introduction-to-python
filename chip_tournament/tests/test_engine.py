@@ -18,7 +18,7 @@ from chips.engine import (
 
 def partners(combined, phone="5550000000"):
     """Two partners whose skill levels add up to `combined`."""
-    return [Player("A", phone, combined // 2), Player("B", "", combined - combined // 2)]
+    return [Player("A", phone, combined // 2, sms_consent=True), Player("B", "", combined - combined // 2)]
 
 
 def make(n_teams=4, skills=None, tables=None, fee=2000):
@@ -146,7 +146,8 @@ def test_partners_and_skill_lock_at_the_start():
     # Phone numbers and the team name can still change.
     new = [Player(p.name, "5559999999", p.skill) for p in team.players]
     t.update_roster(team.id, new, name="Renamed")
-    assert team.name == "Renamed" and team.phones == ["5559999999"]
+    # A new number has to be opted in again before it's texted.
+    assert team.name == "Renamed" and team.players[0].phone == "5559999999" and team.phones == []
 
 
 def test_start_blocked_when_a_team_is_over_the_top_bracket():
@@ -282,6 +283,10 @@ def test_score_to_race_declares_winner():
     t.score(m.id, "b", 1)
     assert m.status == CALLED
     t.score(m.id, "b", 1)
+    assert m.status == CALLED and t.race_winner(m) == m.team_b  # waits for Submit
+    with pytest.raises(TournamentError, match="already reached"):
+        t.score(m.id, "a", 1)
+    t.submit_result(m.id)
     assert m.winner == m.team_b
 
 
@@ -567,7 +572,7 @@ def test_texts_carry_sender_name_and_questions_phone():
     t.register_team("Rails", partners(8))
     t.start(random.Random(1))
     assert "Questions?" not in t.outbox[-1].body  # only on the registration text
-    assert "Reply STOP to opt out." in body
+    assert "Msg & data rates may apply. Reply HELP for help, STOP to opt out." in body
     assert body.endswith("Questions? Call/text 904-528-7657")
 
 
@@ -779,12 +784,12 @@ def test_money_cant_change_once_someone_has_cashed_in():
         t.set_money(3000, 0, t.settings.chip_brackets, 10)
 
 
-def test_table_call_text_has_no_league_prefix_but_others_do():
+def test_table_call_text_carries_the_league_prefix():
     t = make(n_teams=2)
     t.settings.sms_name = "First Coast APA"
     t.outbox.clear()
     t.start(random.Random(53))
-    assert all(m.body.startswith("New match: Table 1:") for m in t.outbox)
+    assert all(m.body.startswith("First Coast APA: New match: Table 1:") for m in t.outbox)
     play(t, called(t)[0])
     assert any(m.body.startswith("First Coast APA: ") for m in t.outbox)
 
@@ -817,9 +822,9 @@ def test_solo_player_holds_a_real_spot_and_must_fit_under_the_cap():
     t = solo_event(cap=2)
     t.settings.registration_cap = 8
     with pytest.raises(TournamentError, match="skill 7 or less"):
-        t.register_team("Too high", [Player("Al", "5551110000", 8)])
+        t.register_team("Too high", [Player("Al", "5551110000", 8, sms_consent=True)])
     t.settings.registration_cap = 10
-    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 9)], list_seeking=True)
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 9, sms_consent=True)], list_seeking=True)
     assert solo.status == REGISTERED and solo.needs_partner and solo.partners == "Ann & partner TBD"
     assert t.chips_preview(solo) is None and t.seeking_partner == [solo]
     assert "add them on your team page" in t.outbox[-1].body and "October 30" in t.outbox[-1].body
@@ -830,18 +835,18 @@ def test_solo_player_holds_a_real_spot_and_must_fit_under_the_cap():
         t.start()
     # A partner with skill 1 fits; the cap applies to the new pair.
     with pytest.raises(TournamentError, match="can't be over 10"):
-        t.update_roster(solo.id, [Player("Ann", "5551110000", 9), Player("Bo", "", 2)])
-    t.update_roster(solo.id, [Player("Ann", "5551110000", 9), Player("Bo", "", 1)])
+        t.update_roster(solo.id, [Player("Ann", "5551110000", 9, sms_consent=True), Player("Bo", "", 2)])
+    t.update_roster(solo.id, [Player("Ann", "5551110000", 9, sms_consent=True), Player("Bo", "", 1)])
     assert not solo.needs_partner and not solo.list_seeking and t.seeking_partner == []
     assert t.chips_preview(solo) == 3 and "all set" in t.outbox[-1].body
 
 
 def test_deadline_moves_solo_teams_to_the_waiting_list():
     t = solo_event(cap=2)
-    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4)])
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4, sms_consent=True)])
     t.register_team("Full", partners(8))
     waiting = t.register_team("Waiting", partners(8))
-    other_solo = t.register_team("Cy's team", [Player("Cy", "5552220000", 3)])
+    other_solo = t.register_team("Cy's team", [Player("Cy", "5552220000", 3, sms_consent=True)])
     assert t.waitlist == [waiting.id, other_solo.id]
     assert t.check_clock(datetime(2026, 10, 30, 20, 59)) == 0
     assert t.check_clock(datetime(2026, 10, 30, 21, 0)) == 1
@@ -851,21 +856,21 @@ def test_deadline_moves_solo_teams_to_the_waiting_list():
     # After the deadline, no registering alone and no removing a partner.
     t.settings.date = "2020-10-31"  # "now" is past the deadline from here on
     with pytest.raises(TournamentError, match="24 hours"):
-        t.register_team("Dee", [Player("Dee", "5553330000", 3)])
+        t.register_team("Dee", [Player("Dee", "5553330000", 3, sms_consent=True)])
     with pytest.raises(TournamentError, match="can't be removed"):
         t.update_roster(waiting.id, [Player("A", "5550000000", 4)])
     # A spot opens: a solo team can't take it; a complete team can.
     t.remove_team(waiting.id)
     assert solo.status == WAITLISTED and other_solo.status == WAITLISTED
-    t.update_roster(solo.id, [Player("Ann", "5551110000", 4), Player("Bo", "", 4)])
+    t.update_roster(solo.id, [Player("Ann", "5551110000", 4, sms_consent=True), Player("Bo", "", 4)])
     assert solo.status == REGISTERED and t.waitlist == [other_solo.id]
 
 
 def test_director_pairs_two_solo_players():
     t = solo_event(cap=2)
-    ann = t.register_team("Ann's team", [Player("Ann", "5551110000", 4)], list_seeking=True)
+    ann = t.register_team("Ann's team", [Player("Ann", "5551110000", 4, sms_consent=True)], list_seeking=True)
     t.register_team("Full", partners(8))
-    cy = t.register_team("Cy's team", [Player("Cy", "5552220000", 7)])
+    cy = t.register_team("Cy's team", [Player("Cy", "5552220000", 7, sms_consent=True)])
     late = t.register_team("Late", partners(8))
     with pytest.raises(TournamentError, match="registration cap"):
         t.pair_solo_teams(cy.id, ann.id)
@@ -875,3 +880,77 @@ def test_director_pairs_two_solo_players():
     assert not ann.list_seeking and late.status == WAITLISTED
     assert "partnered up" in t.outbox[-1].body and ann.pin in t.outbox[-1].body
     assert set(ann.phones) == {"5551110000", "5552220000"}
+
+
+# ---------------------------------------------------- text consent and result fixes
+
+def test_only_opted_in_players_get_texts_and_partner_opts_in_later():
+    t = Tournament()
+    t.site_url = "https://chips.example"
+    t.settings.sms_name, t.settings.contact_phone = "First Coast APA", "904-528-7657"
+    team = t.register_team("Sharks", [Player("Ann", "5551110000", 4, sms_consent=True), Player("Bob", "5552220000", 5)])
+    assert [m.to for m in t.outbox] == ["5551110000"]
+    welcome = t.outbox[-1].body
+    assert welcome.startswith("First Coast APA: Sharks is registered for")
+    assert f"Team page: https://chips.example/team/{team.id}" in welcome and team.pin in welcome
+    assert "Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out." in welcome
+    t.outbox.clear()
+    t.opt_in(team.id, 1)
+    assert [m.to for m in t.outbox] == ["5552220000"] and "Bob, you're signed up" in t.outbox[0].body
+    assert team.phones == ["5551110000", "5552220000"] and team.players[1].sms_consent_at
+    t.outbox.clear()
+    t.opt_in(team.id, 1)  # already on: no second welcome
+    assert t.outbox == []
+
+
+def finished_match(t, winner_side="a"):
+    m = called(t)[0]
+    for _ in range(t.settings.race_to):
+        t.score(m.id, winner_side, 1)
+    t.submit_result(m.id)
+    return m
+
+
+def test_fix_result_swaps_winner_chips_and_lists():
+    t = make(n_teams=4)
+    t.start(random.Random(3))
+    m = finished_match(t)
+    a, b = t.teams[m.team_a], t.teams[m.team_b]
+    chips_a, chips_b, value = a.chips, b.chips, t.chip_value_cents
+    t.fix_result(m.id)
+    assert m.winner == b.id and m.loser == a.id and m.score_b == t.settings.race_to
+    assert (a.chips, b.chips) == (chips_a - 1, chips_b + 1) and t.chip_value_cents == value
+    assert (a.wins, a.losses, b.wins, b.losses) == (0, 1, 1, 0)
+    assert t.total_chips_issued == t.chips_in_play + t.chips_returned
+    assert any("Result corrected" in x.body for x in t.outbox)
+    # Neither team is stuck: each is in line or already on its next table.
+    for team in (a, b):
+        assert team.id in t.winners_list + t.losers_list or t.current_match_for(team.id)
+
+
+def test_fix_result_brings_back_an_eliminated_team():
+    t = make(n_teams=3)
+    t.start(random.Random(4))
+    m = called(t)[0]
+    loser = t.teams[m.team_b]
+    t.adjust_chips(loser.id, -(loser.chips - 1), "test: down to one chip")
+    finished_match(t, "a")
+    assert loser.status == "eliminated" and t.status == RUNNING
+    winner_chips = t.teams[m.team_a].chips
+    t.fix_result(m.id)
+    assert loser.status == ACTIVE and loser.chips == 1 and t.teams[m.team_a].chips == winner_chips - 1
+
+
+def test_fix_result_refused_once_a_later_match_has_started():
+    t = make(n_teams=2, skills=[6, 6])  # 5 chips each: they keep playing each other
+    t.start(random.Random(5))
+    m1 = finished_match(t)
+    nxt = t.current_match_for(m1.winner)
+    assert nxt is not None and nxt.status == CALLED
+    t.score(nxt.id, "a", 1)
+    with pytest.raises(TournamentError, match="already started another match"):
+        t.fix_result(m1.id)
+    t.score(nxt.id, "a", -1)  # nothing scored yet: the fix cancels and redoes the pairing
+    first_winner = m1.winner
+    t.fix_result(m1.id)
+    assert nxt.status == "cancelled" and m1.winner != first_winner

@@ -122,15 +122,44 @@
           <button class="button small square">+</button></form>
       </div>
       <form method="post" action="{{ url_for('admin_winner', match_id=m.id) }}" class="inline"
-            onsubmit="return confirm('{{ t.name_of(tid)|e }} wins?')">
+            data-dialog-title="{{ t.name_of(tid) }} won the match"
+            data-dialog-text="Score {{ sc }}–{{ m.score_b if side == 'a' else m.score_a }}. Submit the result, or go back.">
         <input type="hidden" name="winner" value="{{ tid }}"><button class="button secondary small">Winner</button></form>
     </div>
     {% endfor %}
+    {% set won = t.race_winner(m) %}
+    {% if won %}
+    <div class="banner await-banner" style="margin-top: 12px">
+      <b>{{ t.name_of(won) }} reached {{ s.race_to }}.</b> Waiting for the players to submit.
+      <form method="post" action="{{ url_for('admin_submit', match_id=m.id) }}" class="inline"
+            data-dialog-title="{{ t.name_of(won) }} won the match"
+            data-dialog-text="Score {{ m.score_a }}–{{ m.score_b }}. Submit the result, or go back.">
+        <button class="button small">Submit result</button></form>
+    </div>
+    {% endif %}
   </div>
   {% else %}
   <p class="muted">No open matches.</p>
   {% endfor %}
   </div>
+  {% set finished = t.matches|selectattr("status", "equalto", "done")|selectattr("team_b")|selectattr("winner")|list %}
+  {% if finished %}
+  <details class="card" style="margin-top: 24px" id="results">
+    <summary><b>Recent results</b> <span class="muted">· Fix result swaps the winner if the wrong team was recorded</span></summary>
+    <div class="table-wrap"><table class="grid small" style="margin-top: 16px">
+      <thead><tr><th>Match</th><th>Table</th><th>Winner</th><th>Loser</th><th>Score</th><th></th></tr></thead>
+      {% for x in (finished|reverse|list)[:10] %}
+      <tr><td>#{{ x.round }}</td><td>{{ x.table or "–" }}</td><td>{{ t.name_of(x.winner) }}</td><td>{{ t.name_of(x.loser) }}</td>
+        <td>{% if x.forfeit %}forfeit{% else %}{{ [x.score_a, x.score_b]|max }}–{{ [x.score_a, x.score_b]|min }}{% endif %}</td>
+        <td>{% if not x.forfeit %}<form method="post" action="{{ url_for('admin_fix', match_id=x.id) }}" class="inline"
+              data-dialog-title="Fix match #{{ x.round }}?"
+              data-dialog-text="{{ t.name_of(x.loser) }} becomes the winner and {{ t.name_of(x.winner) }} loses a chip. Both teams get a correction text."
+              data-dialog-ok="Fix result">
+            <button class="button small secondary">Fix result</button></form>{% endif %}</td></tr>
+      {% endfor %}
+    </table></div>
+  </details>
+  {% endif %}
   {% set admin_controls = true %}
   <div class="split" style="margin-top: 32px">
     <div class="card">{% include "_queue.html" %}
@@ -423,6 +452,35 @@ document.querySelectorAll("main form").forEach(function (f) {
   box.addEventListener("keydown", function (e) { if (e.key === "Escape") { box.value = ""; filter(); } });
   filter();
   if (location.hash === "#teams" && box.value) { box.focus(); box.select(); }  // ready to type the next team
+})();
+</script>
+<dialog class="result-dialog" id="confirm-dialog">
+  <h2 id="confirm-title"></h2>
+  <p id="confirm-text"></p>
+  <div class="button-row">
+    <button class="button big" id="confirm-ok">Submit</button>
+    <button class="button big secondary" id="confirm-back">Go back</button>
+  </div>
+</dialog>
+<script>
+// "X won the match" pop-up: Submit sends the form, Go back cancels.
+(function () {
+  var d = document.getElementById("confirm-dialog"), pending = null;
+  if (!d || !d.showModal) return;
+  document.querySelectorAll("form[data-dialog-title]").forEach(function (f) {
+    f.addEventListener("submit", function (e) {
+      if (f.dataset.confirmed) return;
+      e.preventDefault(); pending = f;
+      document.getElementById("confirm-title").textContent = f.dataset.dialogTitle;
+      document.getElementById("confirm-text").textContent = f.dataset.dialogText || "";
+      document.getElementById("confirm-ok").textContent = f.dataset.dialogOk || "Submit";
+      d.showModal();
+    });
+  });
+  document.getElementById("confirm-ok").addEventListener("click", function () {
+    if (pending) { pending.dataset.confirmed = "1"; d.close(); pending.submit(); }
+  });
+  document.getElementById("confirm-back").addEventListener("click", function () { pending = null; d.close(); });
 })();
 </script>
 {% endblock %}

@@ -64,6 +64,12 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer">
+    <span>{{ legal.brand }}</span>
+    <a href="{{ url_for('terms') }}">Terms &amp; Conditions</a>
+    <a href="{{ url_for('privacy') }}">Privacy Policy</a>
+    <a href="mailto:{{ legal.email }}">{{ legal.email }}</a>
+  </footer>
 <script>
 // Live countdowns: <span class="countdown" data-at="ISO time">. On the director page a
 // passed deadline reloads the page so automatic grace/forfeit updates show up.

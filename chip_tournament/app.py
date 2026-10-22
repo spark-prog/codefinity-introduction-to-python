@@ -35,6 +35,7 @@ from chips.engine import (
     money,
 )
 from chips.storage import Store
+from chips.throttle import Throttle
 
 
 def clock(value) -> str:
@@ -127,10 +128,14 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # uploads (CSV import, background photo)
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
+    # Optional read-only director login (e.g. for the league office to look around).
+    viewer_password = os.environ.get("VIEWER_PASSWORD", "")
     if os.environ.get("CHIPS_PRODUCTION") == "1":
         # On the internet: refuse to run with the default password, and only send cookies over HTTPS.
         if admin_password == "admin" or len(admin_password) < 8:
             raise RuntimeError("Set ADMIN_PASSWORD to a password of at least 8 characters before going live.")
+        if viewer_password and (len(viewer_password) < 8 or viewer_password == admin_password):
+            raise RuntimeError("VIEWER_PASSWORD must be at least 8 characters and different from ADMIN_PASSWORD.")
         app.config["SESSION_COOKIE_SECURE"] = True
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config["store"] = store
@@ -167,6 +172,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             "background_url": url_for("background", v=int(bg.stat().st_mtime) if bg else 0),
             "has_custom_background": bg is not None,
             "is_admin": session.get("admin", False),
+            "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
             "ACTIVE": ACTIVE,
             "CALLED": CALLED,
             "WAITING": WAITING,
@@ -229,10 +235,48 @@ def create_app(data_dir: str | None = None) -> Flask:
         @wraps(view)
         def wrapper(*args, **kwargs):
             if not session.get("admin"):
+                if session.get("viewer"):
+                    flash("You're signed in view-only, so changes are turned off.", "error")
+                    return redirect(url_for("admin"))
                 return redirect(url_for("admin_login", next=request.path))
             return view(*args, **kwargs)
 
         return wrapper
+
+    def director_view(view):
+        """Pages the view-only login may look at (it can't change anything)."""
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            if not (session.get("admin") or session.get("viewer")):
+                return redirect(url_for("admin_login", next=request.path))
+            return view(*args, **kwargs)
+
+        return wrapper
+
+    # Wrong-guess limits: a 4-digit PIN or the password can't be guessed by trying over and over.
+    pin_by_ip = Throttle(limit=10, window=15 * 60)
+    pin_by_team = Throttle(limit=20, window=15 * 60)
+    login_by_ip = Throttle(limit=5, window=15 * 60)
+
+    def minutes(seconds: int) -> str:
+        n = max(1, (seconds + 59) // 60)
+        return f"{n} minute{'s' if n != 1 else ''}"
+
+    def check_pin(team) -> bool:
+        """Sign the team in if the PIN matches; count wrong guesses."""
+        ip, key = request.remote_addr or "?", f"team:{team.id}"
+        wait = max(pin_by_ip.wait(ip), pin_by_team.wait(key))
+        if wait:
+            flash(f"Too many wrong PINs. Try again in {minutes(wait)}, or ask the director.", "error")
+            return False
+        if secrets.compare_digest(request.form.get("pin", "").strip(), team.pin):
+            pin_by_ip.clear(ip)
+            session[f"team_{team.id}"] = True
+            return True
+        pin_by_ip.fail(ip)
+        pin_by_team.fail(key)
+        flash("That PIN doesn't match.", "error")
+        return False
 
     # ------------------------------------------------------------- public pages
 
@@ -269,9 +313,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         return {"ok": True}
 
     @app.get("/guide")
+    @director_view  # the director's guide is for directors only
     def guide():
-        if not session.get("admin"):  # the director's guide is for directors only
-            return redirect(url_for("admin_login", next=request.path))
         return render_template("guide.html", t=store.load())
 
     @app.get("/team/<team_id>")
@@ -297,10 +340,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/team/<team_id>/login")
     def team_login(team_id):
         team = store.load().teams.get(team_id) or abort(404)
-        if secrets.compare_digest(request.form.get("pin", "").strip(), team.pin):
-            session[f"team_{team_id}"] = True
-        else:
-            flash("That PIN doesn't match.", "error")
+        check_pin(team)
         return redirect(url_for("team_page", team_id=team_id))
 
     @app.post("/team/<team_id>/arrived")
@@ -333,10 +373,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         team = t.teams.get(team_id) or abort(404)
         allowed = session.get(f"team_{team_id}") or session.get("admin")
         if request.method == "POST" and not allowed:
-            if request.form.get("pin", "").strip() == team.pin:
-                session[f"team_{team_id}"] = True
-            else:
-                flash("That PIN doesn't match.", "error")
+            check_pin(team)
             return redirect(url_for("roster", team_id=team_id))
         if request.method == "POST":
             f = request.form
@@ -355,26 +392,38 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.route("/admin/login", methods=["GET", "POST"])
     def admin_login():
         if request.method == "POST":
-            if secrets.compare_digest(request.form.get("password", ""), admin_password):
-                session["admin"] = True
+            ip, password = request.remote_addr or "?", request.form.get("password", "")
+            wait = login_by_ip.wait(ip)
+            is_director = secrets.compare_digest(password, admin_password)
+            is_viewer = bool(viewer_password) and secrets.compare_digest(password, viewer_password)
+            if wait:
+                flash(f"Too many wrong passwords. Try again in {minutes(wait)}.", "error")
+            elif is_director or is_viewer:
+                login_by_ip.clear(ip)
+                session.pop("admin", None)
+                session.pop("viewer", None)
+                session["admin" if is_director else "viewer"] = True
                 nxt = request.args.get("next", "")
                 return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("admin"))
-            flash("Wrong password.", "error")
+            else:
+                login_by_ip.fail(ip)
+                flash("Wrong password.", "error")
         return render_template("login.html", t=store.load(), default_password=admin_password == "admin")
 
     @app.post("/admin/logout")
     def admin_logout():
         session.pop("admin", None)
+        session.pop("viewer", None)
         return redirect(url_for("home"))
 
     @app.get("/admin")
-    @admin_required
+    @director_view
     def admin():
         tick()
         t = store.load()
         return render_template(
             "admin.html", t=t, undo_label=store.last_undo_label(), server_time=datetime.now(),
-            tz_name=os.environ.get("TZ", ""), texts=sms.recent(50), sms_enabled=sms.enabled,
+            tz_name=os.environ.get("TZ", ""), texts=sms.recent(50), sms_enabled=sms.enabled, archives=store.archives(),
             bracket_text="\n".join(f"{top} = {chips}" for top, chips in t.settings.chip_brackets),
         )
 
@@ -681,12 +730,24 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/reset")
     @admin_required
     def admin_reset():
-        if request.form.get("confirm") != "RESET":
+        if request.form.get("confirm", "").strip().upper() != "RESET":
             flash("Type RESET to confirm.", "error")
+        elif request.form.get("mode") == "delete":
+            store.delete_and_reset()
+            flash("Started a new tournament. The old one, its rosters and its texts were permanently deleted.", "ok")
         else:
             store.archive_and_reset()
-            flash("Started a new tournament. The old one was archived in the data folder.", "ok")
+            flash("Started a new tournament. The old one is saved under Past tournaments.", "ok")
         return redirect(url_for("admin"))
+
+    @app.post("/admin/archives/delete")
+    @admin_required
+    def admin_delete_archives():
+        stamps = [a["stamp"] for a in store.archives()] if request.form.get("all") == "1" else [request.form.get("stamp", "")]
+        deleted = sum(store.delete_archive(stamp) for stamp in stamps)
+        flash(f"Permanently deleted {deleted} past tournament(s)." if deleted else "Nothing to delete.",
+              "ok" if deleted else "error")
+        return redirect(url_for("admin") + "#past")
 
     return app
 

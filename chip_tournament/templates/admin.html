@@ -9,10 +9,11 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
-    <a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>
-    {% if t.status == SETUP %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
+    {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
+    {% if t.status == SETUP and not is_viewer %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
   </div>
 </header>
+{% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. You can look around, but buttons are turned off, and phone numbers, team PINs and text messages are hidden.</p>{% endif %}
 {% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
 
 <section class="card controls" style="margin-top: 0">
@@ -131,8 +132,8 @@
     <tbody>
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}">
-      <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ team.pin }}</span></td>
-      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ p.phone }}</span>{% endif %}</div>{% endfor %}</td>
+      <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ "••••" if is_viewer else team.pin }}</span></td>
+      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}</td>
       <td>{{ team.combined_skill }}
         {% if t.status == SETUP %}
           {% set c = t.chips_preview(team) %}
@@ -208,7 +209,7 @@
   </form>
   <details><summary>Recent texts ({{ texts|length }})</summary>
     <table class="grid small">
-      {% for x in texts %}<tr><td>{{ x.at[11:] }}</td><td>{{ x.to }}</td><td>{{ x.body }}</td><td>{{ x.status }}</td></tr>{% endfor %}
+      {% for x in texts %}<tr><td>{{ x.at[11:] }}</td>{% if is_viewer %}<td>ending in {{ x.to|last4 }}</td><td class="muted">(hidden in view-only)</td>{% else %}<td>{{ x.to }}</td><td>{{ x.body }}</td>{% endif %}<td>{{ x.status }}</td></tr>{% endfor %}
     </table>
   </details>
 </div>
@@ -293,10 +294,44 @@
 <section class="card">
   <p class="eyebrow">Danger zone</p>
   <h2>New tournament</h2>
-  <p class="muted">Archives this tournament (it's kept in the data folder) and starts a fresh one.</p>
+  <p class="muted">Starts a fresh tournament. <b>Archive</b> keeps this one under Past tournaments (you can delete it later).
+    <b>Delete permanently</b> erases it now, with its rosters, phone numbers and texts. Deleting can't be undone.</p>
   <form method="post" action="{{ url_for('admin_reset') }}" class="reset-row">
-    <input name="confirm" placeholder="Type RESET">
-    <button class="button danger">Archive this tournament and start over</button>
+    <input name="confirm" placeholder="Type RESET" autocomplete="off">
+    <button class="button secondary" name="mode" value="archive">Archive and start over</button>
+    <button class="button danger" name="mode" value="delete">Delete permanently and start over</button>
   </form>
 </section>
+
+<section class="card" id="past">
+  <h2>Past tournaments</h2>
+  {% if archives %}
+  <p class="muted">Archived tournaments still hold player names and phone numbers. Delete them once you no longer need them.</p>
+  <table class="grid small">
+    <thead><tr><th>Tournament</th><th>Teams</th><th>Archived</th><th></th></tr></thead>
+    {% for a in archives %}
+    <tr><td>{{ a.name }}</td><td>{{ a.teams }}</td>
+      <td>{{ a.archived.strftime("%B %-d, %Y") if a.archived else a.stamp }}</td>
+      <td><form method="post" action="{{ url_for('admin_delete_archives') }}" class="inline"
+            data-confirm="Permanently delete {{ a.name }}? This can't be undone." onsubmit="return confirm(this.dataset.confirm)">
+        <input type="hidden" name="stamp" value="{{ a.stamp }}"><button class="button small danger">Delete permanently</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% if archives|length > 1 %}
+  <form method="post" action="{{ url_for('admin_delete_archives') }}" style="margin-top: 16px"
+        data-confirm="Permanently delete all {{ archives|length }} past tournaments? This can't be undone." onsubmit="return confirm(this.dataset.confirm)">
+    <input type="hidden" name="all" value="1"><button class="button secondary danger">Delete all past tournaments</button></form>
+  {% endif %}
+  {% else %}
+  <p class="muted">None saved. Nothing from earlier tournaments is being kept.</p>
+  {% endif %}
+</section>
+{% if is_viewer %}
+<script>
+// View-only login: turn every control off (the server refuses changes either way).
+document.querySelectorAll("main form").forEach(function (f) {
+  f.querySelectorAll("button, input, select, textarea").forEach(function (el) { el.disabled = true; });
+});
+</script>
+{% endif %}
 {% endblock %}

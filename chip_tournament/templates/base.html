@@ -32,7 +32,7 @@
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">Director</a>
         <a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>
-        {% if is_admin %}
+        {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline"><button class="link">Log out</button></form>
         {% endif %}
       </nav>

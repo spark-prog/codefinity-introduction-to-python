@@ -146,7 +146,19 @@ Without these, texts are only logged (see **Recent texts** on the director page)
 
 ## Data
 
-Everything is saved in `chip_tournament/data/` (`tournament.json`, the undo history and `texts.log`). **Archive and start over** on the director page renames the old file and starts a fresh tournament. Set `CHIPS_DATA_DIR` to store the data somewhere else.
+Everything is saved in `chip_tournament/data/` (`tournament.json`, the undo history and `texts.log`). Set `CHIPS_DATA_DIR` to store the data somewhere else.
+
+To start the next tournament, type RESET under **New tournament** on the director page and choose:
+
+- **Archive and start over** keeps the old tournament and its texts. It's listed under **Past tournaments**, where you can delete it later.
+- **Delete permanently and start over** erases the old tournament, its undo history and its texts right away.
+
+## Security
+
+- **Phone numbers** appear only on director pages. A team editing its roster sees only the last 4 digits of the numbers on file.
+- **Wrong guesses are limited.** After 5 wrong director passwords from one device, that device waits 15 minutes. Team PINs allow 10 wrong tries per device and 20 per team in 15 minutes.
+- **View-only login (optional).** Set `VIEWER_PASSWORD` to give someone (e.g. the league office) a director login that can look but not change anything. It hides phone numbers, team PINs and text messages.
+- **On the internet** (`CHIPS_PRODUCTION=1`), the app refuses to start without a strong director password, and login cookies are only sent over HTTPS.
 
 ## Code layout
 

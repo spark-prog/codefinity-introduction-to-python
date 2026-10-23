@@ -433,10 +433,18 @@ def test_wrong_pin_guesses_lock_out(client):
         c = client.application.test_client()
         c.environ_base["REMOTE_ADDR"] = f"10.0.1.{i}"
         wrong_pins(c, team, 5)
+    # The team is under attack: a device that has guessed wrong for it is locked out...
     late = client.application.test_client()
     late.environ_base["REMOTE_ADDR"] = "10.0.2.1"
+    wrong_pins(late, team, 1)
     page = late.post(f"/team/{team.id}/roster", data={"pin": team.pin}, follow_redirects=True)
     assert b"Too many wrong PINs" in page.data
+    # ...but the real players, on a phone that hasn't guessed wrong, still get in.
+    real = client.application.test_client()
+    real.environ_base["REMOTE_ADDR"] = "10.0.3.1"
+    real.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    with real.session_transaction() as s:
+        assert s.get(f"team_{team.id}")
 
 
 def test_wrong_password_guesses_lock_out(client):
@@ -644,3 +652,60 @@ def test_partner_deadline_undo_sticks_and_labels_name_the_teams(client):
     assert store.load().teams[ann.id].status == "registered"  # it stuck
     client.post("/admin/partner-deadline")
     assert store.load().teams[ann.id].status == "waitlisted"
+
+
+def test_stale_undo_does_nothing(client):
+    register(client, "Sharks")
+    client.post("/admin/login", data={"password": "secret"})
+    store = client.application.config["store"]
+    page = client.get("/admin").get_data(as_text=True)
+    import re as _re
+    step = _re.search(r'name="step" value="(\d+)"', page).group(1)
+    register(client.application.test_client(), "Rails")  # a player registers meanwhile
+    page = client.post("/admin/undo", data={"step": step}, follow_redirects=True).get_data(as_text=True)
+    assert "Nothing was undone" in page and len(store.load().teams) == 2
+    step = _re.search(r'name="step" value="(\d+)"', page).group(1)
+    client.post("/admin/undo", data={"step": step})
+    assert [x.name for x in store.load().teams.values()] == ["Sharks"]
+
+
+def test_settings_reject_bad_dates_and_a_race_below_a_live_score(client):
+    for name in ("Sharks", "Rails"):
+        register(client, name)
+    client.post("/admin/login", data={"password": "secret"})
+    form = {"name": "T", "date": "0001-01-01", "start_time": "9:00 PM", "tables": "1, 2", "race_to": "3",
+            "entry_fee": "20", "added_money": "0", "registration_cap": "10",
+            "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2", "field_cap": "0"}
+    page = client.post("/admin/settings", data=form, follow_redirects=True).get_data(as_text=True)
+    assert "Enter a real tournament date" in page and client.get("/admin").status_code == 200
+    check_in_and_start(client)
+    store = client.application.config["store"]
+    m = store.load().open_matches()[0]
+    client.post(f"/admin/match/{m.id}/score", data={"side": "a", "delta": "1"})
+    client.post(f"/admin/match/{m.id}/score", data={"side": "a", "delta": "1"})
+    page = client.post("/admin/settings", data={**form, "date": "2099-10-31", "race_to": "1"},
+                       follow_redirects=True).get_data(as_text=True)
+    assert "can&#39;t be lowered" in page and store.load().settings.race_to == 3
+
+
+def test_viewer_page_load_changes_nothing(client):
+    store = client.application.config["store"]
+    register(client, "Sharks")
+    before = store.undo_depth()
+    viewer = client.application.test_client()
+    viewer.post("/admin/login", data={"password": "lookonly"})
+    viewer.get("/admin")
+    assert store.undo_depth() == before
+
+
+def test_name_fix_on_the_roster_keeps_the_hidden_cell(client):
+    register(client, "Sharks")
+    store = client.application.config["store"]
+    team = next(iter(store.load().teams.values()))
+    page = client.get(f"/team/{team.id}/roster").get_data(as_text=True)
+    assert 'name="same_person_0"' in page
+    client.post(f"/team/{team.id}/roster", data={"name": "Sharks", "player_name_0": "Annie", "player_skill_0": "5",
+                                                 "player_phone_0": "", "same_person_0": "1",
+                                                 "player_name_1": "Bob", "player_skill_1": "5"})
+    p = store.load().teams[team.id].players[0]
+    assert p.name == "Annie" and p.phone == "5551234567" and p.sms_consent

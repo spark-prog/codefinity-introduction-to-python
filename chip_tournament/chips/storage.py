@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .engine import Tournament
 
-HISTORY_LIMIT = 100
+HISTORY_LIMIT = 40  # each step is a full copy of the tournament, rewritten on every action
 
 
 class Store:
@@ -58,6 +58,10 @@ class Store:
         """Save without adding an undo step."""
         with self.lock:
             self._write(self.path, t.to_dict())
+
+    def undo_depth(self) -> int:
+        """How many steps can be undone; changes with every action, so a stale Undo button can be spotted."""
+        return len(self._history())
 
     def last_undo_label(self) -> str | None:
         history = self._history()

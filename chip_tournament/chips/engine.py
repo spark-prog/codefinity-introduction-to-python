@@ -460,7 +460,10 @@ class Tournament:
     @property
     def partner_deadline(self) -> datetime | None:
         start = self.event_start
-        return start - timedelta(hours=PARTNER_DEADLINE_HOURS) if start else None
+        try:
+            return start - timedelta(hours=PARTNER_DEADLINE_HOURS) if start else None
+        except OverflowError:  # a date at the very start of the calendar
+            return None
 
     def partner_deadline_text(self) -> str:
         d = self.partner_deadline
@@ -690,7 +693,7 @@ class Tournament:
         return {" ".join(p.name.lower().split()) for p in players}
 
     def update_roster(self, team_id: str, players: list[Player], name: str | None = None,
-                      list_seeking: bool | None = None) -> Team:
+                      list_seeking: bool | None = None, same_people=()) -> Team:
         """Change partners, phones or skill levels.
 
         With the same two partners, skill levels can rise after registration
@@ -699,8 +702,14 @@ class Tournament:
         place (in the field or on the waiting list). Partners and skill levels
         lock once the team has been given its chips. A team registered without a
         partner adds one here (that counts as a new registration too).
+
+        same_people: positions where the name was only corrected (same person), so it's
+        not a swap and the player keeps their cell number and text consent.
         """
         team = self.team(team_id)
+        same_people = {i for i in same_people if i < min(len(players), len(team.players))}
+        # The roster as it was, with corrected names applied, so a spelling fix isn't a swap.
+        before = [Player(players[i].name if i in same_people else o.name, o.phone, o.skill) for i, o in enumerate(team.players)]
         was_solo, solo = team.needs_partner, len(players) == 1
         if solo and not was_solo and self.partner_deadline_passed():
             raise TournamentError(
@@ -709,9 +718,9 @@ class Tournament:
             )
         self._check_players(players, solo_ok=was_solo or solo)
         old_skill, new_skill = team.combined_skill, sum(p.skill for p in players)
-        swap = self._names(players) != self._names(team.players)
+        swap = self._names(players) != self._names(before)
         if team.status not in (REGISTERED, WAITLISTED) and [(p.name, p.skill) for p in players] != [
-            (p.name, p.skill) for p in team.players
+            (p.name, p.skill) for p in before
         ]:
             raise TournamentError("Partners and skill levels are locked once the tournament starts.")
         if solo:
@@ -727,9 +736,14 @@ class Tournament:
             if any(t.name.lower() == name.strip().lower() for t in self.teams.values() if t.id != team_id):
                 raise TournamentError(f"A team named '{name.strip()}' is already registered.")
             team.name = name.strip()
-        for p in players:  # consent belongs to a person and their number
-            old = next((o for o in team.players if self._names([o]) == self._names([p]) and o.phone == p.phone), None)
-            if old is not None:
+        fixed = [f"{team.players[i].name} → {players[i].name}" for i in sorted(same_people)
+                 if self._names([team.players[i]]) != self._names([players[i]])]
+        for i, p in enumerate(players):  # consent belongs to a person and their number
+            if i in same_people:
+                old = team.players[i]
+            else:
+                old = next((o for o in team.players if self._names([o]) == self._names([p])), None)
+            if old is not None and old.phone == p.phone:
                 p.sms_consent, p.sms_consent_at = old.sms_consent, old.sms_consent_at
         team.players = players
         if list_seeking is not None:
@@ -748,6 +762,8 @@ class Tournament:
             change = f" Partner removed; {team.name} needs a partner by {self.partner_deadline_text()}."
         elif swap:
             change = f" Partner swap, now {team.partners}." + change
+        if fixed:
+            change = f" Name corrected: {', '.join(fixed)}." + change
         self._say(f"Roster updated for {team.name}.{change}")
         if was_solo and not solo and team.status == WAITLISTED:
             self._fill_from_waitlist()  # a spot may have been held open for a complete team
@@ -819,6 +835,8 @@ class Tournament:
             raise TournamentError("Teams can't be added after last call.")
         if self.entries_locked:
             raise TournamentError("Entries are locked: every team has already played a match.")
+        if self.status != SETUP and team.needs_partner:
+            raise TournamentError(f"{team.name} still needs a partner, so it can't join the tournament.")
         if self.field_full:
             team.status = WAITLISTED
             self.waitlist.append(team.id)
@@ -1093,6 +1111,8 @@ class Tournament:
         """The team that has reached the race and is waiting for the result to be submitted."""
         if m.status != CALLED:
             return None
+        if m.score_a >= self.settings.race_to and m.score_b >= self.settings.race_to:
+            return None  # only possible if the race was lowered mid-match; the director picks the winner
         if m.score_a >= self.settings.race_to:
             return m.team_a
         if m.score_b >= self.settings.race_to:
@@ -1124,6 +1144,13 @@ class Tournament:
             if team.status not in (ACTIVE, ELIMINATED):
                 raise TournamentError(f"{team.name} has already cashed in, so this result can't be swapped. "
                                       "Use Undo, or Adjust the teams' chips.")
+        # Both teams' chips must still come from this match: no Adjust (or anything else) since.
+        for team in (old_w, old_l):
+            mine = [e for e in self.ledger if e.team_id == team.id]
+            touched = [e for e in mine if e.reason.startswith((f"Lost match #{m.round} ", f"Lost match #{m.round}:"))]
+            if touched and mine[-1] is not touched[-1] or (team is old_w and team.status != ACTIVE):
+                raise TournamentError(f"{team.name}'s chips have changed since this match (for example with Adjust), "
+                                      "so this result can't be swapped. Use Undo, or Adjust the teams' chips.")
         later = self.matches[self.matches.index(m) + 1:]
         for x in later:
             if {x.team_a, x.team_b} & {old_w.id, old_l.id} and (
@@ -1146,7 +1173,9 @@ class Tournament:
                     lst.remove(team.id)
 
         m.winner, m.loser = old_l.id, old_w.id
-        m.score_a, m.score_b = m.score_b, m.score_a
+        # Swap the scores only if they favored the old winner (a wrong tap on Winner leaves them right).
+        if (m.score_a if old_w.id == m.team_a else m.score_b) > (m.score_b if old_w.id == m.team_a else m.score_a):
+            m.score_a, m.score_b = m.score_b, m.score_a
         old_w.wins, old_w.losses = old_w.wins - 1, old_w.losses + 1
         old_l.wins, old_l.losses = old_l.wins + 1, old_l.losses - 1
         # Both start with "Lost" so the chip check (chips returned to the table) still adds up.
@@ -1155,20 +1184,32 @@ class Tournament:
             old_l.status = ACTIVE
         self._chip_change(old_w, -1, f"Lost match #{m.round} to {old_l.name} (result corrected)")
         self._say(f"Result corrected on match #{m.round}: {old_l.name} beat {old_w.name}.")
-        self._enqueue(old_l.id, self.winners_list)
+        if old_l.status == ACTIVE and self.last_call:
+            # A team brought back after last call still gets only its last match. This match was
+            # already counted for a team that stayed active; not for one it had eliminated.
+            if old_l.matches_left is None:
+                old_l.matches_left = 1
+            elif old_l.chips == 1:  # it had been eliminated by this match, so the countdown never ran
+                old_l.matches_left -= 1
+        if old_l.matches_left == 0:
+            payout = self._cash_out(old_l, "Last call")
+            self._text_team(old_l, f"Result corrected: {old_l.name} won the match on table {m.table}. That was your "
+                                   f"last match: you've been cashed in for {money(payout)}. See the desk to collect.")
+        else:
+            self._enqueue(old_l.id, self.winners_list)
         if old_w.chips <= 0:
             old_w.status = ELIMINATED
             self._say(f"{old_w.name} is out of chips and eliminated.")
         else:
             self._enqueue(old_w.id, self.losers_list)
-        for team in (old_l, old_w):
+        for team in [x for x in (old_l, old_w) if x.status != CASHED_OUT]:
             out = " You're out of chips and eliminated." if team.status == ELIMINATED else ""
             self._text_team(team, f"Result corrected: {old_l.name} won the match on table {m.table}. "
                                   f"{team.name} now has {team.chips} chip(s).{out}")
         self._advance()
         return m
 
-    def record_result(self, match_id: str, winner_id: str, forfeit: bool = False) -> Match:
+    def record_result(self, match_id: str, winner_id: str, forfeit: bool = False, advance: bool = True) -> Match:
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("That match is not at a table.")
@@ -1199,7 +1240,8 @@ class Tournament:
             self._text_team(winner, f"{winner.name}: {'your opponent forfeited, ' if forfeit else 'nice win! '}"
                                     f"You keep your {winner.chips} chip(s).")
 
-        self._advance()
+        if advance:
+            self._advance()
         return m
 
     def _after_loss(self, loser: Team, m: Match) -> None:
@@ -1540,6 +1582,9 @@ class Tournament:
         """End the tournament now: stop all matches and cash in every team."""
         if self.status != RUNNING:
             raise TournamentError("The tournament is not running.")
+        # A match that already reached the race counts: record it before stopping everything else.
+        for m in [x for x in self.open_matches() if self.race_winner(x)]:
+            self.record_result(m.id, self.race_winner(m), advance=False)
         self.last_call = True
         self.cash_in_open = True
         for m in self.open_matches():

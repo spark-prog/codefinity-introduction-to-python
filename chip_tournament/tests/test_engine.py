@@ -979,3 +979,109 @@ def test_undone_partner_deadline_stays_paused_until_the_date_changes():
     t2.pause_partner_deadline()
     t2.settings.date = "2021-10-31"  # a new date: the deadline applies again
     assert not t2.partner_deadline_paused and t2.check_clock() == 1 and s2.status == WAITLISTED
+
+
+# ---------------------------------------------------- full review fixes
+
+def test_partnerless_no_show_cant_be_restored_after_the_start():
+    t = solo_event(cap=0)
+    t.settings.require_checkin = False
+    solo = t.register_team("Ann's team", [Player("Ann", "5551110000", 4)])
+    t.mark_no_show(solo.id)
+    for n in ("A", "B"):
+        t.register_team(n, partners(8))
+    t.start(random.Random(1))
+    with pytest.raises(TournamentError, match="still needs a partner"):
+        t.restore_team(solo.id)
+    assert solo.status == "no_show"
+
+
+def test_fix_result_refused_after_adjust_changed_the_chips():
+    t = make(n_teams=4)
+    t.start(random.Random(3))
+    m = finished_match(t)
+    t.adjust_chips(m.winner, -t.teams[m.winner].chips, "test: zeroed")
+    with pytest.raises(TournamentError, match="chips have changed"):
+        t.fix_result(m.id)
+    m2 = finished_match(t)
+    t.adjust_chips(m2.loser, -t.teams[m2.loser].chips, "test: zeroed")
+    with pytest.raises(TournamentError, match="chips have changed"):
+        t.fix_result(m2.id)
+    assert all(x.chips >= 0 for x in t.teams.values())
+
+
+def test_fix_result_keeps_the_last_call_countdown():
+    t = make(n_teams=3)
+    t.start(random.Random(4))
+    m = called(t)[0]
+    loser = t.teams[m.team_b]
+    t.adjust_chips(loser.id, -(loser.chips - 1), "test: one chip")
+    t.call_last_call()
+    assert loser.matches_left == 2  # on a table at last call
+    finished_match(t, "a")
+    assert loser.status == "eliminated"
+    t.fix_result(m.id)
+    assert loser.status == ACTIVE and loser.matches_left == 1  # this match counted: one more, not two
+
+    t = make(n_teams=4)
+    t.start(random.Random(6))
+    m = called(t)[0]
+    loser = t.teams[m.team_b]
+    t.adjust_chips(loser.id, -(loser.chips - 1), "test: one chip")
+    finished_match(t, "a")  # eliminated before last call
+    t.call_last_call()
+    t.fix_result(m.id)
+    assert loser.status == ACTIVE and loser.matches_left == 1
+
+
+def test_end_now_records_a_match_waiting_for_submit():
+    t = make(n_teams=2)
+    t.start(random.Random(9))
+    m = called(t)[0]
+    for _ in range(t.settings.race_to):
+        t.score(m.id, "a", 1)
+    winner, loser = t.teams[m.team_a], t.teams[m.team_b]
+    t.cash_out_everyone()
+    assert m.status == "done" and m.winner == winner.id
+    assert winner.payout_cents > loser.payout_cents
+
+
+def test_fix_result_keeps_scores_when_the_wrong_winner_was_tapped():
+    t = make(n_teams=4)
+    t.start(random.Random(3))
+    m = called(t)[0]
+    for _ in range(t.settings.race_to):
+        t.score(m.id, "a", 1)
+    t.record_result(m.id, m.team_b)  # director tapped the wrong row
+    t.fix_result(m.id)
+    assert m.winner == m.team_a and m.score_a == t.settings.race_to and m.score_b == 0
+
+
+def test_no_race_winner_when_both_teams_passed_a_lowered_race():
+    t = make(n_teams=2)
+    t.settings.race_to = 5
+    t.start(random.Random(9))
+    m = called(t)[0]
+    m.score_a = m.score_b = 4
+    t.settings.race_to = 3
+    assert t.race_winner(m) is None
+
+
+def test_far_past_date_doesnt_break_the_deadline():
+    t = Tournament()
+    t.settings.date, t.settings.start_time = "0001-01-01", "12:00 AM"
+    assert t.partner_deadline is None and not t.partner_deadline_passed()
+
+
+def test_name_correction_keeps_cell_and_consent_and_isnt_a_swap():
+    t = Tournament()
+    team = t.register_team("Sharks", [Player("Ann", "5551110000", 5, sms_consent=True),
+                                      Player("Bob Smith", "5552220000", 5, sms_consent=True)])
+    t.update_roster(team.id, [Player("Ann", "5551110000", 5), Player("Robert Smith", "5552220000", 6)],
+                    same_people={1})
+    assert team.players[1].name == "Robert Smith" and team.players[1].sms_consent
+    assert any("Name corrected: Bob Smith → Robert Smith" in line for line in t.log)
+    assert not any("Partner swap" in line for line in t.log)
+    # Without the box it's a new person: no inherited consent.
+    t.update_roster(team.id, [Player("Ann", "5551110000", 5), Player("Jim Jones", "5552220000", 5)])
+    assert not team.players[1].sms_consent

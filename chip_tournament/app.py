@@ -93,9 +93,10 @@ def last4(phone: str) -> str:
     return digits[-4:]
 
 
-def players_from_form(form, keep_phones_of=None) -> list[Player]:
+def players_from_form(form, keep_phones_of=None, same_people=()) -> list[Player]:
     """Partners from the form. With keep_phones_of (a team), a blank cell box keeps
-    the number on file for that partner, since teams don't get to see the numbers."""
+    the number on file for that partner, since teams don't get to see the numbers:
+    the same name, or a name marked as only corrected (same_people)."""
     players = []
     for i in range(TEAM_SIZE):
         skill = form.get(f"player_skill_{i}", "").strip()
@@ -105,7 +106,7 @@ def players_from_form(form, keep_phones_of=None) -> list[Player]:
         phone = form.get(f"player_phone_{i}", "").strip()
         if not phone and keep_phones_of is not None and i < len(keep_phones_of.players):
             old = keep_phones_of.players[i]
-            if " ".join(old.name.lower().split()) == " ".join(name.lower().split()):
+            if i in same_people or " ".join(old.name.lower().split()) == " ".join(name.lower().split()):
                 phone = old.phone
         players.append(Player(name=name, phone=phone, skill=int(skill or 0)))
     return players
@@ -271,6 +272,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Wrong-guess limits: a 4-digit PIN or the password can't be guessed by trying over and over.
     pin_by_ip = Throttle(limit=10, window=15 * 60)
     pin_by_team = Throttle(limit=20, window=15 * 60)
+    pin_by_device_team = Throttle(limit=10, window=15 * 60)  # who guessed wrong for which team
     login_by_ip = Throttle(limit=5, window=15 * 60)
 
     def minutes(seconds: int) -> str:
@@ -280,16 +282,21 @@ def create_app(data_dir: str | None = None) -> Flask:
     def check_pin(team) -> bool:
         """Sign the team in if the PIN matches; count wrong guesses."""
         ip, key = request.remote_addr or "?", f"team:{team.id}"
-        wait = max(pin_by_ip.wait(ip), pin_by_team.wait(key))
+        pair = f"{ip}|{team.id}"
+        # A team under attack is locked only for devices that have guessed wrong for it, so strangers
+        # can't lock the real players out of their own team.
+        wait = max(pin_by_ip.wait(ip), pin_by_team.wait(key) if pin_by_device_team.failures(pair) else 0)
         if wait:
             flash(f"Too many wrong PINs. Try again in {minutes(wait)}, or ask the director.", "error")
             return False
         if secrets.compare_digest(request.form.get("pin", "").strip(), team.pin):
             pin_by_ip.clear(ip)
+            pin_by_device_team.clear(pair)
             session[f"team_{team.id}"] = True
             return True
         pin_by_ip.fail(ip)
         pin_by_team.fail(key)
+        pin_by_device_team.fail(pair)
         flash("That PIN doesn't match.", "error")
         return False
 
@@ -439,12 +446,13 @@ def create_app(data_dir: str | None = None) -> Flask:
         if request.method == "POST":
             f = request.form
             solo = f.get("solo") == "1"
+            same = {i for i in range(TEAM_SIZE) if f.get(f"same_person_{i}") == "1"}
             if act(
-                "Update roster",
+                f"Update roster: {store.load().name_of(team_id)}",
                 lambda t: t.update_roster(
                     team_id,
-                    players_from_form(f, None if session.get("admin") else t.teams[team_id])[:1 if solo else TEAM_SIZE],
-                    name=f.get("name"), list_seeking=f.get("list_seeking") == "1"),
+                    players_from_form(f, None if session.get("admin") else t.teams[team_id], same)[:1 if solo else TEAM_SIZE],
+                    name=f.get("name"), list_seeking=f.get("list_seeking") == "1", same_people=same),
                 "Roster saved.",
             ):
                 return redirect(url_for("team_page", team_id=team_id))
@@ -483,10 +491,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.get("/admin")
     @director_view
     def admin():
-        tick()
+        if session.get("admin"):  # the view-only login never changes anything (the background clock still runs)
+            tick()
         t = store.load()
         return render_template(
-            "admin.html", t=t, undo_label=store.last_undo_label(), server_time=datetime.now(),
+            "admin.html", t=t, undo_label=store.last_undo_label(), undo_step=store.undo_depth(), server_time=datetime.now(),
             tz_name=os.environ.get("TZ", ""), texts=sms.recent(50), sms_enabled=sms.enabled, archives=store.archives(),
             bracket_text="\n".join(f"{top} = {chips}" for top, chips in t.settings.chip_brackets),
         )
@@ -499,7 +508,14 @@ def create_app(data_dir: str | None = None) -> Flask:
         def update(t):
             s = t.settings
             s.name = f.get("name", "").strip() or "Chip Tournament"
-            s.date, s.start_time = f.get("date", ""), f.get("start_time", "")
+            date = f.get("date", "").strip()
+            if date:
+                try:
+                    if not 2000 <= datetime.strptime(date, "%Y-%m-%d").year <= 2100:
+                        raise ValueError
+                except ValueError:
+                    raise TournamentError("Enter a real tournament date.")
+            s.date, s.start_time = date, f.get("start_time", "")
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.cash_in_time, s.last_call_time = f.get("cash_in_time", ""), f.get("last_call_time", "")
             s.checkin_by = f.get("checkin_by", s.checkin_by).strip()
@@ -519,6 +535,10 @@ def create_app(data_dir: str | None = None) -> Flask:
             race = f.get("race_to", "3")
             if not race.isdigit() or int(race) < 1:
                 raise TournamentError("Race must be a whole number of games.")
+            live = [m for m in t.matches if m.status == CALLED and max(m.score_a, m.score_b) > int(race)]
+            if live:
+                raise TournamentError(f"Table {live[0].table} already has a team past {race} games, so the race can't "
+                                      "be lowered that far while it's playing.")
             if not t.entries_locked and t.status != FINISHED:
                 cap = f.get("registration_cap", "")
                 if not cap.isdigit():
@@ -799,6 +819,12 @@ def create_app(data_dir: str | None = None) -> Flask:
     @admin_required
     def admin_undo():
         with store.lock:
+            expected = request.form.get("step", "")
+            if expected and expected != str(store.undo_depth()):
+                latest = store.last_undo_label()
+                flash(f"Nothing was undone: something else happened since you looked ({latest or 'nothing to undo'} is "
+                      "now the latest action). Check the Undo button and press it again if that's what you want.", "error")
+                return redirect(url_for("admin"))
             label = store.undo()
             t = store.load()
             paused = t.pause_overdue_forfeits()

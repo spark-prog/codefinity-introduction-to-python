@@ -16,7 +16,12 @@
   {% set p = v.players[i] if v.players and i < v.players|length else none %}
   <fieldset class="partner{% if i %} partner-extra{% endif %}">
     <legend>Partner {{ i + 1 }}</legend>
-    <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if locked %}readonly{% endif %}></label>
+    <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}"
+      {% if original_names and p %}data-original="{{ p.name }}"{% endif %} {% if locked and not (original_names and p) %}readonly{% endif %}></label>
+    {% if original_names and p %}
+    <label class="checkbox name-fix" hidden><input type="checkbox" name="same_person_{{ i }}" value="1">
+      <span>Same person: I'm only fixing the spelling of {{ p.name }}'s name (keeps their cell number and text alerts)</span></label>
+    {% endif %}
     <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" max="9" step="1" required
       value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
     {% if hide_phones and p and p.phone %}
@@ -68,9 +73,22 @@
   }
   if (solo) { solo.addEventListener("change", function () { applySolo(); update(); }); applySolo(); }
   function norm(v) { return v.trim().toLowerCase().split(/\s+/).join(" "); }
+  // Show "same person, just fixing the spelling" when a partner's name is edited.
+  names.forEach(function (el) {
+    if (!el.dataset.original) return;
+    var box = el.closest("fieldset").querySelector(".name-fix");
+    function toggle() {
+      var changed = norm(el.value) !== norm(el.dataset.original);
+      box.hidden = !changed; if (!changed) box.querySelector("input").checked = false;
+    }
+    el.addEventListener("input", toggle); box.querySelector("input").addEventListener("change", update); toggle();
+  });
   function isSwap() {
     if (!original) return false;
-    var now = Array.prototype.map.call(names, function (el) { return norm(el.value); }).sort();
+    var now = Array.prototype.map.call(names, function (el) {
+      var fix = el.closest("fieldset").querySelector(".name-fix input");
+      return norm(fix && fix.checked ? el.dataset.original : el.value);
+    }).sort();
     return now.join("|") !== original.slice().sort().join("|");
   }
   function update() {

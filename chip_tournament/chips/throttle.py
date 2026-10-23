@@ -31,6 +31,10 @@ class Throttle:
                 return 0
             return max(1, int(recent[-self.limit] + self.window - now + 0.999))
 
+    def failures(self, key: str) -> int:
+        with self.lock:
+            return len(self._recent(key, time.monotonic()))
+
     def fail(self, key: str) -> None:
         with self.lock:
             self._recent(key, time.monotonic())

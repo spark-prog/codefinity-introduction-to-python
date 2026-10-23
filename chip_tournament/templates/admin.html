@@ -92,6 +92,7 @@
         data-dialog-title="Undo: {{ undo_label }}?"
         data-dialog-text="Undo takes back the most recent action, for everyone.{% if undo_label and undo_label.startswith('Registration:') %} This removes that team's registration, even if a player registered themselves (they were already texted their PIN). To take out one team without undoing anything else, use Remove next to it instead.{% endif %} Texts already sent can't be recalled."
         data-dialog-ok="Undo">
+    <input type="hidden" name="step" value="{{ undo_step }}">
     <button class="button secondary{% if t.status == SETUP %} big{% endif %}" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
   </div>
 </section>

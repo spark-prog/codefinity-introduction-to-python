@@ -1,4 +1,4 @@
-/* Chip Tournament — dark design system, matched to the Control Table artwork
+/* Chip Tournament — dark design system, matched to the Control Table artwork (white headlines with a dark halo for readability)
    Deep navy with a faded photo behind, bright light type, one electric-blue accent
    (cyan-to-blue gradient for headlines and primary buttons), green for "good",
    APA yellow for "running long", APA red only for danger. Montserrat headlines, Inter for UI. */
@@ -72,9 +72,12 @@ main { max-width: 1200px; margin: 0 auto; padding: var(--space-5) var(--space-3)
 h1, h2, h3 { color: var(--ink); margin: 0; }
 h1 {
   font-family: var(--display); font-size: var(--fs-h1); font-weight: 900; line-height: 1.04; letter-spacing: -.02em;
-  /* The Control Table title: cyan-to-blue gradient letters with a soft glow */
-  background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 18px rgba(56, 182, 255, .35));
+  /* White with a dark halo so it reads over any background photo; a short blue line keeps the Control Table look */
+  color: #fff; text-shadow: 0 0 3px #000, 0 2px 18px rgba(0, 0, 0, .95), 0 0 44px rgba(0, 0, 0, .7);
+}
+h1::after {
+  content: ""; display: block; width: 72px; height: 4px; border-radius: 4px; margin-top: 18px;
+  background: linear-gradient(90deg, #8fe9ff, #1a6dff); box-shadow: 0 0 14px rgba(56, 182, 255, .6);
 }
 h2 { font-family: var(--display); font-size: var(--fs-h2); font-weight: 800; line-height: 1.2; letter-spacing: -.01em; margin-bottom: var(--space-2); }
 h3 { font-family: var(--display); }
@@ -509,7 +512,7 @@ mark { background: var(--accent); color: #031024; border-radius: 3px; padding: 0
 
 /* ---------- Terms & Privacy pages, site footer ---------- */
 .legal { max-width: 820px; margin: 0 auto; }
-.legal h1 { font-size: clamp(2rem, 5vw, 2.8rem); }
+.legal h1 { font-size: clamp(2rem, 5vw, 2.8rem); margin-bottom: 14px; }
 .legal h2 { font-size: 1.35rem; margin-top: var(--space-4); }
 .legal li { margin-bottom: 8px; }
 .site-footer { max-width: 1200px; margin: 0 auto; padding: var(--space-3) var(--space-3) var(--space-5); color: var(--muted); font-size: .9rem;
@@ -527,4 +530,19 @@ mark { background: var(--accent); color: #031024; border-radius: 3px; padding: 0
 .small-note { font-size: .88rem; margin: 4px 0 0; }
 .consent-box .button { white-space: normal; text-align: center; }
 .consent-box .checkbox span { min-width: 0; overflow-wrap: anywhere; }
-@media print { h1 { background: none; color: #111; filter: none; } }
+@media print { h1 { color: #111; text-shadow: none; } h1::after, .page-head::before, .hero-copy::before { display: none; } }
+
+/* ---------- Readability over the background photo ---------- */
+/* White text that sits right on the photo gets a dark glow; text inside cards and boxes doesn't need it. */
+main { text-shadow: 0 0 2px rgba(0, 0, 0, .9), 0 1px 10px rgba(0, 0, 0, .85); }
+.card, .table-wrap, .stat, .banner, .flash, dialog, .pill, .button, input, textarea, select, .jump-nav, .checkin-note, .tag { text-shadow: none; }
+.card h1 { text-shadow: none; }
+/* A soft dark patch behind page headings, so the date, title and buttons sit on calmer ground. */
+.page-head, .hero-copy { position: relative; isolation: isolate; }
+.page-head::before, .hero-copy::before {
+  content: ""; position: absolute; inset: -40px -60px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse at 30% 50%, rgba(2, 6, 16, .78) 0%, rgba(2, 6, 16, .45) 45%, rgba(2, 6, 16, 0) 75%);
+}
+/* Info boxes are solid enough to read white text over a bright photo. */
+.banner, .checkin-note { background-color: rgba(3, 10, 24, .86); background-image: linear-gradient(rgba(56, 182, 255, .1), rgba(56, 182, 255, .1)); }
+.banner.danger { background-color: rgba(3, 10, 24, .86); background-image: linear-gradient(rgba(255, 59, 74, .12), rgba(255, 59, 74, .12)); }

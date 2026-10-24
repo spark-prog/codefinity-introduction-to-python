@@ -337,6 +337,35 @@
     If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
     Check-in, grace and start times all use this clock.</p>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    <div class="settings-group">Theme</div>
+    <label class="wide">Colors for this tournament's pages
+      <select name="theme" id="theme-pick">
+        {% for group in ("Everyday", "Holidays") %}
+        <optgroup label="{{ group }}">
+          {% for key, name, g, sw in THEMES if g == group %}
+          <option value="{{ key }}" data-swatches="{{ sw|join(',') }}" {% if theme_key(s.theme) == key %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+      <span class="theme-swatches" id="theme-swatches" aria-hidden="true"></span></label>
+    <script>
+    // Preview a theme on this page as soon as it's picked (saved only with "Save settings").
+    (function () {
+      var pick = document.getElementById("theme-pick"), sw = document.getElementById("theme-swatches");
+      function show() {
+        var opt = pick.options[pick.selectedIndex];
+        document.documentElement.dataset.theme = pick.value;
+        sw.innerHTML = "";
+        opt.dataset.swatches.split(",").forEach(function (c) {
+          var dot = document.createElement("span"); dot.style.background = c; sw.appendChild(dot);
+        });
+      }
+      pick.addEventListener("change", show); show();
+    })();
+    </script>
+    <p class="muted wide">Changing the menu previews the theme on this page right away; press <b>Save settings</b> to use it everywhere.
+      The default background picks up the theme's color; your own venue photo keeps its colors.</p>
     <div class="settings-group">Event</div>
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>

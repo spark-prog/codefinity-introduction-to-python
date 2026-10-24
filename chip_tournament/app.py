@@ -19,7 +19,7 @@ from urllib.parse import quote_plus
 from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from chips import importer, rules as rulebook
+from chips import importer, rules as rulebook, themes
 from chips.alerts import SmsSender
 from chips.engine import (
     ACTIVE,
@@ -182,6 +182,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             # Versioned by file time so browsers pick up a new photo (or a new default) right away.
             "background_url": url_for("background", v=int((bg or Path(app.static_folder) / "img" / "billiard-room.jpg").stat().st_mtime)),
             "has_custom_background": bg is not None,
+            "THEMES": themes.THEMES,
+            "theme_key": themes.theme_key,
             "is_admin": session.get("admin", False),
             "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
             "ACTIVE": ACTIVE,
@@ -522,6 +524,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if t.status == SETUP:
                 s.require_checkin = f.get("require_checkin") == "1"
             s.sms_name = f.get("sms_name", s.sms_name).strip()
+            s.theme = themes.theme_key(f.get("theme", s.theme))
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:

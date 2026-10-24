@@ -134,6 +134,10 @@ Directors edit the rules from the director page (**Edit rules**). Paste each gam
 
 The APA Pool Leagues – First Coast logo sits in the top-left corner and opens the league website (https://firstcoast.poolplayers.com/) in a new tab. Next to it, the house icon and event name go back to this app's home page. The logo file is `static/img/apa-first-coast-logo.png` (white on transparent).
 
+## Themes
+
+Each tournament has its own color theme: **Director → Settings → Theme**. Picking one previews it on the director page right away; **Save settings** applies it to every page, including the board. Everyday themes: Electric blue (default), Neutral, Mustard yellow and Neon green. Holiday themes: New Year's, Valentine's Day, Mardi Gras, St. Patrick's Day, Easter / spring, Patriotic (Memorial Day, July 4th, Labor Day, Veterans Day), Halloween, Thanksgiving / fall, Christmas and Hanukkah. The default background picks up the theme's color; an uploaded venue photo keeps its own colors. Themes are defined as `[data-theme="..."]` blocks at the end of `static/style.css` and listed in `chips/themes.py`.
+
 ## Link previews and icon
 
 When someone shares a link to the app (in a text, Facebook, etc.), the preview shows the **Control Table** image (`static/img/share.jpg`, 1200×630) with the event name, date and venue. The browser-tab icon is a blue **CT** tile (`static/favicon.ico`, also served at `/favicon.ico`, plus `img/favicon-32.png` and `img/favicon.png`). The phone home-screen icon (`apple-touch-icon.png`) is a square crop of the Control Table artwork. To change the preview image, replace `share.jpg` with another 1200×630 image.

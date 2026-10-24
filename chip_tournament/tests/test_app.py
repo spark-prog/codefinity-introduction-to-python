@@ -709,3 +709,21 @@ def test_name_fix_on_the_roster_keeps_the_hidden_cell(client):
                                                  "player_name_1": "Bob", "player_skill_1": "5"})
     p = store.load().teams[team.id].players[0]
     assert p.name == "Annie" and p.phone == "5551234567" and p.sms_consent
+
+
+def test_director_picks_a_theme_for_every_page(client):
+    from chips.themes import THEMES
+    client.post("/admin/login", data={"password": "secret"})
+    assert 'data-theme="electric"' in client.get("/").get_data(as_text=True)  # default
+    page = client.get("/admin").get_data(as_text=True)
+    assert all(f'value="{key}"' in page for key, *_ in THEMES)
+    form = {"name": "T", "date": "2099-10-31", "start_time": "9:00 PM", "tables": "1, 2", "race_to": "3",
+            "entry_fee": "20", "added_money": "0", "registration_cap": "10",
+            "chip_brackets": "6 = 5\n8 = 4\n10 = 3\n11 = 2", "field_cap": "0", "theme": "halloween"}
+    client.post("/admin/settings", data=form)
+    for path in ("/", "/board", "/register", "/rules"):
+        assert 'data-theme="halloween"' in client.get(path).get_data(as_text=True)
+    client.post("/admin/settings", data={**form, "theme": "made-up"})
+    assert 'data-theme="electric"' in client.get("/").get_data(as_text=True)
+    css = client.get("/static/style.css").get_data(as_text=True)
+    assert all(f'[data-theme="{key}"]' in css for key, *_ in THEMES if key != "electric")

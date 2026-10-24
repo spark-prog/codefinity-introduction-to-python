@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme_key(t.settings.theme if t else none) }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body style="--bg-image: url('{{ background_url }}')">
+<body style="--bg-image: url('{{ background_url }}')" {% if not has_custom_background %}class="default-bg"{% endif %}>
   {% set ep = request.endpoint or "" %}
   <header class="topbar">
     <div class="topbar-inner">

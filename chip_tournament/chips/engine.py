@@ -213,6 +213,7 @@ class Settings:
     checkin_by: str = ""  # event check-in time shown to players, e.g. "6:30 PM"
     require_checkin: bool = True  # every team in the field must be checked in to start
     sms_name: str = ""  # starts every text, e.g. "First Coast APA"
+    theme: str = "electric"  # color theme for this tournament's pages (see chips/themes.py)
     contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
 
 

@@ -22,7 +22,7 @@ Everything lives in `chip_tournament/`. The `variables_and_types/` folder is an 
 | `templates/`, `static/style.css` | Jinja pages (files starting `_` are partials; `b_*` are bracket pages) and styles. Themes are `[data-theme="..."]` blocks at the end of `style.css`. |
 | `tests/` | pytest tests, one file per module |
 | `README.md` | The full feature and rules description. Read it before changing behavior. |
-| `DEPLOY.md` | Hosting guide. The app is hosted on **Render**; this guide still describes Railway and is out of date. |
+| `DEPLOY.md` | Render hosting guide (setup, disk, environment variables, backups, deploying safely) |
 
 ## Run and test
 

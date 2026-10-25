@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}{{ team.name }} — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Team captain</p>
+  <h1>{{ team.name }}</h1>
+  <p class="lede">{{ location_name(s, team.loc) }} · {{ team.night }}s · {{ team.format }} · {{ team.spots }} open spot{{ "s" if team.spots != 1 }}</p>
+</header>
+{{ lg.nav() }}
+
+<section id="players" class="jump-target">
+  <div class="section-head"><h2>Players looking for a team</h2>
+    <form method="get" class="form inline-filters">
+      <label>Night <select name="night" onchange="this.form.submit()"><option value="any">Any night</option>{% for d in L_DAYS %}<option{{ ' selected' if night == d }}>{{ d }}</option>{% endfor %}</select></label>
+      <label>Format <select name="format" onchange="this.form.submit()"><option value="any">Any format</option>{% for f in L_FORMATS %}<option{{ ' selected' if fmt == f }}>{{ f }}</option>{% endfor %}</select></label>
+      <noscript><button class="button small">Filter</button></noscript>
+    </form></div>
+  <p class="muted">Best fits first (your night, location and format). Send your team info and the player decides whether to reach out.</p>
+  {% if team.spots == 0 %}<p class="banner">Your team shows 0 open spots, so it's off the list players see. Change it below when you need someone.</p>{% endif %}
+  {% if players %}
+  <div class="lg-grid">
+    {% for p in players %}{% set m = fit(p, team) %}
+    <div class="card">
+      <div><h3>{{ p.first }} {{ p.last }}</h3><div class="muted">{{ [p.area, p.level]|select|join(" · ") }}</div>
+        {% if m == 3 %}<span class="tag good" style="margin: 6px 0 0">Great fit</span>{% elif m == 2 %}<span class="tag claimed" style="margin: 6px 0 0">Good fit</span>{% endif %}</div>
+      <div>{% for f in p.formats %}<span class="pill">{{ f }}</span>{% endfor %}{% for n in p.nights %}<span class="pill">{{ n }}</span>{% endfor %}</div>
+      {% if p.locs %}<div class="muted">Prefers {% for l in p.locs %}{{ location_name(s, l) }}{{ ", " if not loop.last }}{% endfor %}</div>{% endif %}
+      {% if p.about %}<p style="margin: 0">{{ p.about }}</p>{% endif %}
+      <div class="foot">
+        {% if p.id in sent %}<span class="tag good" style="margin: 0">Invite sent</span>
+        {% else %}
+        <details style="width: 100%"><summary class="button small">Send our team info</summary>
+          <form method="post" action="{{ url_for('league_captain_invite', player_id=p.id) }}" class="form" style="margin-top: 12px">
+            <p class="muted">{{ p.first }} will see your team name, night, location, format, open spots and <b>{{ team.captain }} · {{ team.contact }}</b>.</p>
+            <label>Message <textarea name="message" rows="3" required>We play {{ team.night }}s at {{ location_name(s, team.loc) }} and have {{ team.spots }} open spot{{ "s" if team.spots != 1 }}. We'd love to have you!</textarea></label>
+            <button class="button small">Send team info</button>
+          </form></details>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">No players match{{ " those filters" if night != 'any' or fmt != 'any' }} right now.</p></div>
+  {% endif %}
+</section>
+
+<section class="card" id="sent">
+  <h2>Invites sent</h2>
+  {% if sent %}
+  <div class="table-wrap"><table class="grid"><thead><tr><th>Player</th><th>Sent</th><th>Status</th></tr></thead>
+    {% for pid, i in sent.items() %}{% set p = names[pid] %}
+    <tr><td>{{ p.first }} {{ p.last }}</td><td>{{ i.created|day_label }}</td>
+      <td>{{ {"new": "Not opened yet", "seen": "Seen by the player", "declined": "Player passed"}[i.status] }}</td></tr>
+    {% endfor %}</table></div>
+  {% else %}<p class="muted">None yet. Players reach out to your captain contact directly if they're interested.</p>{% endif %}
+</section>
+
+<section class="card" id="team">
+  <h2>Our team</h2>
+  <form method="post" class="form settings">
+    {% include "_league_team_fields.html" %}
+    <button class="button">Save team</button>
+  </form>
+  <form method="post" action="{{ url_for('league_captain_delete') }}" onsubmit="return confirm('Take your team off the list and delete its invites?')" style="margin-top: 16px">
+    <button class="button danger-outline small">Delete our team</button></form>
+</section>
+{% endblock %}

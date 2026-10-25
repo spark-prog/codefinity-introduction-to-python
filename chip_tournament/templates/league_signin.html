@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Sign in — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">League</p>
+  <h1>Sign in</h1>
+  <p class="lede">The league office signs in as the <a href="{{ url_for('admin_login', next=url_for('league_office')) }}">director</a>. Everyone else uses a PIN.</p>
+</header>
+{{ lg.nav() }}
+<section class="split">
+  <form method="post" class="card form" id="host">
+    <input type="hidden" name="role" value="host">
+    <h2>Host location</h2>
+    <label>Location <select name="who" required>{% for l in s.locations %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
+    <label>Host PIN <span class="muted">6 digits, from the league office</span><input name="pin" inputmode="numeric" autocomplete="off" required {{ 'autofocus' if role == 'host' }}></label>
+    <button class="button block"{{ ' disabled' if not s.locations }}>Sign in</button>
+  </form>
+  <form method="post" class="card form" id="rep">
+    <input type="hidden" name="role" value="rep">
+    <h2>Division rep</h2>
+    <label>Rep <select name="who" required>{% for r in s.reps %}<option value="{{ r.id }}">{{ r.name }}{% if r.division %} · {{ r.division }}{% endif %}</option>{% endfor %}</select></label>
+    <label>Rep PIN <span class="muted">6 digits, from the league office</span><input name="pin" inputmode="numeric" autocomplete="off" required {{ 'autofocus' if role == 'rep' }}></label>
+    <button class="button block"{{ ' disabled' if not s.reps }}>Sign in</button>
+  </form>
+  <form method="post" class="card form" id="player">
+    <input type="hidden" name="role" value="player">
+    <h2>Player</h2>
+    <label>Phone or email on your listing <input name="contact" required {{ 'autofocus' if role == 'player' }}></label>
+    <label>PIN <input name="pin" inputmode="numeric" autocomplete="off" required></label>
+    <button class="button block">Sign in</button>
+    <p class="muted">No listing yet? <a href="{{ url_for('league_player_new') }}">Post one</a>.</p>
+  </form>
+  <form method="post" class="card form" id="captain">
+    <input type="hidden" name="role" value="captain">
+    <h2>Team captain</h2>
+    <label>Captain phone or email <input name="contact" required {{ 'autofocus' if role == 'captain' }}></label>
+    <label>PIN <input name="pin" inputmode="numeric" autocomplete="off" required></label>
+    <button class="button block">Sign in</button>
+    <p class="muted">Team not posted yet? <a href="{{ url_for('league_team_new') }}">Post it</a>.</p>
+  </form>
+</section>
+<p class="muted">Forgot a PIN? The league office can give you a new one.</p>
+{% endblock %}

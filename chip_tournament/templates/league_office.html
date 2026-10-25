@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Master calendar — {{ s.settings.name }}{% endblock %}
+{% block content %}
+{% set cur = month %}
+<header class="page-head">
+  <p class="eyebrow">League office</p>
+  <h1>Master calendar</h1>
+  <p class="lede">Everything across all host locations. Blackout days are hatched; an event that lands on one is flagged.</p>
+</header>
+{{ lg.nav(counts) }}
+{% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>.</p>{% endif %}
+
+<div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr))">
+  <div class="stat"><span class="label">League nights · 30 days</span><span class="value">{{ stats.league }}</span></div>
+  <div class="stat"><span class="label">Weekend events · 30 days</span><span class="value">{{ stats.special }}</span></div>
+  <div class="stat"><span class="label">Open host requests</span><span class="value">{{ s.requests|selectattr("status", "equalto", "open")|list|length }}</span></div>
+  <div class="stat{{ ' highlight' if conflicts }}"><span class="label">Blackout conflicts</span><span class="value">{{ conflicts|length }}</span></div>
+</div>
+{% if conflicts %}
+<div class="banner danger">{% for e, b in conflicts %}{{ location_name(s, e.loc) }} is closed {{ e.date|day_label }} ({{ b.reason }}), but “{{ e.title }}” is on the calendar.{% if e.weekly %} (Weekly league night: move it for that week.){% endif %}<br>{% endfor %}</div>
+{% endif %}
+{% if not s.locations %}<p class="banner">Start in <a href="{{ url_for('league_office_setup') }}">Setup</a>: add the host locations, their league nights and the division reps.</p>{% endif %}
+
+<section>
+  <div class="section-head">
+    <div class="cal-nav">
+      <a class="button small secondary" href="{{ url_for('league_office', month=prev_m, loc=loc_filter or None) }}" aria-label="Previous month">‹</a>
+      <h3>{{ month_label }}</h3>
+      <a class="button small secondary" href="{{ url_for('league_office', month=next_m, loc=loc_filter or None) }}" aria-label="Next month">›</a>
+      <a class="button small secondary" href="{{ url_for('league_office', loc=loc_filter or None, day=today) }}#day">Today</a>
+    </div>
+    <form method="get" class="form inline-filters"><input type="hidden" name="month" value="{{ month }}">
+      <label><span class="sr-only">Location</span><select name="loc" onchange="this.form.submit()"><option value="">All locations</option>
+        {% for l in s.locations %}<option value="{{ l.id }}"{{ ' selected' if loc_filter == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
+      <noscript><button class="button small">Show</button></noscript></form>
+  </div>
+  {{ lg.legend() }}
+  <div class="cal">
+    <div class="cal-row head">{% for d in L_DAYS %}<div>{{ d }}</div>{% endfor %}</div>
+    {% for week in weeks %}
+    <div class="cal-row">
+      {% for d in week %}
+      {% set evs = by_day.get(d, []) %}{% set blks = closed.get(d, []) %}
+      <a class="cal-cell{{ ' out' if d[:7] != cur }}{{ ' today' if d == today }}{{ ' sel' if d == day }}{{ ' hatch' if blks }}"
+         href="{{ url_for('league_office', month=month, loc=loc_filter or None, day=d) }}#day">
+        <span class="dn">{{ d[8:]|int }}</span>
+        <span class="cal-chips">
+        {% for e in evs %}{% set clash = e.loc != L_ALL and blks|selectattr("loc", "equalto", e.loc)|list %}
+          {% if loop.index <= 4 %}<span class="cal-chip{{ ' conflict' if clash }}">{{ lg.ball(e.type, true) }}<span class="ct">{% if e.loc != L_ALL %}{{ location_name(s, e.loc)[:3]|upper }} {% endif %}{{ e.title }}</span></span>{% endif %}
+        {% endfor %}
+        {% for b in blks %}{% if evs|length + loop.index <= 4 %}<span class="cal-chip">{{ lg.ball("blackout", true) }}<span class="ct">{{ location_name(s, b.loc) }} closed</span></span>{% endif %}{% endfor %}
+        {% if evs|length + blks|length > 4 %}<span class="muted" style="font-size: .72rem">+{{ evs|length + blks|length - 4 }} more</span>{% endif %}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card jump-target" id="day">
+  {% if day %}
+  {% set evs = by_day.get(day, []) %}{% set blks = closed.get(day, []) %}
+  <h2>{{ day|day_label(true) }}</h2>
+  {% if evs or blks %}
+  <div class="lg-items">
+    {% for e in evs %}{% set clash = e.loc != L_ALL and blks|selectattr("loc", "equalto", e.loc)|list %}
+    <div class="lg-item">{{ lg.ball(e.type) }}<div class="txt">
+      <div class="ttl">{{ e.title }}{% if e.loc == L_ALL %}<span class="tag claimed">League-wide</span>{% endif %}{% if clash %}<span class="tag bad">Blackout conflict</span>{% endif %}{% if e.weekly %}<span class="tag claimed">Weekly</span>{% endif %}</div>
+      <div class="meta">{{ location_name(s, e.loc) }}{% if e.time %} · {{ e.time }}{% endif %}{% if e.director %} · Run by {{ e.director }}{% endif %}{% if e.notes %} · {{ e.notes }}{% endif %}</div>
+      {% if not e.weekly and is_admin %}
+      <div class="button-row" style="margin-top: 8px">
+        {% if e.tournament and e.tournament in tournaments %}<a class="button small secondary" href="{{ url_for('admin', event=e.tournament) }}">Run it in Control Table</a>
+        {% elif e.type not in (L_GENERAL, L_LEAGUE_NIGHT) %}
+        <form method="post" action="{{ url_for('league_office_tournament', event_id=e.id) }}" class="form inline-filters">
+          <label><span class="sr-only">Format</span><select name="kind">{% for k, name in formats %}<option value="{{ k }}"{{ ' selected' if (e.type == 'singles_tourney' and k == 'double') or (e.type == 'singles_board' and k == 'single') or (e.type == 'doubles_tourney' and k == 'double') }}>{{ name }}</option>{% endfor %}</select></label>
+          <button class="button small">Set up in Control Table</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('league_office_event_delete', event_id=e.id) }}" onsubmit="return confirm('Delete this event?')">
+          <input type="hidden" name="month" value="{{ month }}"><input type="hidden" name="day" value="{{ day }}">
+          <button class="button small danger-outline">Delete</button></form>
+      </div>
+      {% elif e.weekly %}<div class="meta">Weekly league nights are set per location in <a href="{{ url_for('league_office_setup') }}#locations">Setup</a>.</div>{% endif %}
+    </div></div>
+    {% endfor %}
+    {% for b in blks %}<div class="lg-item">{{ lg.ball("blackout") }}<div class="txt"><div class="ttl">{{ location_name(s, b.loc) }} unavailable</div><div class="meta">{{ b.reason }}</div></div></div>{% endfor %}
+  </div>
+  {% else %}<p class="muted">Nothing scheduled.</p>{% endif %}
+  {% else %}
+  <h2>Add an event</h2>
+  <p class="muted">Pick a day on the calendar to see it, or add an event below.</p>
+  {% endif %}
+
+  {% if is_admin %}
+  <h3 style="margin-top: 32px">{{ "Add to calendar: " ~ prefill.title if prefill else "Add an event" ~ (" this day" if day else "") }}</h3>
+  <form method="post" action="{{ url_for('league_office_event') }}" class="form settings">
+    {% if prefill %}<input type="hidden" name="request" value="{{ prefill.request }}">{% endif %}
+    <label>Type <select name="type">{% for k, v in L_TYPES.items() if k != L_LEAGUE_NIGHT %}<option value="{{ k }}"{{ ' selected' if prefill.type == k }}>{{ v[0] }}</option>{% endfor %}</select></label>
+    <label>Location <span class="muted">League-wide dates go to every location</span><select name="loc"><option value="">Pick a location</option>
+      {% for l in s.locations %}<option value="{{ l.id }}"{{ ' selected' if (prefill.loc or loc_filter) == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
+    <label class="wide">Title <input name="title" required value="{{ prefill.title }}" placeholder="8-Ball Singles Open"></label>
+    <label>Date <input type="date" name="date" required value="{{ prefill.date or day }}"></label>
+    <label>Start time <input name="time" value="{{ prefill.time or '7:00 PM' }}"></label>
+    <label>Tournament director / rep <span class="muted">Optional</span><input name="director" value="{{ prefill.director }}"></label>
+    <label>Notes <span class="muted">The host location sees these</span><input name="notes" value="{{ prefill.notes }}"></label>
+    <button class="button">Save to calendar</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

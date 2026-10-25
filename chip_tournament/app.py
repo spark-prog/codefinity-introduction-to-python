@@ -3,7 +3,8 @@
 Several tournaments can run at once. Each lives at /t/<id>/ with its own data,
 texts and undo history: chip tournaments (chips/engine.py) and bracket
 tournaments (chips/bracket.py, pages in bracket_web.py). The page at / lists
-them all, and /admin is where the director creates and opens them.
+them all, and /admin is where the director creates and opens them. The league hub
+(calendar, host locations, player match-ups) is under /league (league_web.py).
 
 Run it with:  python app.py   (then open http://localhost:5000)
 In production: gunicorn --workers 1 --threads 8 "app:create_app()"
@@ -26,6 +27,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
+import league_web
 from chips import importer, rules as rulebook, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
@@ -1008,6 +1010,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes,
+    })
+
+    league_web.register(app, {
+        "hub": hub, "data_path": data_path, "minutes": minutes, "director_view": director_view,
+        "admin_required": admin_required,
     })
 
     @app.before_request

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}{{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">League</p>
+  <h1>{{ s.settings.name }}</h1>
+  <p class="lede">Where the league plays, what's coming up, and teams and players finding each other.</p>
+</header>
+{{ lg.nav() }}
+
+<section>
+  <div class="section-head"><h2>Host locations</h2></div>
+  {% if cards %}
+  <div class="lg-grid">
+    {% for c in cards %}{% set l = c.loc %}
+    <div class="card">
+      <h3>{{ l.name }}</h3>
+      <div class="muted">{{ [l.area, l.address]|select|join(" · ") }}</div>
+      {% if l.nights %}<div>{% for n in l.nights %}<span class="pill">{{ L_DAYS[n.dow] }} · {{ n.label.split(" · ")[0] }}</span>{% endfor %}</div>{% endif %}
+      {% if c.next %}<div class="lg-item">{{ lg.ball(c.next.type, true) }}<span class="muted">Next: {{ c.next.title }}, {{ c.next.date|day_label }}</span></div>
+      {% else %}<div class="muted">No weekend events scheduled yet.</div>{% endif %}
+      <div>{% if c.open %}<b>{{ c.open }} team{{ "s" if c.open != 1 }}</b> here looking for players{% else %}<span class="muted">No teams recruiting right now</span>{% endif %}</div>
+      <div class="foot"><a class="button small" href="{{ url_for('league_location', loc_id=l.id) }}">View location</a></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">The league office hasn't added host locations yet.</p></div>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head"><h2>Coming up</h2><span class="muted">Tournaments, boards and league-wide dates in the next 60 days</span></div>
+  {% if upcoming %}
+  <div class="card"><div class="lg-items">{% for e in upcoming %}{{ lg.event_item(e, s) }}{% endfor %}</div></div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">Nothing on the calendar yet.</p></div>
+  {% endif %}
+</section>
+
+<section class="split">
+  <div class="card">
+    <h2>Looking for a team?</h2>
+    <p class="muted">Post a listing so captains can find you. They see your first name, last initial and what you play, never your phone or email.</p>
+    <a class="button" href="{{ url_for('league_player') if league_roles.player else url_for('league_player_new') }}">{{ "My listing" if league_roles.player else "Post a listing" }}</a>
+  </div>
+  <div class="card">
+    <h2>Need players?</h2>
+    <p class="muted">{{ teams|length }} team{{ "s" if teams|length != 1 }} recruiting now. Post your team's open spots, then browse players and send them your team info.</p>
+    <a class="button" href="{{ url_for('league_captain') if league_roles.captain else url_for('league_team_new') }}">{{ "My team" if league_roles.captain else "Post a team" }}</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}{{ loc.name }} — {{ s.settings.name }}{% endblock %}
+{% macro rows(text) %}{% set r = text|label_rows %}{% if r %}<table class="grid small"><tbody>
+  {% for k, v in r %}<tr>{% if k %}<td class="muted">{{ k }}</td><td>{{ v }}</td>{% else %}<td colspan="2">{{ v }}</td>{% endif %}</tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">Not listed yet.</p>{% endif %}{% endmacro %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow"><a href="{{ url_for('league_home') }}">Host locations</a></p>
+  <h1>{{ loc.name }}</h1>
+  <p class="lede">{{ [loc.address, loc.area]|select|join(" · ") }}</p>
+</header>
+{{ lg.nav() }}
+
+<section class="split">
+  <div class="card"><h3>Hours</h3>{{ rows(loc.hours) }}</div>
+  <div class="card"><h3>Specials</h3>{{ rows(loc.specials) }}</div>
+  <div class="card"><h3>Pool tables &amp; rates</h3>{% if loc.tables %}<p>{{ loc.tables }}</p>{% endif %}{{ rows(loc.rates) }}</div>
+  <div class="card"><h3>Menu highlights</h3>{% if loc.menu %}<ul>{% for x in loc.menu|lines %}<li>{{ x }}</li>{% endfor %}</ul>{% else %}<p class="muted">Not listed yet.</p>{% endif %}</div>
+  <div class="card"><h3>League nights here</h3>
+    {% if loc.nights %}<div class="lg-items">{% for n in loc.nights %}<div class="lg-item">{{ lg.ball(L_LEAGUE_NIGHT, true) }}<span><b>{{ L_DAY_NAMES[n.dow] }}s, {{ n.time }}</b> · {{ n.label }}</span></div>{% endfor %}</div>
+    {% else %}<p class="muted">None yet.</p>{% endif %}</div>
+  <div class="card"><h3>Contact</h3>
+    {% if loc.phone %}<p class="contact">{{ loc.phone }}</p>{% endif %}{% if loc.email %}<p class="contact">{{ loc.email }}</p>{% endif %}
+    {% if loc.address %}<a href="https://www.google.com/maps/search/?api=1&query={{ (loc.name ~ ' ' ~ loc.address)|urlquote }}" target="_blank" rel="noopener">Map</a>{% endif %}</div>
+</section>
+
+<section class="card">
+  <h2>Coming up in the next 60 days</h2>
+  {% if events %}<div class="lg-items">{% for e in events %}{{ lg.event_item(e, s, show_loc=false) }}{% endfor %}</div>
+  {% else %}<p class="muted">No tournaments or boards scheduled here yet.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Teams here with open spots</h2>
+  {% if teams %}<ul>{% for t in teams %}<li><b>{{ t.name }}</b> · {{ t.night }}s · {{ t.format }} · {{ t.spots }} spot{{ "s" if t.spots != 1 }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted">None right now. Sign up below and the league office will find you one.</p>{% endif %}
+</section>
+
+<section class="card" id="play">
+  <h2>Play out of {{ loc.name }}</h2>
+  <p class="muted">This goes privately to the league office, which will connect you with a team here.</p>
+  <form method="post" action="{{ url_for('league_signup', loc_id=loc.id) }}" class="form settings">
+    <label>Your name <input name="name" required value="{{ form.name }}"></label>
+    <label>Phone or email <span class="muted">Only the league office sees it</span><input name="contact" required value="{{ form.contact }}"></label>
+    <label class="wide">Formats {{ lg.format_checks("formats", form.getlist("formats") if form else []) }}</label>
+    <label class="wide">Nights you can play {{ lg.day_checks("nights", form.getlist("nights") if form else []) }}</label>
+    <label class="wide">Anything else? <span class="muted">Experience, skill level, sub only</span><textarea name="note" rows="3">{{ form.note }}</textarea></label>
+    <button class="button">Send to the league office</button>
+  </form>
+</section>
+{% endblock %}

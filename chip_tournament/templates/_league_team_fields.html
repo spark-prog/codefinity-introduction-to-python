@@ -1,0 +1,9 @@
+{# A team looking for players; `team` is the team (or what was typed). #}
+<label>Team name <input name="name" required value="{{ team.name }}"></label>
+<label>Plays out of <select name="loc" required><option value="">Pick a location</option>
+  {% for l in s.locations %}<option value="{{ l.id }}"{{ ' selected' if team.loc == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
+<label>Night <select name="night">{% for d in L_DAYS %}<option{{ ' selected' if team.night == d }}>{{ d }}</option>{% endfor %}</select></label>
+<label>Format <select name="format">{% for f in L_FORMATS %}<option{{ ' selected' if team.format == f }}>{{ f }}</option>{% endfor %}</select></label>
+<label>Open spots <span class="muted">0 takes the team off the list</span><input name="spots" type="number" min="0" max="8" required value="{{ team.spots if team.spots is not none and team.spots != '' else 1 }}"></label>
+<label>Captain's name <input name="captain" required value="{{ team.captain }}"></label>
+<label class="wide">Captain's phone or email <span class="muted">Players you invite see this; you sign in with it</span><input name="contact" required value="{{ team.contact }}"></label>

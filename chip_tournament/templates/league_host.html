@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}{{ loc.name }} — host{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Host location</p>
+  <h1>{{ loc.name }}</h1>
+  <p class="lede">What the league has planned here, plus league-wide dates. Block the days you're unavailable and ask for weekend events.</p>
+</header>
+{{ lg.nav() }}
+
+<section id="schedule" class="jump-target">
+  <div class="section-head"><h2>My schedule</h2>
+    <div class="button-row">
+      <a class="button small{{ ' secondary' if window != 30 }}" href="{{ url_for('league_host') }}#schedule">Next 30 days</a>
+      <a class="button small{{ ' secondary' if window != 60 }}" href="{{ url_for('league_host', days=60) }}#schedule">Next 60 days</a>
+    </div></div>
+  <div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))">
+    <div class="stat"><span class="label">League nights</span><span class="value">{{ stats.league }}</span></div>
+    <div class="stat"><span class="label">Tournaments &amp; boards</span><span class="value">{{ stats.special }}</span></div>
+    <div class="stat"><span class="label">League-wide dates</span><span class="value">{{ stats.general }}</span></div>
+    <div class="stat"><span class="label">Blackout days</span><span class="value">{{ stats.blackout }}</span></div>
+  </div>
+  {{ lg.legend() }}
+  {% if agenda %}
+  <div class="agenda">
+    {% for day in agenda %}
+    {% if day.week %}<div class="agenda-week">Week of {{ day.week|day_label }}</div>{% endif %}
+    <div class="agenda-day{{ ' hatch' if day.blackout }}">
+      <div class="agenda-date">{{ day.date.strftime("%a") }}<b>{{ day.date.day }}</b>{{ day.date.strftime("%b") }}</div>
+      <div class="lg-items">
+        {% for kind, x, clash in day.entries %}
+        {% if kind == "event" %}{{ lg.event_item(x, s, show_loc=false, conflict=clash, show_date=false) }}
+        {% elif kind == "blackout" %}<div class="lg-item">{{ lg.ball("blackout") }}<div class="txt"><div class="ttl">You're unavailable</div><div class="meta">{{ x.reason }}</div></div></div>
+        {% else %}<div class="lg-item">{{ lg.ball(x.type) }}<div class="txt"><div class="ttl">Your request: {{ lg.type_label(x.type) }}<span class="tag {{ x.status }}">{{ x.status }}</span></div>
+          <div class="meta">{{ ("Claimed by " ~ reps[x.rep].name) if x.rep in reps else "Waiting for a division rep" }}</div></div></div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">Nothing scheduled in this window.</p></div>
+  {% endif %}
+</section>
+
+<section class="split jump-target" id="blackouts">
+  <form method="post" action="{{ url_for('league_host_blackout') }}" class="card form">
+    <h2>Add a blackout</h2>
+    <p class="muted">Days you're closed or hosting something else. The league office can't schedule on them.</p>
+    <label>From <input type="date" name="start" required min="{{ today }}"></label>
+    <label>To <span class="muted">Leave blank for one day</span><input type="date" name="end" min="{{ today }}"></label>
+    <label>Reason <span class="muted">The league office sees it</span><input name="reason" required placeholder="Closed for the holiday"></label>
+    <button class="button">Add blackout</button>
+  </form>
+  <div class="card">
+    <h2>Upcoming blackouts</h2>
+    {% if blackouts %}<div class="lg-items">
+      {% for b in blackouts %}<div class="lg-item">{{ lg.ball("blackout") }}<div class="txt"><div class="ttl">{{ b.start|day_label }}{% if b.end != b.start %} – {{ b.end|day_label }}{% endif %}</div><div class="meta">{{ b.reason }}</div></div>
+        <form method="post" action="{{ url_for('league_host_blackout_delete', blackout_id=b.id) }}"><button class="button small danger-outline">Remove</button></form></div>{% endfor %}
+    </div>{% else %}<p class="muted">No blackout dates yet.</p>{% endif %}
+  </div>
+</section>
+
+<section class="split jump-target" id="request">
+  <form method="post" action="{{ url_for('league_host_request') }}" class="card form">
+    <h2>Request an event</h2>
+    <p class="muted">Ask for a weekend event here. It goes on the request board, where a division rep can claim it; then the league office puts it on the calendar.</p>
+    <label>Kind of event
+      <span class="checks">{% for k in L_REQUEST_TYPES %}<label class="checkbox"><input type="radio" name="type" value="{{ k }}"{{ ' checked' if loop.first }}>{{ lg.ball(k, true) }} {{ lg.type_label(k) }}</label>{% endfor %}</span></label>
+    <label>Preferred date <input type="date" name="date" required min="{{ today }}"></label>
+    <label>Backup date <span class="muted">Optional</span><input type="date" name="alt" min="{{ today }}"></label>
+    <label>Notes for the rep <span class="muted">Added money, tables, food, start time</span><textarea name="notes" rows="3"></textarea></label>
+    <button class="button">Post to the request board</button>
+  </form>
+  <div class="card">
+    <h2>My requests</h2>
+    {% if requests %}<div class="lg-items">
+      {% for r in requests %}<div class="lg-item">{{ lg.ball(r.type) }}<div class="txt"><div class="ttl">{{ lg.type_label(r.type) }}<span class="tag {{ r.status }}">{{ r.status }}</span></div>
+        <div class="meta">{{ r.date|day_label }}{% if r.rep in reps %} · {{ reps[r.rep].name }}{% endif %}</div></div></div>{% endfor %}
+    </div>{% else %}<p class="muted">No requests yet.</p>{% endif %}
+  </div>
+</section>
+
+<section class="card jump-target" id="page">
+  <h2>My location page</h2>
+  <p class="muted">What players see in the <a href="{{ url_for('league_location', loc_id=loc.id) }}">host directory</a>. Keep your hours, specials and rates current.
+    For "Mon: $2 off pitchers" style lines, the part before the colon shows as a label.</p>
+  <form method="post" action="{{ url_for('league_host_page') }}" class="form settings">
+    <label>Business name <input name="name" required value="{{ loc.name }}"></label>
+    <label>Area / neighborhood <input name="area" value="{{ loc.area }}"></label>
+    <label>Address <input name="address" value="{{ loc.address }}"></label>
+    <label>Phone <input name="phone" value="{{ loc.phone }}"></label>
+    <label>Email <input name="email" value="{{ loc.email }}"></label>
+    <label>Tables <input name="tables" value="{{ loc.tables }}" placeholder="6 Diamond 7-ft bar boxes"></label>
+    <label>Hours <span class="muted">One line per day range</span><textarea name="hours" rows="4">{{ loc.hours }}</textarea></label>
+    <label>Specials <span class="muted">One per line</span><textarea name="specials" rows="4">{{ loc.specials }}</textarea></label>
+    <label>Menu highlights <span class="muted">One per line</span><textarea name="menu" rows="4">{{ loc.menu }}</textarea></label>
+    <label>Table rates <span class="muted">One per line</span><textarea name="rates" rows="4">{{ loc.rates }}</textarea></label>
+    <button class="button">Save location page</button>
+  </form>
+</section>
+{% endblock %}

@@ -39,7 +39,7 @@
 <div class="lg-item">{{ ball(e.type) }}<div class="txt">
   <div class="ttl">{{ e.title }}{% if e.loc == L_ALL %}<span class="tag claimed">League-wide</span>{% endif %}{% if conflict %}<span class="tag bad">Blackout conflict</span>{% endif %}</div>
   <div class="meta">{{ e.date|day_label if show_date }}{% if e.time %}{{ " · " if show_date }}{{ e.time }}{% endif %}{% if show_loc and e.loc != L_ALL %} · {{ location_name(s, e.loc) }}{% endif %}
-    {%- if e.director %} · Run by {{ e.director }}{% endif %}{% if e.tournament %} · <a href="{{ url_for('home', event=e.tournament) }}">Register and details</a>{% endif %}</div>
+    {%- if e.director %} · Run by {{ e.director }}{% endif %}</div>
 </div></div>
 {%- endmacro %}
 

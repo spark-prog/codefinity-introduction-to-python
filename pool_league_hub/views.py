@@ -1,9 +1,9 @@
-"""League hub pages, under /league: what goes on between tournaments.
+"""Pool League Hub pages.
 
-The league office signs in with the director password (/league/office). Host locations
-and division reps sign in with a 6-digit PIN the league office gives them; players and
+The league office signs in with the office password (/office). Host locations and
+division reps sign in with a 6-digit PIN the league office gives them; players and
 team captains with the phone or email on their listing and the 4-digit PIN they got
-when they made it (/league/signin). The rules are in chips/league.py.
+when they made it (/signin). The rules are in league/core.py.
 """
 
 from __future__ import annotations
@@ -14,21 +14,18 @@ from functools import wraps
 
 from flask import abort, flash, redirect, render_template, request, session, url_for
 
-from chips.bracket import FORMATS as BRACKET_FORMATS
-from chips.engine import TournamentError
-from chips.hub import BRACKET, CHIP
-from chips.league import (
+from league.core import (
     ALL, CLAIMED, DAY_NAMES, DAYS, FORMATS, GENERAL, LEAGUE_NIGHT, LEVELS, LOCATION_FIELDS, OPEN, REQUEST_TYPES, SCHEDULED,
     TYPES, League, LeagueError, day_label, label_rows, lines, month_grid,
 )
-from chips.throttle import Throttle
+from league.throttle import Throttle
 
 ROLE_KEYS = {"host": "league_host", "rep": "league_rep", "player": "league_player", "captain": "league_captain"}
 
 
 def register(app, h) -> League:
-    hub, data_path, minutes = h["hub"], h["data_path"], h["minutes"]
-    director_view, admin_required = h["director_view"], h["admin_required"]
+    data_path, minutes = h["data_path"], h["minutes"]
+    office_view, admin_required = h["office_view"], h["admin_required"]
     league = League(data_path, today=h.get("today"))
     app.config["league"] = league
     signin_by_ip = Throttle(limit=10, window=15 * 60)
@@ -90,7 +87,7 @@ def register(app, h) -> League:
 
     # ------------------------------------------------------------- public
 
-    @app.get("/league/")
+    @app.get("/")
     def league_home():
         s = league.load()
         upcoming = [e for e in league.events_between(s, today(), plus(60)) if e["type"] != LEAGUE_NIGHT][:12]
@@ -99,18 +96,18 @@ def register(app, h) -> League:
             nxt = next((e for e in league.events_between(s, today(), plus(60), loc["id"])
                         if e["loc"] != ALL and e["type"] != LEAGUE_NIGHT), None)
             cards.append({"loc": loc, "next": nxt, "open": len(league.open_teams(s, loc["id"]))})
-        return render_template("league_home.html", t=None, s=s, upcoming=upcoming, cards=cards,
+        return render_template("league_home.html", s=s, upcoming=upcoming, cards=cards,
                                teams=league.open_teams(s))
 
-    @app.get("/league/loc/<loc_id>")
+    @app.get("/loc/<loc_id>")
     def league_location(loc_id):
         s = league.load()
         loc = league.location(s, loc_id) or abort(404)
         evs = [e for e in league.events_between(s, today(), plus(60), loc_id) if e["type"] != LEAGUE_NIGHT]
-        return render_template("league_location.html", t=None, s=s, loc=loc, events=evs,
+        return render_template("league_location.html", s=s, loc=loc, events=evs,
                                teams=league.open_teams(s, loc_id), form=request.form)
 
-    @app.post("/league/loc/<loc_id>/signup")
+    @app.post("/loc/<loc_id>/signup")
     def league_signup(loc_id):
         f = request.form
         data = {**f.to_dict(), "formats": f.getlist("formats"), "nights": f.getlist("nights")}
@@ -123,7 +120,7 @@ def register(app, h) -> League:
         return {**f.to_dict(), "formats": f.getlist("formats"), "nights": f.getlist("nights"), "locs": f.getlist("locs"),
                 "visible": f.get("visible") == "1"}
 
-    @app.route("/league/players/new", methods=["GET", "POST"])
+    @app.route("/players/new", methods=["GET", "POST"])
     def league_player_new():
         s = league.load()
         if request.method == "POST":
@@ -137,9 +134,9 @@ def register(app, h) -> League:
                   "about": "", "visible": True, "contact": ""}
         if request.method == "POST":
             player.update(listing_form(request.form))
-        return render_template("league_player_new.html", t=None, s=s, player=player)
+        return render_template("league_player_new.html", s=s, player=player)
 
-    @app.route("/league/teams/new", methods=["GET", "POST"])
+    @app.route("/teams/new", methods=["GET", "POST"])
     def league_team_new():
         s = league.load()
         if request.method == "POST":
@@ -149,9 +146,9 @@ def register(app, h) -> League:
                 flash(f"{team['name']} is posted. Your PIN is {team['pin']}: use it with the captain phone or email "
                       "to sign in and invite players.", "ok")
                 return redirect(url_for("league_captain"))
-        return render_template("league_team_new.html", t=None, s=s, team=request.form.to_dict())
+        return render_template("league_team_new.html", s=s, team=request.form.to_dict())
 
-    @app.route("/league/signin", methods=["GET", "POST"])
+    @app.route("/signin", methods=["GET", "POST"])
     def league_signin():
         s = league.load()
         role = request.values.get("role", "")
@@ -160,7 +157,7 @@ def register(app, h) -> League:
             wait = signin_by_ip.wait(ip)
             if wait:
                 flash(f"Too many wrong PINs. Try again in {minutes(wait)}, or ask the league office.", "error")
-                return render_template("league_signin.html", t=None, s=s, role=role)
+                return render_template("league_signin.html", s=s, role=role)
             pin = f.get("pin", "").strip()
             if role in ("host", "rep"):
                 kind = "locations" if role == "host" else "reps"
@@ -175,9 +172,9 @@ def register(app, h) -> League:
                                          "captain": "league_captain"}[role]))
             signin_by_ip.fail(ip)
             flash("That doesn't match. Check the PIN (and the phone or email), or ask the league office.", "error")
-        return render_template("league_signin.html", t=None, s=s, role=role)
+        return render_template("league_signin.html", s=s, role=role)
 
-    @app.post("/league/signout")
+    @app.post("/signout")
     def league_signout():
         for key in ROLE_KEYS.values():
             session.pop(key, None)
@@ -185,7 +182,7 @@ def register(app, h) -> League:
 
     # ------------------------------------------------------------- host location
 
-    @app.get("/league/host")
+    @app.get("/host")
     @role_required("host", "locations")
     def league_host(s, loc):
         window = 60 if request.args.get("days") == "60" else 30
@@ -219,10 +216,10 @@ def register(app, h) -> League:
             agenda.append({"date": dt, "entries": items, "week": week if week != last_week else "",
                            "blackout": any(k == "blackout" for k, _, _ in items)})
             last_week = week
-        return render_template("league_host.html", t=None, s=s, loc=loc, window=window, agenda=agenda,
+        return render_template("league_host.html", s=s, loc=loc, window=window, agenda=agenda,
                                stats=stats, blackouts=blackouts, requests=requests_, reps=reps, today=today())
 
-    @app.post("/league/host/blackout")
+    @app.post("/host/blackout")
     @role_required("host", "locations")
     def league_host_blackout(s, loc):
         f = request.form
@@ -232,13 +229,13 @@ def register(app, h) -> League:
                                        "are flagged for the league office." if hits is not True and hits else ""), "ok")
         return back("league_host", "blackouts")
 
-    @app.post("/league/host/blackout/<blackout_id>/delete")
+    @app.post("/host/blackout/<blackout_id>/delete")
     @role_required("host", "locations")
     def league_host_blackout_delete(s, loc, blackout_id):
         change(lambda: league.delete_blackout(loc["id"], blackout_id), "Blackout removed.")
         return back("league_host", "blackouts")
 
-    @app.post("/league/host/request")
+    @app.post("/host/request")
     @role_required("host", "locations")
     def league_host_request(s, loc):
         f = request.form
@@ -247,7 +244,7 @@ def register(app, h) -> League:
                "Posted to the request board. A division rep can claim it.")
         return back("league_host", "request")
 
-    @app.post("/league/host/page")
+    @app.post("/host/page")
     @role_required("host", "locations")
     def league_host_page(s, loc):
         change(lambda: league.save_location(loc["id"], {k: request.form.get(k, loc[k]) for k in LOCATION_FIELDS}),
@@ -266,18 +263,18 @@ def register(app, h) -> League:
                                             "blackout": league.blackout_on(s, r["loc"], r["date"])} for r in rows]))
         return groups
 
-    @app.get("/league/rep")
+    @app.get("/rep")
     @role_required("rep", "reps")
     def league_rep(s, rep):
-        return render_template("league_board.html", t=None, s=s, rep=rep, groups=board(s), office=False)
+        return render_template("league_board.html", s=s, rep=rep, groups=board(s), office=False)
 
-    @app.post("/league/rep/claim/<req_id>")
+    @app.post("/rep/claim/<req_id>")
     @role_required("rep", "reps")
     def league_rep_claim(s, rep, req_id):
         change(lambda: league.claim(req_id, rep["id"]), "Claimed. The league office will confirm the date.")
         return back("league_rep")
 
-    @app.post("/league/rep/release/<req_id>")
+    @app.post("/rep/release/<req_id>")
     @role_required("rep", "reps")
     def league_rep_release(s, rep, req_id):
         change(lambda: league.release(req_id, rep["id"]), "Released back to the board.")
@@ -285,7 +282,7 @@ def register(app, h) -> League:
 
     # ------------------------------------------------------------- player
 
-    @app.route("/league/me", methods=["GET", "POST"])
+    @app.route("/me", methods=["GET", "POST"])
     @role_required("player", "players")
     def league_player(s, player):
         if request.method == "POST":
@@ -296,16 +293,16 @@ def register(app, h) -> League:
         teams = {t["id"]: t for t in s["teams"]}
         invites = sorted((i for i in s["invites"] if i["player"] == player["id"] and i["team"] in teams),
                          key=lambda i: i["created"], reverse=True)
-        return render_template("league_player.html", t=None, s=s, player=player, invites=invites, teams=teams,
+        return render_template("league_player.html", s=s, player=player, invites=invites, teams=teams,
                                open_teams=league.open_teams(s))
 
-    @app.post("/league/me/invite/<invite_id>")
+    @app.post("/me/invite/<invite_id>")
     @role_required("player", "players")
     def league_player_invite(s, player, invite_id):
         change(lambda: league.answer_invite(player["id"], invite_id, request.form.get("status", "")))
         return back("league_player", "inbox")
 
-    @app.post("/league/me/delete")
+    @app.post("/me/delete")
     @role_required("player", "players")
     def league_player_delete(s, player):
         if change(lambda: league.delete_row("players", player["id"]), "Your listing is deleted."):
@@ -314,7 +311,7 @@ def register(app, h) -> League:
 
     # ------------------------------------------------------------- team captain
 
-    @app.route("/league/captain", methods=["GET", "POST"])
+    @app.route("/captain", methods=["GET", "POST"])
     @role_required("captain", "teams")
     def league_captain(s, team):
         if request.method == "POST":
@@ -326,17 +323,17 @@ def register(app, h) -> League:
         players.sort(key=lambda p: -league.fit(p, team))
         sent = {i["player"]: i for i in s["invites"] if i["team"] == team["id"]}
         names = {p["id"]: p for p in s["players"]}
-        return render_template("league_captain.html", t=None, s=s, team=team, players=players, sent=sent, names=names,
+        return render_template("league_captain.html", s=s, team=team, players=players, sent=sent, names=names,
                                fit=league.fit, night=night, fmt=fmt)
 
-    @app.post("/league/captain/invite/<player_id>")
+    @app.post("/captain/invite/<player_id>")
     @role_required("captain", "teams")
     def league_captain_invite(s, team, player_id):
         change(lambda: league.invite(team["id"], player_id, request.form.get("message", "")),
                "Team info sent. The player decides whether to reach out.")
         return back("league_captain", "players")
 
-    @app.post("/league/captain/delete")
+    @app.post("/captain/delete")
     @role_required("captain", "teams")
     def league_captain_delete(s, team):
         if change(lambda: league.delete_row("teams", team["id"]), "Your team is taken off the list."):
@@ -349,8 +346,8 @@ def register(app, h) -> League:
         return {"requests": sum(r["status"] in (OPEN, CLAIMED) for r in s["requests"]),
                 "signups": sum(x["status"] == "new" for x in s["signups"])}
 
-    @app.get("/league/office")
-    @director_view
+    @app.get("/office")
+    @office_view
     def league_office():
         s = league.load()
         month = request.args.get("month") or today()[:7]
@@ -389,15 +386,14 @@ def register(app, h) -> League:
                        "director": rep["name"] if rep else "", "notes": req["notes"]}
             day = day or req["date"]
         return render_template(
-            "league_office.html", t=None, s=s, weeks=weeks, month=month, month_label=f"{first:%B %Y}",
+            "league_office.html", s=s, weeks=weeks, month=month, month_label=f"{first:%B %Y}",
             prev_m=prev_m, next_m=next_m, by_day=by_day, closed=closed, day=day, loc_filter=loc_filter,
             today=today(), conflicts=league.conflicts(s), counts=office_counts(s), prefill=prefill,
             stats={"league": sum(e["type"] == LEAGUE_NIGHT for e in next30),
                    "special": sum(e["type"] not in (LEAGUE_NIGHT, GENERAL) for e in next30)},
-            formats=[*BRACKET_FORMATS, (CHIP, "Chip tournament")], tournaments={ev.id for ev in hub.events()},
         )
 
-    @app.post("/league/office/event")
+    @app.post("/office/event")
     @admin_required
     def league_office_event():
         ev = change(lambda: league.add_event(request.form.to_dict()))
@@ -409,64 +405,41 @@ def register(app, h) -> League:
                                 day=request.form.get("date") or None, schedule=request.form.get("request") or None)
                         + "#day")
 
-    @app.post("/league/office/event/<event_id>/delete")
+    @app.post("/office/event/<event_id>/delete")
     @admin_required
     def league_office_event_delete(event_id):
         change(lambda: league.delete_event(event_id), "Event deleted.")
         return redirect(url_for("league_office", month=request.form.get("month") or None,
                                 day=request.form.get("day") or None) + "#day")
 
-    @app.post("/league/office/event/<event_id>/tournament")
-    @admin_required
-    def league_office_tournament(event_id):
-        """Set up a tournament in Control Table for a calendar event (its date, time and venue carried over)."""
-        s = league.load()
-        e = next((x for x in s["events"] if x["id"] == event_id), None) or abort(404)
-        kind = request.form.get("kind", "")
-        settings = {"date": e["date"], "start_time": e["time"].upper(),
-                    "venue": League.location_name(s, e["loc"]) if e["loc"] != ALL else ""}
-        if kind in dict(BRACKET_FORMATS):
-            settings["format"], kind = kind, BRACKET
-        elif kind != CHIP:
-            flash("Pick a tournament format.", "error")
-            return redirect(url_for("league_office", month=e["date"][:7], day=e["date"]) + "#day")
-        try:
-            ev = hub.create(e["title"], kind, **settings)
-        except TournamentError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("league_office", month=e["date"][:7], day=e["date"]) + "#day")
-        league.link_tournament(event_id, ev.id)
-        flash(f"Created {e['title']} in Control Table. Finish its settings, then share the link.", "ok")
-        return redirect(url_for("admin", event=ev.id) + "#settings")
-
-    @app.get("/league/office/requests")
-    @director_view
+    @app.get("/office/requests")
+    @office_view
     def league_office_requests():
         s = league.load()
-        return render_template("league_board.html", t=None, s=s, rep=None, groups=board(s), office=True,
+        return render_template("league_board.html", s=s, rep=None, groups=board(s), office=True,
                                counts=office_counts(s))
 
-    @app.post("/league/office/request/<req_id>/decline")
+    @app.post("/office/request/<req_id>/decline")
     @admin_required
     def league_office_decline(req_id):
         change(lambda: league.decline_request(req_id), "Request declined and removed.")
         return back("league_office_requests")
 
-    @app.get("/league/office/signups")
-    @director_view
+    @app.get("/office/signups")
+    @office_view
     def league_office_signups():
         s = league.load()
         signups = sorted(s["signups"], key=lambda x: x["created"], reverse=True)
-        return render_template("league_signups.html", t=None, s=s, signups=signups, counts=office_counts(s),
+        return render_template("league_signups.html", s=s, signups=signups, counts=office_counts(s),
                                open_teams=league.open_teams)
 
-    @app.post("/league/office/signup/<signup_id>/connected")
+    @app.post("/office/signup/<signup_id>/connected")
     @admin_required
     def league_office_connected(signup_id):
         change(lambda: league.mark_connected(signup_id), "Marked as connected.")
         return back("league_office_signups")
 
-    @app.post("/league/office/remove/<kind>/<row_id>")
+    @app.post("/office/remove/<kind>/<row_id>")
     @admin_required
     def league_office_remove(kind, row_id):
         if kind not in ("players", "teams", "signups"):
@@ -475,17 +448,17 @@ def register(app, h) -> League:
         return back("league_office_signups" if kind == "signups" else "league_office_setup",
                     "" if kind == "signups" else "people")
 
-    @app.get("/league/office/setup")
-    @director_view
+    @app.get("/office/setup")
+    @office_view
     def league_office_setup():
         s = league.load()
         blackouts = sorted((b for b in s["blackouts"] if b["end"] >= today()), key=lambda b: b["start"])
         nights_text = {l["id"]: "\n".join(f"{DAYS[n['dow']]} {n['time']} {n['label']}" for n in l["nights"])
                        for l in s["locations"]}
-        return render_template("league_setup.html", t=None, s=s, blackouts=blackouts, nights_text=nights_text,
+        return render_template("league_setup.html", s=s, blackouts=blackouts, nights_text=nights_text,
                                counts=office_counts(s), edit=request.args.get("edit", ""))
 
-    @app.post("/league/office/settings")
+    @app.post("/office/settings")
     @admin_required
     def league_office_settings():
         f = request.form
@@ -493,8 +466,8 @@ def register(app, h) -> League:
                "Saved.")
         return back("league_office_setup", "season")
 
-    @app.post("/league/office/location")
-    @app.post("/league/office/location/<loc_id>")
+    @app.post("/office/location")
+    @app.post("/office/location/<loc_id>")
     @admin_required
     def league_office_location(loc_id=None):
         f = request.form
@@ -506,7 +479,7 @@ def register(app, h) -> League:
             flash(f"Saved {loc['name']}.", "ok")
         return back("league_office_setup", "locations")
 
-    @app.post("/league/office/location/<loc_id>/delete")
+    @app.post("/office/location/<loc_id>/delete")
     @admin_required
     def league_office_location_delete(loc_id):
         if request.form.get("confirm", "").strip().upper() != "DELETE":
@@ -516,7 +489,7 @@ def register(app, h) -> League:
                    "Deleted the location with its events, blackouts, requests, sign-ups and teams.")
         return back("league_office_setup", "locations")
 
-    @app.post("/league/office/rep")
+    @app.post("/office/rep")
     @admin_required
     def league_office_rep():
         rep = change(lambda: league.add_rep(request.form.get("name", ""), request.form.get("division", "")))
@@ -524,13 +497,13 @@ def register(app, h) -> League:
             flash(f"Added {rep['name']}. Their rep PIN is {rep['pin']}.", "ok")
         return back("league_office_setup", "reps")
 
-    @app.post("/league/office/rep/<rep_id>/delete")
+    @app.post("/office/rep/<rep_id>/delete")
     @admin_required
     def league_office_rep_delete(rep_id):
         change(lambda: league.delete_rep(rep_id), "Removed the rep. Requests they had claimed are open again.")
         return back("league_office_setup", "reps")
 
-    @app.post("/league/office/pin/<kind>/<row_id>")
+    @app.post("/office/pin/<kind>/<row_id>")
     @admin_required
     def league_office_pin(kind, row_id):
         if kind not in ("locations", "reps", "players", "teams"):

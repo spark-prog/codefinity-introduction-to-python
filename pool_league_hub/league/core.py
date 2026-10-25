@@ -1,4 +1,4 @@
-"""League hub: the calendar, host locations and player match-ups between tournaments.
+"""Pool League Hub: the league calendar, host locations and player match-ups.
 
 Who does what:
   league office   the master calendar, confirming host requests, player sign-ups, setup
@@ -7,7 +7,7 @@ Who does what:
   player          a "looking for a team" listing and an inbox of team invites
   team captain    a team with open spots, browsing players and sending invites
 
-Everything is kept in league.json in the data folder, separate from the tournaments.
+Everything is kept in league.json in the data folder.
 League nights repeat every week at each location (between the season dates, when set);
 other events are single dates. A host's blackout dates block new events there, and
 anything already on the calendar that lands on one is flagged as a conflict.
@@ -86,7 +86,7 @@ def label_rows(text: str) -> list[tuple[str, str]]:
 
 
 def empty() -> dict:
-    return {"settings": {"name": "League Hub", "season_start": "", "season_end": ""},
+    return {"settings": {"name": "Pool League Hub", "season_start": "", "season_end": ""},
             "locations": [], "reps": [], "events": [], "blackouts": [], "requests": [],
             "signups": [], "players": [], "teams": [], "invites": []}
 
@@ -208,7 +208,7 @@ class League:
         if start and end and end < start:
             raise LeagueError("The season ends before it starts.")
         with self.change() as s:
-            s["settings"].update(name=name.strip() or "League Hub", season_start=start, season_end=end)
+            s["settings"].update(name=name.strip() or "Pool League Hub", season_start=start, season_end=end)
 
     def save_location(self, loc_id: str | None, fields: dict, nights: list[dict] | None = None) -> dict:
         """Add a location (loc_id None) or update one. Hosts change only the page fields, not nights."""
@@ -292,7 +292,7 @@ class League:
                                   "Pick another date or ask the host to lift the blackout.")
             event = {"id": self._id("ev", s["events"]), "date": day, "loc": loc, "type": kind, "title": title,
                      "time": (f.get("time") or "").strip(), "director": (f.get("director") or "").strip(),
-                     "notes": (f.get("notes") or "").strip(), "request": "", "tournament": ""}
+                     "notes": (f.get("notes") or "").strip(), "request": ""}
             if f.get("request"):
                 req = self.find(s, "requests", f["request"])
                 if req["status"] != CLAIMED:
@@ -309,10 +309,6 @@ class League:
                 if req:
                     req["status"] = CLAIMED if req.get("rep") else OPEN  # back to the board, still with its rep
             s["events"].remove(event)
-
-    def link_tournament(self, event_id: str, tournament_id: str) -> None:
-        with self.change() as s:
-            self.find(s, "events", event_id)["tournament"] = tournament_id
 
     def decline_request(self, req_id: str) -> None:
         with self.change() as s:

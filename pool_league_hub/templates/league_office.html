@@ -71,12 +71,6 @@
       <div class="meta">{{ location_name(s, e.loc) }}{% if e.time %} · {{ e.time }}{% endif %}{% if e.director %} · Run by {{ e.director }}{% endif %}{% if e.notes %} · {{ e.notes }}{% endif %}</div>
       {% if not e.weekly and is_admin %}
       <div class="button-row" style="margin-top: 8px">
-        {% if e.tournament and e.tournament in tournaments %}<a class="button small secondary" href="{{ url_for('admin', event=e.tournament) }}">Run it in Control Table</a>
-        {% elif e.type not in (L_GENERAL, L_LEAGUE_NIGHT) %}
-        <form method="post" action="{{ url_for('league_office_tournament', event_id=e.id) }}" class="form inline-filters">
-          <label><span class="sr-only">Format</span><select name="kind">{% for k, name in formats %}<option value="{{ k }}"{{ ' selected' if (e.type == 'singles_tourney' and k == 'double') or (e.type == 'singles_board' and k == 'single') or (e.type == 'doubles_tourney' and k == 'double') }}>{{ name }}</option>{% endfor %}</select></label>
-          <button class="button small">Set up in Control Table</button></form>
-        {% endif %}
         <form method="post" action="{{ url_for('league_office_event_delete', event_id=e.id) }}" onsubmit="return confirm('Delete this event?')">
           <input type="hidden" name="month" value="{{ month }}"><input type="hidden" name="day" value="{{ day }}">
           <button class="button small danger-outline">Delete</button></form>

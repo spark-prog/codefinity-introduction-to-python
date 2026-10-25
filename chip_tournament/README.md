@@ -204,24 +204,6 @@ export TWILIO_FROM_NUMBER=+15551234567
 
 Without these, texts are only logged (see **Recent texts** on the director page), so you can test without paying for SMS. US carriers require A2P 10DLC registration for business texting through Twilio.
 
-## League hub
-
-Between tournaments, the league runs on the **League** pages (`/league/`): one calendar shared by the league office, the host locations, the division reps, and players and teams looking for each other. (This brings in the plans and workflows from the *Pool League Hub* prototype.) Everything is saved in `league.json` in the data folder, apart from the tournaments.
-
-| Who | Signs in with | What they do |
-|---|---|---|
-| **League office** | the director password (`/league/office`) | **Calendar**: a month view of every location with league nights, tournaments, boards, league-wide dates and blackouts. Adds events (blocked on a host's blackout days), sees conflicts, and turns a tournament or board into a Control Table tournament with **Set up in Control Table** (name, date, time and venue carried over). **Requests**: confirms the events reps have claimed (**Add to calendar**) or declines them. **Sign-ups**: players who asked to play out of a location, with their contact and the teams there with open spots. **Setup**: the season dates, host locations and their weekly league nights, division reps, PINs, and the player and team listings. |
-| **Host location** | its 6-digit host PIN | Its schedule for the next 30 or 60 days, blackout dates (any event already on those days is flagged for the office), requests for a singles board, singles tournament or doubles tournament (preferred and backup date), and its public page: hours, specials, menu, table rates, contact. |
-| **Division rep** | their 6-digit rep PIN | The request board: claims a host's request to run it, or releases it. |
-| **Player** | phone or email + 4-digit PIN from posting a listing | A "looking for a team" listing (name, level, formats, nights, preferred locations) that can be hidden, and an inbox of team invites with the captain's contact. |
-| **Team captain** | phone or email + 4-digit PIN from posting the team | The team's open spots, players looking (best fit first, by night, location and format, with filters), and invites sent with whether each was opened. |
-
-Anyone can browse the host locations, see what's coming up, and send **Play out of here** to the league office from a location's page.
-
-- **League nights** are set per location in Setup, one per line: `Tue 7:00 PM 8-Ball Open · Division 1`. They repeat weekly between the season dates (or with no end if the dates are blank).
-- **Privacy.** Captains never see a player's phone or email; a player sees the captain's contact only on an invite. Sign-up contacts go only to the league office.
-- **PINs.** The office sees host and rep PINs in Setup and can give anyone a new PIN (the old one stops working and signs that person out). Wrong PINs are limited to 10 per device in 15 minutes.
-
 ## Data
 
 Everything is saved in `chip_tournament/data/`: `events.json` lists the tournaments, and each has its own folder `events/<id>/` with `tournament.json`, the undo history and `texts.log`. Rules, the background photo and the login key are shared. Set `CHIPS_DATA_DIR` to store the data somewhere else. A data folder from the single-tournament version is moved into `events/` automatically the first time Control Table starts.
@@ -244,7 +226,6 @@ To run another tournament, create it from **All tournaments** (`/admin`). To sta
 - `chips/bracket.py`: bracket tournament rules, tested in `tests/test_bracket.py`
 - `chips/hub.py`: the list of tournaments, one folder each, and moving old data in
 - `bracket_web.py`: the bracket tournament pages
-- `chips/league.py`: the league hub (calendar, locations, blackouts, requests, listings, invites); `league_web.py`: its pages under `/league`; tests in `tests/test_league.py`
 - `chips/storage.py`: JSON save/load and undo
 - `chips/alerts.py`: Twilio texts with a log-only fallback
 - `app.py`: Flask routes (the hub, chip tournament pages, and sending each tournament to its own pages), with `templates/` and `static/`; hub and bracket tests in `tests/test_hub.py`

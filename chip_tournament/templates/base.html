@@ -56,7 +56,6 @@
         {% if t and t.status == SETUP %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
-        <a href="{{ url_for('league_home') }}" class="{{ 'active' if ep.startswith('league') }}">League</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('director') }}" class="nav-cta {{ 'active' if ep.startswith('admin') or ep == 'director' }}">Director</a>
         {% endif %}

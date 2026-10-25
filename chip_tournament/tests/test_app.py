@@ -1,8 +1,25 @@
 import time
 
 import pytest
+from flask.testing import FlaskClient
 
 from app import create_app
+
+
+# Pages every tournament shares (or that cover all of them) stay where they are; the rest of a
+# chip tournament's pages live under /t/<id>/, so the client below adds that for these tests.
+GLOBAL_PATHS = ("/t/", "/static", "/admin/login", "/admin/logout", "/admin/rules", "/healthz", "/favicon.ico",
+                "/background")
+
+
+class ChipEventClient(FlaskClient):
+    event_id = ""
+
+    def open(self, *args, **kwargs):
+        if args and isinstance(args[0], str) and not args[0].startswith(GLOBAL_PATHS):
+            path = args[0]
+            args = (f"/t/{self.event_id}" + ("/" if path == "/" else path),) + args[1:]
+        return super().open(*args, **kwargs)
 
 
 @pytest.fixture
@@ -13,6 +30,10 @@ def client(tmp_path, monkeypatch):
         monkeypatch.delenv(var, raising=False)
     app = create_app(str(tmp_path))
     app.testing = True
+    event = app.config["hub"].create("Chip Tournament", "chip")
+    app.config["store"], app.config["sms"] = event.store, event.sms
+    ChipEventClient.event_id = event.id
+    app.test_client_class = ChipEventClient
     return app.test_client()
 
 
@@ -205,10 +226,10 @@ def test_rules_editor_and_page(client):
     client.post("/admin/rules/new", data={"title": "10-Ball Rules"})
     client.post("/admin/rules/10-ball-rules/move", data={"dir": "up"})
     from chips.rules import RuleBook
-    ids = [r["id"] for r in RuleBook(client.application.config["store"].dir).load()]
+    ids = [r["id"] for r in RuleBook(client.application.config["data_dir"]).load()]
     assert ids[-2:] == ["10-ball-rules", "fast-saratoga-rules"]
     client.post("/admin/rules/10-ball-rules/delete")
-    assert "10-ball-rules" not in [r["id"] for r in RuleBook(client.application.config["store"].dir).load()]
+    assert "10-ball-rules" not in [r["id"] for r in RuleBook(client.application.config["data_dir"]).load()]
 
 
 def test_production_refuses_default_password(tmp_path, monkeypatch):
@@ -251,7 +272,7 @@ def test_registration_shows_text_consent(client):
     assert 'name="sms_consent" value="1" >' in page or 'name="sms_consent" value="1">' in page  # not pre-checked
     assert "Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out." in page
     assert 'name="agree_terms" value="1" required' in page
-    assert 'href="/terms"' in page and 'href="/privacy"' in page
+    assert 'href="/t/chip-tournament/terms"' in page and 'href="/t/chip-tournament/privacy"' in page
     for path in ("/terms", "/privacy"):
         body = client.get(path).get_data(as_text=True)
         assert "Maximum English LLC dba First Coast APA" in body and "firstcoast@apaleagues.com" in body
@@ -480,7 +501,8 @@ def test_view_only_login(client):
     assert f"PIN {team.pin}" in page and "view-only" not in page
 
 
-def test_delete_permanently_and_past_tournaments(client, tmp_path):
+def test_delete_permanently_and_past_tournaments(client):
+    tmp_path = client.application.config["store"].dir  # this tournament's folder
     client.post("/admin/login", data={"password": "secret"})
     store = client.application.config["store"]
     register(client, "Sharks")
@@ -568,7 +590,7 @@ def test_share_preview_tags(client):
     assert '<meta property="og:image" content="http://localhost/static/img/share.jpg">' in page
     assert '<meta property="og:title" content="Fall Classic">' in page
     assert "October 31, 2026 beginning at 9 PM at Ace&#39;s." in page
-    assert '<meta property="og:url" content="http://localhost/register">' in page
+    assert '<meta property="og:url" content="http://localhost/t/chip-tournament/register">' in page
     icon = client.get("/favicon.ico")
     assert icon.status_code == 200 and icon.mimetype == "image/x-icon"
     assert 'href="/favicon.ico"' in page

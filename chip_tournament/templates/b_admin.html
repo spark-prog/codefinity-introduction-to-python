@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+{% block title %}Director — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+{% set setup = t.status == SETUP %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Director · {{ t.format_name }} · {{ {"setup": "setting up", "running": "live", "finished": "finished"}[t.status] }}</p>
+    <h1>{{ s.name }}</h1>
+  </div>
+  <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
+    <a class="button secondary" href="{{ url_for('board') }}">Board</a>
+    {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
+  </div>
+</header>
+{% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. Phone numbers, PINs and texts are hidden.</p>{% endif %}
+<nav class="jump-nav" aria-label="Director sections">
+  <a href="#summary">Summary</a>
+  {% if t.status == RUNNING %}<a href="#tables">Tables</a>{% endif %}
+  <a href="#entries">Entries</a>
+  {% if not setup %}<a href="#results">Results</a>{% endif %}
+  <a href="#texts">Texts &amp; log</a>
+  <a href="#settings">Settings</a>
+  <a href="#new-tournament">Start over</a>
+</nav>
+
+<div id="summary" class="jump-target">
+<div class="stats">
+  <div class="stat"><span class="label">Entries</span><span class="value">{{ t.field_entries|length }}{% if s.field_cap %} / {{ s.field_cap }}{% endif %}</span></div>
+  <div class="stat highlight"><span class="label">Pot</span><span class="value">{{ t.projected_pot_cents|money }}</span></div>
+  {% if not setup %}
+  <div class="stat"><span class="label">Still in</span><span class="value">{{ t.entries.values()|selectattr("status", "equalto", "active")|list|length }}</span></div>
+  <div class="stat"><span class="label">Matches left</span><span class="value">{{ t.matches|selectattr("status", "in", ["pending", "ready", "called"])|rejectattr("is_bye")|list|length }}</span></div>
+  {% endif %}
+</div>
+<section class="card controls" style="margin-top: 0">
+  {% if setup %}
+  {% set unchecked = t.not_checked_in %}
+  <p>{{ t.field_entries|length }} entr{{ "y" if t.field_entries|length == 1 else "ies" }} in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
+    Drawing the bracket {{ "shuffles the entries randomly" if s.seeding == "random" else "seeds them in the order shown under Entries" }},
+    builds the {{ t.format_name|lower }} and calls the first matches to tables {{ s.tables|join(", ") }}.</p>
+  <p class="muted">Check-in: {{ t.field_entries|selectattr("checked_in_at")|list|length }} of {{ t.field_entries|length }}{% if s.require_checkin %} (required before the draw){% endif %}.</p>
+  {% endif %}
+  {% if t.status == FINISHED %}<p class="banner">Finished. Payouts are under Results.</p>{% endif %}
+  <div class="button-row">
+    {% if setup %}
+    <form method="post" action="{{ url_for('admin_start') }}" class="inline"
+          data-dialog-title="Draw the bracket?" data-dialog-text="Registration closes, the bracket is drawn and the first matches are called to tables (and texted)." data-dialog-ok="Draw it">
+      <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first"{% endif %}>Draw the bracket &amp; start</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin_undo') }}" class="inline"
+          data-dialog-title="Undo: {{ undo_label }}?" data-dialog-text="Undo takes back the most recent action, for everyone. Texts already sent can't be recalled." data-dialog-ok="Undo">
+      <input type="hidden" name="step" value="{{ undo_step }}">
+      <button class="button secondary" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+  </div>
+</section>
+</div>
+
+{% if t.status == RUNNING %}
+<section id="tables" class="jump-target">
+  <div class="section-head"><h2>Tables</h2>
+    <span class="muted">Ready matches go to free tables {{ "automatically" if s.auto_call else "when you send them (auto-call is off)" }}.</span></div>
+  {% set long = t.long_matches() %}
+  {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min):
+    {% for m in long %}<b>Table {{ m.table }}</b> (#{{ m.num }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+  <div class="match-grid">
+  {% for m in t.in_play() %}
+  {% set mins = t.match_minutes_played(m) %}
+  <div class="card match{% if mins >= s.long_match_minutes %} long{% elif mins >= s.match_minutes %} over{% endif %}">
+    <div class="match-head">
+      <span class="table-label">Table {{ m.table }}</span>
+      <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.match_minutes }}" data-long="{{ s.long_match_minutes }}"></span>
+      <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · race to {{ m.race_to }}</span>
+    </div>
+    {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}
+    <div class="score-row">
+      <div class="team-name">{{ t.name_of(id) }}</div>
+      <div class="score-ctl">
+        <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
+          <button class="button secondary small square">−</button></form>
+        <b class="score">{{ sc }}</b>
+        <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
+          <button class="button small square">+</button></form>
+      </div>
+      <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline"
+            data-dialog-title="{{ t.name_of(id) }} won the match?" data-dialog-text="Records the win now (the score stays as entered)." data-dialog-ok="Record it">
+        <input type="hidden" name="winner" value="{{ id }}"><input type="hidden" name="forfeit" value="1">
+        <button class="button small secondary">Winner</button></form>
+    </div>
+    {% endfor %}
+    <div class="button-row">
+      {% set w = t.race_winner(m) %}
+      {% if w %}
+      <form method="post" action="{{ url_for('b_submit', match_id=m.id) }}" class="inline"><button class="button">Submit: {{ t.name_of(w) }} won</button></form>
+      {% endif %}
+      {% set free = t.free_tables() %}
+      {% if free %}
+      <form method="post" action="{{ url_for('b_call', match_id=m.id) }}" class="inline">
+        <select name="table" aria-label="Move to table">{% for x in free %}<option>{{ x }}</option>{% endfor %}</select>
+        <button class="button small secondary">Move table</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}<p class="muted">No matches on the tables.</p>
+  {% endfor %}
+  </div>
+
+  {% set queue = t.ready_queue() %}
+  <div class="card">
+    <div class="section-head"><h3>Waiting for a table ({{ queue|length }})</h3>
+      {% if queue and t.free_tables() %}<form method="post" action="{{ url_for('b_call_waiting') }}" class="inline"><button class="button small">Call what fits now</button></form>{% endif %}</div>
+    {% if queue %}
+    <table class="grid small">
+      {% for m in queue %}
+      <tr><td>#{{ m.num }}</td><td><b>{{ t.name_of(m.a) }}</b> vs <b>{{ t.name_of(m.b) }}</b>{% if m.priority %} <span class="tag call">next</span>{% endif %}
+          <div class="muted">{{ t.match_label(m) }}</div></td>
+        <td class="nowrap">
+          {% set free = t.free_tables() %}
+          {% if free %}
+          <form method="post" action="{{ url_for('b_call', match_id=m.id) }}" class="inline">
+            <select name="table" aria-label="Table">{% for x in free %}<option>{{ x }}</option>{% endfor %}</select>
+            <button class="button small">Send</button></form>
+          {% endif %}
+          {% if not m.priority %}<form method="post" action="{{ url_for('b_front', match_id=m.id) }}" class="inline"><button class="button small secondary">To the front</button></form>{% endif %}
+          <details class="inline-details"><summary class="button small secondary">Forfeit</summary>
+            {% for id in (m.a, m.b) %}
+            <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline">
+              <input type="hidden" name="winner" value="{{ id }}"><input type="hidden" name="forfeit" value="1">
+              <button class="button small danger-outline">{{ t.name_of(id) }} wins by forfeit</button></form>
+            {% endfor %}
+          </details>
+        </td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">Nothing waiting.</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Table service</h3>
+    <p class="muted">Taking a table out moves its match to a free table, or to the front of the line with its score kept.</p>
+    <div class="button-row">
+      {% for x in s.tables %}
+      {% set down = x in s.tables_down %}
+      <form method="post" action="{{ url_for('b_table', table=x) }}" class="inline">
+        <input type="hidden" name="down" value="{{ '0' if down else '1' }}">
+        <button class="button small {{ 'danger' if down else 'secondary' }}" title="{{ 'Bring back into service' if down else 'Take out of service' }}">
+          Table {{ x }}: {{ "out — bring back" if down else "in service" }}</button></form>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section id="entries" class="card jump-target">
+  <div class="section-head"><h2>Entries</h2>
+    {% if setup and not is_viewer %}<form method="post" action="{{ url_for('b_shuffle') }}" class="inline"><button class="button small secondary">Shuffle order</button></form>{% endif %}</div>
+  {% if setup %}
+  <p class="muted">{{ "With manual seeding, the order below is the seed order (1 at the top): byes go to the top seeds."
+     if s.seeding == "manual" else "Seeding is a random draw at the start. Switch to manual seeding in Settings to set the order yourself." }}</p>
+  {% endif %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>#</th><th>Entry</th>{% if not is_viewer %}<th>PIN</th>{% endif %}<th>Status</th><th></th></tr></thead>
+    {% for e in t.listed_entries %}
+    <tr>
+      <td>{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
+      <td><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
+        {% if s.team_size > 1 and e.partners != e.name %}<div class="muted">{{ e.partners }}</div>{% endif %}
+        {% if not is_viewer %}<div class="muted small-note">{% for p in e.players if p.phone %}{{ p.name }} ···{{ p.phone|last4 }}{% if p.sms_consent %} ✓texts{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
+      {% if not is_viewer %}<td>{{ e.pin }}</td>{% endif %}
+      <td>{% if e.status == "waitlisted" %}Waiting list #{{ t.waitlist_position(e) }}
+        {% elif e.status == "no_show" %}No-show
+        {% elif setup %}{{ ("Checked in " ~ e.checked_in_at|clock) if e.checked_in_at else "Not checked in" }}
+        {% else %}{{ {"active": "Still in", "eliminated": "Out", "champion": "Champion"}.get(e.status, e.status) }}{% if e.withdrawn %} (withdrew){% endif %}{% endif %}</td>
+      <td class="nowrap">
+        {% if setup %}
+          {% if e.status == "registered" %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='check-in') }}" class="inline"><button class="button small{% if e.checked_in_at %} secondary{% endif %}">{{ "Undo check-in" if e.checked_in_at else "Check in" }}</button></form>
+          {% if s.seeding == "manual" %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='up') }}" class="inline"><button class="button small secondary square" title="Move up">↑</button></form>
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='down') }}" class="inline"><button class="button small secondary square" title="Move down">↓</button></form>
+          {% endif %}
+          {% endif %}
+          {% if e.status == "no_show" %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='restore') }}" class="inline"><button class="button small secondary">Restore</button></form>
+          {% else %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='no-show') }}" class="inline"><button class="button small danger-outline">No-show</button></form>
+          {% endif %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='remove') }}" class="inline"
+                data-dialog-title="Remove {{ e.name }}?" data-dialog-text="They come off the list (the next on the waiting list moves in)." data-dialog-ok="Remove">
+            <button class="button small danger">Remove</button></form>
+        {% elif e.status == "active" and t.status == RUNNING and not e.withdrawn %}
+          <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='withdraw') }}" class="inline"
+                data-dialog-title="Withdraw {{ e.name }}?" data-dialog-text="Every match they have left is recorded as a forfeit win for the opponent." data-dialog-ok="Withdraw">
+            <button class="button small danger-outline">Withdraw</button></form>
+        {% endif %}
+        {% if not is_viewer %}
+        <details class="inline-details"><summary class="button small secondary">Edit</summary>
+          <form method="post" action="{{ url_for('b_edit_entry', entry_id=e.id) }}" class="form">
+            <label>Entry name <input name="name" value="{{ e.name }}"></label>
+            {% for p in e.players %}{% set i = loop.index0 %}
+            <label>Player {{ i + 1 }} <input name="player_name_{{ i }}" value="{{ p.name }}" {% if not setup %}readonly{% endif %}></label>
+            <label>Cell <input name="player_phone_{{ i }}" value="{{ p.phone }}"></label>
+            <input type="hidden" name="player_skill_{{ i }}" value="{{ p.skill or '' }}">
+            {% endfor %}
+            <button class="button small">Save</button>
+          </form>
+        </details>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">No entries yet. Players can register at the Register page, or add them below.</td></tr>
+    {% endfor %}
+  </table></div>
+
+  {% if setup and not is_viewer %}
+  <div class="split" style="margin-top: 24px">
+    <form method="post" action="{{ url_for('b_add_entries') }}" class="form">
+      <h3>Add an entry</h3>
+      {% if s.team_size > 1 %}<label>Team name (optional) <input name="name"></label>{% endif %}
+      {% for i in range(s.team_size) %}
+      <label>Player {{ i + 1 if s.team_size > 1 else "" }} name <input name="player_name_{{ i }}" required></label>
+      <label>Cell (optional) <input name="player_phone_{{ i }}" type="tel"></label>
+      {% endfor %}
+      <p class="muted small-note">Players added here don't get texts until they turn alerts on from their own page.</p>
+      <button class="button">Add</button>
+    </form>
+    <form method="post" action="{{ url_for('b_add_entries') }}" class="form">
+      <h3>Add many at once</h3>
+      <label>One per line{% if s.team_size == 1 %} (<code>Name</code> or <code>Name, cell</code>){% else %} (<code>Ann &amp; Bob</code> or <code>Sharks: Ann &amp; Bob</code>){% endif %}
+        <textarea name="bulk" rows="8"></textarea></label>
+      <button class="button">Add all</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+
+{% if not setup %}
+<section id="results" class="card jump-target">
+  <div class="section-head"><h2>Results</h2><a href="{{ url_for('home') }}#bracket">See the bracket</a></div>
+  {% set paid = t.results()|selectattr("entry.payout_cents")|list %}
+  {% if paid %}
+  <h3>Payouts</h3>
+  <table class="grid small">
+    {% for r in paid %}<tr><td>{{ r.place_text }}</td><td>{{ r.entry.name }}</td><td><b>{{ r.entry.payout_cents|money }}</b></td></tr>{% endfor %}
+  </table>
+  {% endif %}
+  <h3>Recent matches</h3>
+  {% set recent = t.recent_results() %}
+  {% if recent %}
+  <table class="grid small">
+    {% for m in recent %}
+    <tr><td>#{{ m.num }}</td><td>{{ t.match_label(m) }}</td>
+      <td><b>{{ t.name_of(m.winner) }}</b> beat {{ t.name_of(m.loser) }} {{ [m.score_a, m.score_b]|max }}-{{ [m.score_a, m.score_b]|min }}{% if m.forfeit %} (forfeit){% endif %}</td>
+      <td>{{ m.finished_at|clock }}</td>
+      <td>{% if not is_viewer %}<form method="post" action="{{ url_for('b_fix', match_id=m.id) }}" class="inline"
+            data-dialog-title="Fix #{{ m.num }}?" data-dialog-text="{{ t.name_of(m.loser) }} becomes the winner. Works until a later match has used this result." data-dialog-ok="Swap the winner">
+        <button class="button small secondary">Fix result</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No results yet.</p>{% endif %}
+</section>
+{% endif %}
+
+<section id="texts" class="card jump-target">
+  <h2>Texts &amp; log</h2>
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
+    <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="300"></textarea></label>
+    <button class="button small">Send</button>
+  </form>
+  {% if not sms_enabled %}<p class="muted">Texting isn't set up (no Twilio settings), so texts are only logged below.</p>{% endif %}
+  <details><summary>Recent texts ({{ texts|length }})</summary>
+    <table class="grid small">{% for x in texts %}<tr><td>{{ x.at|clock }}</td><td>···{{ x.to|last4 }}</td><td>{{ x.body }}</td><td class="muted">{{ x.status }}</td></tr>{% endfor %}</table>
+  </details>
+  {% endif %}
+  <details><summary>Activity log</summary>
+    <pre class="log">{% for line in t.log|reverse %}{{ line }}
+{% endfor %}</pre>
+  </details>
+</section>
+
+<section id="settings" class="card jump-target">
+  <h2>Settings</h2>
+  <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    <div class="settings-group">Event</div>
+    <label>Tournament name <input name="name" value="{{ s.name }}"></label>
+    <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
+    <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
+    <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>
+    <label>Venue <input name="venue" value="{{ s.venue }}"></label>
+    <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
+    <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+
+    <div class="settings-group">Format{% if not setup %} (set at the draw){% endif %}</div>
+    <label>Bracket
+      <select name="format" {% if not setup %}disabled{% endif %}>
+        {% for key, name in formats %}<option value="{{ key }}" {% if s.format == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select></label>
+    <label>Entries are
+      <select name="team_size" {% if not setup %}disabled{% endif %}>
+        <option value="1" {% if s.team_size == 1 %}selected{% endif %}>Singles (1 player)</option>
+        <option value="2" {% if s.team_size == 2 %}selected{% endif %}>Doubles (2 players)</option>
+      </select></label>
+    <label>Seeding
+      <select name="seeding" {% if not setup %}disabled{% endif %}>
+        <option value="random" {% if s.seeding == "random" %}selected{% endif %}>Random draw at the start</option>
+        <option value="manual" {% if s.seeding == "manual" %}selected{% endif %}>Manual (the order under Entries)</option>
+      </select></label>
+    <label>Modified single: single elimination from the final
+      <select name="final_cut" {% if not setup %}disabled{% endif %}>{% for n in final_cuts %}<option {% if s.final_cut == n %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    <label class="checkbox"><input type="checkbox" name="true_double" value="1" {% if s.true_double %}checked{% endif %} {% if not setup %}disabled{% endif %}>
+      Double elimination: play a second final if the losers-side champion wins the first</label>
+    <label>Round robin groups <input name="groups" type="number" min="1" value="{{ s.groups }}" {% if not setup %}disabled{% endif %}></label>
+    <label>Round robin: advance to a playoff from each group (0 = no playoff) <input name="advance" type="number" min="0" value="{{ s.advance }}" {% if not setup %}disabled{% endif %}></label>
+
+    <div class="settings-group">Races</div>
+    <label>Winners side / main race to <input name="race_winners" type="number" min="1" value="{{ s.race_winners }}"></label>
+    <label>Losers side race to <input name="race_losers" type="number" min="1" value="{{ s.race_losers }}"></label>
+    <label>Final(s) race to <input name="race_finals" type="number" min="1" value="{{ s.race_finals }}"></label>
+    {% if not setup %}<p class="muted wide">A new race applies to matches that haven't been called to a table yet.</p>{% endif %}
+
+    <div class="settings-group">Money &amp; field</div>
+    <label>Entry fee <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if not setup %}disabled{% endif %}></label>
+    <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if not setup %}disabled{% endif %}></label>
+    <label>Payouts, % of the pot by place <input name="payouts" value="{{ s.payouts|join(', ') }}" placeholder="50, 30, 20"></label>
+    <label>Field cap (0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}" {% if not setup %}disabled{% endif %}></label>
+    <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if not setup %}disabled{% endif %}>
+      Every entry must be checked in (or marked a no-show) before the draw</label>
+
+    <div class="settings-group">Tables</div>
+    <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
+    <label class="checkbox"><input type="checkbox" name="auto_call" value="1" {% if s.auto_call %}checked{% endif %}>
+      Send ready matches to free tables automatically</label>
+    <label>Card turns amber after (min) <input name="match_minutes" type="number" min="1" value="{{ s.match_minutes }}"></label>
+    <label>Card turns red after (min) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
+
+    <div class="settings-group">Texts &amp; look</div>
+    <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
+    <label>Questions phone <input name="contact_phone" value="{{ s.contact_phone }}"></label>
+    <label>Colors
+      <select name="theme">
+        {% for key, name, g, sw in THEMES %}<option value="{{ key }}" {% if theme_key(s.theme) == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select></label>
+    <p class="clock-check wide muted">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.</p>
+    <button class="button big">Save settings</button>
+  </form>
+</section>
+
+<section class="card jump-target" id="new-tournament">
+  <p class="eyebrow">Danger zone</p>
+  <h2>Start this tournament over</h2>
+  <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
+    Starting over clears this one: <b>Archive</b> keeps a copy below; <b>Delete permanently</b> erases it with its rosters and texts.</p>
+  <form method="post" action="{{ url_for('admin_reset') }}" class="reset-row">
+    <input name="confirm" placeholder="Type RESET" autocomplete="off">
+    <button class="button secondary" name="mode" value="archive">Archive and start over</button>
+    <button class="button danger" name="mode" value="delete">Delete permanently and start over</button>
+  </form>
+  {% if archives %}
+  <table class="grid small" style="margin-top: 16px">
+    {% for a in archives %}
+    <tr><td>{{ a.name }}</td><td>{{ a.teams }} entries</td><td>{{ a.archived.strftime("%B %-d, %Y") if a.archived else a.stamp }}</td>
+      <td><form method="post" action="{{ url_for('admin_delete_archives') }}" class="inline" onsubmit="return confirm('Permanently delete {{ a.name }}?')">
+        <input type="hidden" name="stamp" value="{{ a.stamp }}"><button class="button small danger">Delete</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</section>
+{% include "_director_js.html" %}
+{% endblock %}

@@ -1,8 +1,13 @@
-"""Web app for running a chip billiards tournament.
+"""Control Table: a web app for running billiards tournaments.
+
+Several tournaments can run at once. Each lives at /t/<id>/ with its own data,
+texts and undo history: chip tournaments (chips/engine.py) and bracket
+tournaments (chips/bracket.py, pages in bracket_web.py). The page at / lists
+them all, and /admin is where the director creates and opens them.
 
 Run it with:  python app.py   (then open http://localhost:5000)
 In production: gunicorn --workers 1 --threads 8 "app:create_app()"
-(one worker only: the tournament file and the check-in clock live in one process)
+(one worker only: the tournament files and the check-in clock live in one process)
 """
 
 from __future__ import annotations
@@ -16,11 +21,14 @@ from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
+from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import bracket_web
 from chips import importer, rules as rulebook, themes
-from chips.alerts import SmsSender
+from chips.bracket import FINAL_CUTS, FORMATS
+from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
     ACTIVE,
     CALLED,
@@ -34,7 +42,6 @@ from chips.engine import (
     TournamentError,
     money,
 )
-from chips.storage import Store
 from chips.throttle import Throttle
 
 
@@ -115,9 +122,16 @@ def players_from_form(form, keep_phones_of=None, same_people=()) -> list[Player]
 def create_app(data_dir: str | None = None) -> Flask:
     app = Flask(__name__)
     data_path = Path(data_dir or os.environ.get("CHIPS_DATA_DIR", Path(__file__).parent / "data"))
-    store = Store(data_path)
+    hub = Hub(data_path)
+    # The tournament this request is about (set from /t/<event>/ in the URL).
+    store = LocalProxy(lambda: g.event.store)
+    sms = LocalProxy(lambda: g.event.sms)
     rule_book = rulebook.RuleBook(data_path)
-    sms = SmsSender(data_path / "texts.log")
+
+    def current_t():
+        """The tournament in view, or None on the pages that cover every tournament."""
+        ev = g.get("event")
+        return ev.store.load() if ev else None
 
     key_file = data_path / "secret_key"
     if os.environ.get("SECRET_KEY"):
@@ -139,8 +153,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             raise RuntimeError("VIEWER_PASSWORD must be at least 8 characters and different from ADMIN_PASSWORD.")
         app.config["SESSION_COOKIE_SECURE"] = True
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-    app.config["store"] = store
-    app.config["sms"] = sms
+    app.config["hub"] = hub
+    app.config["data_dir"] = data_path
 
     app.jinja_env.filters["money"] = money
     app.jinja_env.filters["urlquote"] = quote_plus
@@ -194,21 +208,25 @@ def create_app(data_dir: str | None = None) -> Flask:
             "RUNNING": RUNNING,
             "FINISHED": FINISHED,
             "TEAM_SIZE": TEAM_SIZE,
+            "event": g.get("event"),
+            "CHIP": CHIP,
+            "BRACKET": BRACKET,
         }
 
     def send_texts(t) -> None:
         """Send whatever texts the last change produced, without slowing the page."""
         messages, t.outbox = list(t.outbox), []
         if messages:
+            sender = sms._get_current_object()  # this tournament's sender: the thread runs outside the request
             threading.Thread(
-                target=lambda: [sms.send(m.to, m.body) for m in messages], daemon=True
+                target=lambda: [sender.send(m.to, m.body) for m in messages], daemon=True
             ).start()
 
     def act(label: str, fn, success: str | None = None):
         """Apply one change to the tournament; show rule errors instead of crashing."""
         try:
             with store.change(label) as t:
-                t.site_url = request.url_root.rstrip("/")  # for the team-page link in welcome texts
+                t.site_url = f"{request.url_root.rstrip('/')}/t/{g.event.id}"  # for team-page links in texts
                 result = fn(t)
                 send_texts(t)
             if success:
@@ -218,8 +236,17 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(str(exc), "error")
             return None
 
-    def tick() -> None:
+    def tick(ev) -> None:
         """Start grace periods, record no-show forfeits, and apply the partner deadline when due."""
+        if ev.kind != CHIP:
+            return
+        store, sms = ev.store, ev.sms  # noqa: F841 (runs outside a request, so not the proxies)
+
+        def send_texts(t) -> None:
+            messages, t.outbox = list(t.outbox), []
+            if messages:
+                threading.Thread(target=lambda: [sms.send(m.to, m.body) for m in messages], daemon=True).start()
+
         probe = store.load()
         solos = [x.name for x in probe.solo_teams_in_field]
         if probe.check_clock() == 0:  # cheap check first, so idle ticks don't fill the undo history
@@ -230,12 +257,19 @@ def create_app(data_dir: str | None = None) -> Flask:
             t.check_clock()
             send_texts(t)
 
+    def tick_all() -> None:
+        for ev in hub.events():
+            if ev.kind == CHIP and ev.store.load().status != FINISHED:
+                tick(ev)
+
     def clock_loop() -> None:
         while True:
-            try:
-                tick()
-            except Exception as exc:  # keep the clock running no matter what
-                app.logger.exception("check-in clock failed: %s", exc)
+            for ev in hub.events():
+                try:
+                    if ev.kind == CHIP and ev.store.load().status != FINISHED:
+                        tick(ev)
+                except Exception as exc:  # keep the clock running no matter what
+                    app.logger.exception("check-in clock failed for %s: %s", ev.id, exc)
             time.sleep(15)
 
     clock_started = threading.Event()
@@ -247,7 +281,23 @@ def create_app(data_dir: str | None = None) -> Flask:
             clock_started.set()
             threading.Thread(target=clock_loop, daemon=True).start()
 
-    app.config["tick"] = tick
+    app.config["tick"] = tick_all
+
+    # ------------------------------------------------- which tournament is in view
+
+    @app.url_value_preprocessor
+    def pull_event(endpoint, values):
+        if values and "event" in values:
+            ev = hub.get(values.pop("event"))
+            if ev is None:
+                abort(404)
+            g.event = ev
+
+    @app.url_defaults
+    def add_event(endpoint, values):
+        # Links on a tournament's pages stay inside that tournament.
+        if "event" not in values and g.get("event") and app.url_map.is_endpoint_expecting(endpoint, "event"):
+            values["event"] = g.event.id
 
     def admin_required(view):
         @wraps(view)
@@ -255,7 +305,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if not session.get("admin"):
                 if session.get("viewer"):
                     flash("You're signed in view-only, so changes are turned off.", "error")
-                    return redirect(url_for("admin"))
+                    return redirect(url_for("admin") if g.get("event") else url_for("director"))
                 return redirect(url_for("admin_login", next=request.path))
             return view(*args, **kwargs)
 
@@ -304,15 +354,15 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     # ------------------------------------------------------------- public pages
 
-    @app.get("/")
+    @app.get("/t/<event>/")
     def home():
         return render_template("home.html", t=store.load())
 
-    @app.get("/board")
+    @app.get("/t/<event>/board")
     def board():
         return render_template("board.html", t=store.load())
 
-    @app.route("/register", methods=["GET", "POST"])
+    @app.route("/t/<event>/register", methods=["GET", "POST"])
     def register():
         t = store.load()
         if request.method == "POST":
@@ -344,24 +394,26 @@ def create_app(data_dir: str | None = None) -> Flask:
         # Browsers and search engines look for the icon here even without a <link> tag.
         return send_file(Path(app.static_folder) / "favicon.ico", mimetype="image/x-icon", max_age=86400)
 
+    @app.get("/t/<event>/privacy")
     @app.get("/privacy")
     def privacy():
-        return render_template("privacy.html", t=store.load())
+        return render_template("privacy.html", t=current_t())
 
+    @app.get("/t/<event>/terms")
     @app.get("/terms")
     def terms():
-        return render_template("terms.html", t=store.load())
+        return render_template("terms.html", t=current_t())
 
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
 
-    @app.get("/guide")
+    @app.get("/t/<event>/guide")
     @director_view  # the director's guide is for directors only
     def guide():
         return render_template("guide.html", t=store.load())
 
-    @app.get("/team/<team_id>")
+    @app.get("/t/<event>/team/<team_id>")
     def team_page(team_id):
         t = store.load()
         team = t.teams.get(team_id) or abort(404)
@@ -381,13 +433,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             raise TournamentError("Your team isn't on a table right now.")
         return m, "a" if m.team_a == team_id else "b"
 
-    @app.post("/team/<team_id>/login")
+    @app.post("/t/<event>/team/<team_id>/login")
     def team_login(team_id):
         team = store.load().teams.get(team_id) or abort(404)
         check_pin(team)
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.post("/team/<team_id>/texts")
+    @app.post("/t/<event>/team/<team_id>/texts")
     def team_texts(team_id):
         # Only someone signed in with the team PIN can opt in, for their own number (not the director).
         if not session.get(f"team_{team_id}"):
@@ -402,7 +454,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash("Tick the box to agree to text alerts.", "error")
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.post("/team/<team_id>/submit")
+    @app.post("/t/<event>/team/<team_id>/submit")
     def team_submit(team_id):
         try:
             m, _ = team_match(team_id)
@@ -413,7 +465,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 flash("Result submitted. Only the tournament director can change it now.", "ok")
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.post("/team/<team_id>/arrived")
+    @app.post("/t/<event>/team/<team_id>/arrived")
     def team_arrived(team_id):
         try:
             m, side = team_match(team_id)
@@ -423,7 +475,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             act("Check in (team)", lambda t: t.check_in(m.id, side), "Checked in. Good luck!")
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.post("/team/<team_id>/score")
+    @app.post("/t/<event>/team/<team_id>/score")
     def team_score(team_id):
         side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
         if side not in ("a", "b") or delta not in (1, -1):
@@ -437,7 +489,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             act("Score (team)", lambda t: t.score(m.id, side, delta, by=name))
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.route("/team/<team_id>/roster", methods=["GET", "POST"])
+    @app.route("/t/<event>/team/<team_id>/roster", methods=["GET", "POST"])
     def roster(team_id):
         t = store.load()
         team = t.teams.get(team_id) or abort(404)
@@ -478,23 +530,23 @@ def create_app(data_dir: str | None = None) -> Flask:
                 session.pop("viewer", None)
                 session["admin" if is_director else "viewer"] = True
                 nxt = request.args.get("next", "")
-                return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("admin"))
+                return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("director"))
             else:
                 login_by_ip.fail(ip)
                 flash("Wrong password.", "error")
-        return render_template("login.html", t=store.load(), default_password=admin_password == "admin")
+        return render_template("login.html", t=None, default_password=admin_password == "admin")
 
     @app.post("/admin/logout")
     def admin_logout():
         session.pop("admin", None)
         session.pop("viewer", None)
-        return redirect(url_for("home"))
+        return redirect(url_for("index"))
 
-    @app.get("/admin")
+    @app.get("/t/<event>/admin")
     @director_view
     def admin():
         if session.get("admin"):  # the view-only login never changes anything (the background clock still runs)
-            tick()
+            tick(g.event)
         t = store.load()
         return render_template(
             "admin.html", t=t, undo_label=store.last_undo_label(), undo_step=store.undo_depth(), server_time=datetime.now(),
@@ -502,7 +554,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             bracket_text="\n".join(f"{top} = {chips}" for top, chips in t.settings.chip_brackets),
         )
 
-    @app.post("/admin/settings")
+    @app.post("/t/<event>/admin/settings")
     @admin_required
     def admin_settings():
         f = request.form
@@ -571,6 +623,10 @@ def create_app(data_dir: str | None = None) -> Flask:
                       "Press Undo to keep them in the field.", "error")
         return redirect(url_for("admin"))
 
+    def back_to_settings() -> str:
+        return url_for("admin") + "#settings" if g.get("event") else url_for("director")
+
+    @app.post("/t/<event>/admin/background")
     @app.post("/admin/background")
     @admin_required
     def admin_background():
@@ -578,30 +634,31 @@ def create_app(data_dir: str | None = None) -> Flask:
             for ext in ("jpg", "png", "webp"):
                 (data_path / f"background.{ext}").unlink(missing_ok=True)
             flash("Using the default background (the Control Table glow).", "ok")
-            return redirect(url_for("admin") + "#settings")
+            return redirect(back_to_settings())
         upload = request.files.get("photo")
         data = upload.read() if upload and upload.filename else b""
         kind = next((v for magic, v in photo_types.items() if data.startswith(magic)), None)
         if not data or kind is None or (kind[0] == "webp" and data[8:12] != b"WEBP"):
             flash("Choose a JPG, PNG or WebP photo.", "error")
-            return redirect(url_for("admin") + "#settings")
+            return redirect(back_to_settings())
         for ext in ("jpg", "png", "webp"):
             (data_path / f"background.{ext}").unlink(missing_ok=True)
         (data_path / f"background.{kind[0]}").write_bytes(data)
         flash("Background photo updated.", "ok")
-        return redirect(url_for("admin") + "#settings")
+        return redirect(back_to_settings())
 
     # ------------------------------------------------------------------ rules
 
+    @app.get("/t/<event>/rules")
     @app.get("/rules")
     def rules_page():
         sets = [{**r, "html": rulebook.render(r["body"])} for r in rule_book.load()]
-        return render_template("rules.html", t=store.load(), rule_sets=sets)
+        return render_template("rules.html", t=current_t(), rule_sets=sets)
 
     @app.get("/admin/rules")
     @admin_required
     def admin_rules():
-        return render_template("admin_rules.html", t=store.load(), rule_sets=rule_book.load())
+        return render_template("admin_rules.html", t=None, rule_sets=rule_book.load())
 
     @app.post("/admin/rules/new")
     @admin_required
@@ -634,9 +691,9 @@ def create_app(data_dir: str | None = None) -> Flask:
         flash(f"Deleted {rule['title'] if rule else 'the rule set'}.", "ok")
         return redirect(url_for("admin_rules"))
 
-    import_file = data_path / "import.csv"
+    import_file = LocalProxy(lambda: g.event.dir / "import.csv")
 
-    @app.route("/admin/import", methods=["GET", "POST"])
+    @app.route("/t/<event>/admin/import", methods=["GET", "POST"])
     @admin_required
     def admin_import():
         t = store.load()
@@ -692,13 +749,13 @@ def create_app(data_dir: str | None = None) -> Flask:
             samples=samples, added=added, waitlisted=waitlisted,
         )
 
-    @app.post("/admin/start")
+    @app.post("/t/<event>/admin/start")
     @admin_required
     def admin_start():
         act("Start tournament", lambda t: t.start(), "Tournament started — round 1 is called.")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/match/<match_id>/score")
+    @app.post("/t/<event>/admin/match/<match_id>/score")
     @admin_required
     def admin_score(match_id):
         side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
@@ -707,7 +764,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         act("Score", lambda t: t.score(match_id, side, delta))
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/match/<match_id>/arrived")
+    @app.post("/t/<event>/admin/match/<match_id>/arrived")
     @admin_required
     def admin_arrived(match_id):
         side = request.form.get("side")
@@ -716,7 +773,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         act("Check in", lambda t: t.check_in(match_id, side))
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/team/<team_id>/call-next")
+    @app.post("/t/<event>/admin/team/<team_id>/call-next")
     @admin_required
     def admin_call_next(team_id):
         name = store.load().name_of(team_id)
@@ -724,52 +781,52 @@ def create_app(data_dir: str | None = None) -> Flask:
             f"{name} is first in line" + " (called to a table if one was free).")
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/match/<match_id>/winner")
+    @app.post("/t/<event>/admin/match/<match_id>/winner")
     @admin_required
     def admin_winner(match_id):
         act("Record result", lambda t: t.record_result(match_id, request.form.get("winner", "")), "Result recorded.")
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/match/<match_id>/submit")
+    @app.post("/t/<event>/admin/match/<match_id>/submit")
     @admin_required
     def admin_submit(match_id):
         act("Submit result", lambda t: t.submit_result(match_id), "Result recorded.")
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/match/<match_id>/fix")
+    @app.post("/t/<event>/admin/match/<match_id>/fix")
     @admin_required
     def admin_fix(match_id):
         act("Fix result", lambda t: t.fix_result(match_id),
             "Result corrected on match #{result.round}. Both teams were texted.")
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/admin/cash-in/open")
+    @app.post("/t/<event>/admin/cash-in/open")
     @admin_required
     def admin_open_cash_in():
         act("Open cash-in", lambda t: t.open_cash_in(), "Cash-in is open and teams were texted.")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/team/<team_id>/cash-in")
+    @app.post("/t/<event>/admin/team/<team_id>/cash-in")
     @admin_required
     def admin_cash_in(team_id):
         act("Cash in team", lambda t: money(t.cash_in(team_id)), "Cashed in — pay out {result}.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/last-call")
+    @app.post("/t/<event>/admin/last-call")
     @admin_required
     def admin_last_call():
         act("Last call", lambda t: t.call_last_call(),
             "Last call is on and teams were texted. Each team is cashed in automatically after its last match.")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/end-now")
+    @app.post("/t/<event>/admin/end-now")
     @admin_required
     def admin_end_now():
         act("Cash everyone out now", lambda t: t.cash_out_everyone(),
             "Tournament ended — every team has been cashed in. See payouts below.")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/team/<team_id>/adjust")
+    @app.post("/t/<event>/admin/team/<team_id>/adjust")
     @admin_required
     def admin_adjust(team_id):
         try:
@@ -779,38 +836,38 @@ def create_app(data_dir: str | None = None) -> Flask:
         act("Adjust chips", lambda t: t.adjust_chips(team_id, change, request.form.get("reason", "")), "Chips adjusted.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/team/<team_id>/check-in")
+    @app.post("/t/<event>/admin/team/<team_id>/check-in")
     @admin_required
     def admin_team_check_in(team_id):
         act(f"Check in {store.load().name_of(team_id)}", lambda t: t.check_in_team(team_id))
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/team/<team_id>/no-show")
+    @app.post("/t/<event>/admin/team/<team_id>/no-show")
     @admin_required
     def admin_no_show(team_id):
         act(f"Mark no-show: {store.load().name_of(team_id)}", lambda t: t.mark_no_show(team_id), "Marked as a no-show.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/team/<team_id>/restore")
+    @app.post("/t/<event>/admin/team/<team_id>/restore")
     @admin_required
     def admin_restore(team_id):
         act(f"Restore: {store.load().name_of(team_id)}", lambda t: t.restore_team(team_id), "Team restored.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/no-show-rest")
+    @app.post("/t/<event>/admin/no-show-rest")
     @admin_required
     def admin_no_show_rest():
         act("Mark remaining teams no-show", lambda t: t.no_show_everyone_not_checked_in(),
             "Marked {result} team(s) as no-shows.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/team/<team_id>/remove")
+    @app.post("/t/<event>/admin/team/<team_id>/remove")
     @admin_required
     def admin_remove(team_id):
         act(f"Remove: {store.load().name_of(team_id)}", lambda t: t.remove_team(team_id), "Team removed.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/broadcast")
+    @app.post("/t/<event>/admin/broadcast")
     @admin_required
     def admin_broadcast():
         body = request.form.get("body", "").strip()
@@ -818,7 +875,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
         return redirect(url_for("admin") + "#texts")
 
-    @app.post("/admin/undo")
+    @app.post("/t/<event>/admin/undo")
     @admin_required
     def admin_undo():
         with store.lock:
@@ -843,7 +900,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                   "Use \"Move them to the waiting list now\" at the top when you're ready.", "ok")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/partner-deadline")
+    @app.post("/t/<event>/admin/partner-deadline")
     @admin_required
     def admin_partner_deadline():
         names = ", ".join(x.name for x in store.load().solo_teams_in_field)
@@ -851,14 +908,14 @@ def create_app(data_dir: str | None = None) -> Flask:
             lambda t: t.enforce_partner_deadline(force=True), "Moved {result} team(s) to the waiting list.")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/team/<team_id>/pair")
+    @app.post("/t/<event>/admin/team/<team_id>/pair")
     @admin_required
     def admin_pair(team_id):
         act(f"Pair players: {store.load().name_of(team_id)}", lambda t: t.pair_solo_teams(team_id, request.form.get("other", "")),
             "Paired: {result.partners} are {result.name}.")
         return redirect(url_for("admin") + "#teams")
 
-    @app.post("/admin/reset")
+    @app.post("/t/<event>/admin/reset")
     @admin_required
     def admin_reset():
         if request.form.get("confirm", "").strip().upper() != "RESET":
@@ -871,7 +928,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash("Started a new tournament. The old one is saved under Past tournaments.", "ok")
         return redirect(url_for("admin"))
 
-    @app.post("/admin/archives/delete")
+    @app.post("/t/<event>/admin/archives/delete")
     @admin_required
     def admin_delete_archives():
         stamps = [a["stamp"] for a in store.archives()] if request.form.get("all") == "1" else [request.form.get("stamp", "")]
@@ -879,6 +936,92 @@ def create_app(data_dir: str | None = None) -> Flask:
         flash(f"Permanently deleted {deleted} past tournament(s)." if deleted else "Nothing to delete.",
               "ok" if deleted else "error")
         return redirect(url_for("admin") + "#past")
+
+    # ------------------------------------------------------------- the hub
+
+    @app.get("/")
+    def index():
+        return render_template("hub.html", t=None, rows=hub.summaries())
+
+    @app.get("/admin")
+    @director_view
+    def director():
+        return render_template("hub_admin.html", t=None, rows=hub.summaries(), formats=FORMATS,
+                               final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"))
+
+    @app.post("/admin/new")
+    @admin_required
+    def new_event():
+        f = request.form
+        kind = f.get("kind", "")
+        settings = {"date": f.get("date", "").strip(), "start_time": f.get("start_time", "").strip(),
+                    "venue": f.get("venue", "").strip()}
+        if kind in dict(FORMATS):
+            settings["format"], kind = kind, BRACKET
+        elif kind != CHIP:
+            flash("Pick a tournament type.", "error")
+            return redirect(url_for("director"))
+        try:
+            ev = hub.create(f.get("name", ""), kind, **settings)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("director"))
+        flash(f"Created {f.get('name', '').strip()}. Finish its settings below, then share the link.", "ok")
+        return redirect(url_for("admin", event=ev.id) + "#settings")
+
+    @app.post("/admin/event/<event_id>/delete")
+    @admin_required
+    def delete_event(event_id):
+        ev = hub.get(event_id) or abort(404)
+        name = ev.load().settings.name
+        if request.form.get("confirm", "").strip().upper() != "DELETE":
+            flash("Type DELETE to confirm.", "error")
+        elif hub.delete(event_id):
+            flash(f"Deleted {name}, its rosters and its texts.", "ok")
+        return redirect(url_for("director"))
+
+    # Links from before Control Table hosted several tournaments (old texts, bookmarks, the TV).
+    def only_live_event():
+        live = [r["event"] for r in hub.summaries() if r["t"].status != FINISHED]
+        return live[0] if len(live) == 1 else None
+
+    @app.get("/board")
+    @app.get("/register")
+    @app.get("/guide")
+    def legacy_page():
+        ev = only_live_event()
+        if ev is None:
+            return redirect(url_for("index"))
+        return redirect(f"/t/{ev.id}{request.path}")
+
+    @app.get("/team/<team_id>")
+    @app.get("/team/<team_id>/roster")
+    def legacy_team(team_id):
+        ev = hub.find_team(team_id) or abort(404)
+        return redirect(f"/t/{ev.id}{request.path}")
+
+    # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket
+    # tournament gets its own version (or a 404) from bracket_web.
+    shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
+              "admin_broadcast"}
+    chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
+    bracket_views = bracket_web.register(app, {
+        "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
+        "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes,
+    })
+
+    @app.before_request
+    def dispatch_by_kind():
+        ev = g.get("event")
+        endpoint = request.endpoint or ""
+        if ev is None:
+            return None
+        if ev.kind == BRACKET and endpoint in chip_only:
+            view = bracket_views.get(endpoint)
+            return view() if view else abort(404)
+        if ev.kind == CHIP and endpoint.startswith("b_"):
+            abort(404)
+        return None
 
     return app
 

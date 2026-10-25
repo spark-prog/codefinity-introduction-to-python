@@ -15,17 +15,18 @@ HISTORY_LIMIT = 40  # each step is a full copy of the tournament, rewritten on e
 
 
 class Store:
-    def __init__(self, data_dir: str | os.PathLike):
+    def __init__(self, data_dir: str | os.PathLike, kind=Tournament):
         self.dir = Path(data_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.path = self.dir / "tournament.json"
         self.history_path = self.dir / "history.json"
         self.lock = threading.RLock()
+        self.kind = kind  # the tournament class: chip Tournament or BracketTournament
 
-    def load(self) -> Tournament:
+    def load(self):
         if not self.path.exists():
-            return Tournament()
-        return Tournament.from_dict(json.loads(self.path.read_text()))
+            return self.kind()
+        return self.kind.from_dict(json.loads(self.path.read_text()))
 
     def _write(self, path: Path, data) -> None:
         tmp = path.with_suffix(".tmp")
@@ -106,7 +107,8 @@ class Store:
             stamp = path.stem[len("tournament-"):]
             try:
                 data = json.loads(path.read_text())
-                name, teams = data.get("settings", {}).get("name", ""), len(data.get("teams", {}))
+                name = data.get("settings", {}).get("name", "")
+                teams = len(data.get("teams") or data.get("entries") or {})
             except (OSError, ValueError):
                 name, teams = "", 0
             try:

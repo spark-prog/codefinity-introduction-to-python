@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.name }} — {{ t.settings.name }}{% endblock %}
+{% block head %}{% if match and match.status == "called" and not is_entry %}<meta http-equiv="refresh" content="30">{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">{{ t.settings.name }}{% if entry.seed %} · seed {{ entry.seed }}{% endif %}</p>
+  <h1>{{ entry.name }}</h1>
+  {% if t.settings.team_size > 1 and entry.partners != entry.name %}<p class="lede">{{ entry.partners }}</p>{% endif %}
+</header>
+
+<section class="card">
+  {% if entry.status == "waitlisted" %}
+    <p class="lede">You're #{{ t.waitlist_position(entry) }} on the waiting list.</p>
+  {% elif entry.status == "no_show" %}
+    <p class="lede">Marked as a no-show. See the tournament desk.</p>
+  {% elif entry.status == "champion" %}
+    <p class="lede"><b>Champion!</b>{% if entry.payout_cents %} You won {{ entry.payout_cents|money }}. Collect it at the desk.{% endif %}</p>
+  {% elif entry.status == "eliminated" %}
+    <p class="lede">You're out{% if place %}, finishing {{ place }}{% endif %}.{% if entry.payout_cents %} You won {{ entry.payout_cents|money }}: collect it at the desk.{% endif %} Thanks for playing!</p>
+  {% elif t.status == SETUP %}
+    <p class="lede">You're registered. We'll text the table calls{% if not entry.phones %} once text alerts are on{% endif %}. The bracket is drawn when the tournament starts.</p>
+  {% elif match and match.status == "called" %}
+    {% set me = "a" if match.a == entry.id else "b" %}
+    <p class="eyebrow">Now playing · {{ t.match_label(match) }}</p>
+    <h2>Table {{ match.table }}</h2>
+    <p class="muted">Race to {{ match.race_to }}{% if path.win %} · win: {{ path.win }}{% endif %}{% if path.lose %} · lose: {{ path.lose }}{% endif %}</p>
+    {% for side, id, sc in (("a", match.a, match.score_a), ("b", match.b, match.score_b)) %}
+    <div class="score-row">
+      <div class="team-name">{{ t.name_of(id) }}{% if id == entry.id %} <span class="muted">(you)</span>{% endif %}</div>
+      {% if is_entry %}
+      <div class="score-ctl">
+        <form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
+          <button class="button secondary square">−</button></form>
+        <b class="score big-score">{{ sc }}</b>
+        <form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
+          <button class="button square">+</button></form>
+      </div>
+      {% else %}<b class="score big-score">{{ sc }}</b>{% endif %}
+    </div>
+    {% endfor %}
+    {% set winner = t.race_winner(match) %}
+    {% if is_entry and winner %}
+    <form method="post" action="{{ url_for('b_entry_submit', entry_id=entry.id) }}" class="button-row">
+      <button class="button big">Submit: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}</button></form>
+    <p class="muted">Check the score with your opponent first. Only the director can change a submitted result.</p>
+    {% endif %}
+  {% elif match %}
+    <p class="lede">Next: <b>{{ t.slot_label(match, "a") }}</b> vs <b>{{ t.slot_label(match, "b") }}</b> ({{ t.match_label(match) }}). Waiting for a free table. Stay close!</p>
+  {% else %}
+    <p class="lede">You're still in. Your next opponent isn't decided yet: watch the <a href="{{ url_for('home') }}">bracket</a>.</p>
+  {% endif %}
+</section>
+
+{% if not is_entry %}
+<section class="card">
+  <h3>Enter scores for your match</h3>
+  <form method="post" action="{{ url_for('b_entry_login', entry_id=entry.id) }}" class="form narrow">
+    <label>PIN <input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required></label>
+    <button class="button">Sign in</button>
+  </form>
+  <p class="muted">Your 4-digit PIN came with your registration (or ask the tournament desk).</p>
+</section>
+{% elif entry.awaiting_texts %}
+<section class="card">
+  <h3>Text alerts</h3>
+  {% for p in entry.players %}{% if p.phone and not p.sms_consent %}
+  <form method="post" action="{{ url_for('b_entry_texts', entry_id=entry.id) }}" class="form">
+    <input type="hidden" name="player" value="{{ loop.index0 }}">
+    <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
+      Text {{ p.name }} (cell ending {{ p.phone|last4 }}) table calls and results. Msg &amp; data rates may apply. Reply STOP to opt out.</label>
+    <button class="button small">Turn on alerts</button>
+  </form>
+  {% endif %}{% endfor %}
+</section>
+{% endif %}
+
+{% if history %}
+<section class="card">
+  <h3>Results</h3>
+  <table class="grid small">
+    {% for m in history %}
+    <tr><td>#{{ m.num }}</td><td>{{ t.match_label(m) }}</td>
+      <td>{{ "Won" if m.winner == entry.id else "Lost" }} vs {{ t.name_of(m.b if m.a == entry.id else m.a) }}</td>
+      <td>{{ m.score_a if m.a == entry.id else m.score_b }}-{{ m.score_b if m.a == entry.id else m.score_a }}{% if m.forfeit %} (forfeit){% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endblock %}

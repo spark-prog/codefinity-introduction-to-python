@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Register — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+<div class="split center">
+  <header>
+    <p class="eyebrow">{{ t.format_name }}</p>
+    <h1>Register</h1>
+    <p class="lede">{{ s.name }}{% if s.date %} · {{ event_when(s.date, s.start_time) }}{% endif %}.
+      Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.</p>
+    {% if t.field_full %}<p class="banner">The field is full. Register to join the waiting list; we'll text you if a spot opens.</p>{% endif %}
+  </header>
+  {% if t.status != SETUP %}
+  <div class="card"><p>Registration is closed: the bracket is drawn. <a href="{{ url_for('home') }}">Follow it here.</a></p></div>
+  {% else %}
+  <form method="post" class="card form">
+    {% if s.team_size > 1 %}<label>Team name (optional) <input name="name" value="{{ form.get('name', '') }}" placeholder="We'll use your names if blank"></label>{% endif %}
+    {% for i in range(s.team_size) %}
+    <fieldset class="partner">
+      <legend>{{ "Player" if s.team_size == 1 else "Player " ~ (i + 1) }}</legend>
+      <label>Name <input name="player_name_{{ i }}" value="{{ form.get('player_name_' ~ i, '') }}" required></label>
+      <label>Skill level (optional) <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ form.get('player_skill_' ~ i, '') }}"></label>
+      <label>Cell number {% if i %}(optional){% endif %} <input name="player_phone_{{ i }}" type="tel" value="{{ form.get('player_phone_' ~ i, '') }}" placeholder="904-555-0123"></label>
+    </fieldset>
+    {% endfor %}
+    <label class="checkbox sms-consent"><input type="checkbox" name="sms_consent" value="1" {% if form.get('sms_consent') %}checked{% endif %}>
+      Text me table calls and results for this tournament at the first cell number above. Msg frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help.</label>
+    <label class="checkbox"><input type="checkbox" name="agree_terms" value="1" required>
+      I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms &amp; Conditions</a> and <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</label>
+    <button class="button big block">Register</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

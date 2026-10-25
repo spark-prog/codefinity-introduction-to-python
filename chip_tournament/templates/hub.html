@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Control Table — tournaments{% endblock %}
+{% block content %}
+{% set live = rows|rejectattr("t.status", "equalto", FINISHED)|list %}
+{% set past = rows|selectattr("t.status", "equalto", FINISHED)|list %}
+<header class="page-head split center">
+  <div class="hero-copy">
+    <p class="eyebrow">Control Table</p>
+    <h1>Tournaments</h1>
+    <p class="lede">Pick a tournament to register, follow the live tables and brackets, or check results.</p>
+  </div>
+</header>
+
+<section>
+  {% if live %}
+  <div class="event-grid">
+    {% for r in live %}{% set s = r.t.settings %}
+    <a class="card event-card" href="{{ url_for('home', event=r.event.id) }}">
+      <span class="event-status {{ r.t.status }}">{{ "Live now" if r.t.status == RUNNING else "Registration open" if r.t.status == SETUP else r.t.status }}</span>
+      <h2>{{ s.name }}</h2>
+      <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
+      {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}
+      <p class="event-meta"><span class="pill">{{ r.format }}</span>
+        <span class="pill">{{ r.count }} {{ "team" if r.event.kind == CHIP else "entr" }}{{ ("s" if r.count != 1 else "") if r.event.kind == CHIP else ("ies" if r.count != 1 else "y") }}</span>
+        {% if s.entry_fee_cents %}<span class="pill">{{ s.entry_fee_cents|money }} entry</span>{% endif %}</p>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="lede" style="margin: 0">No tournaments are open right now. Check back soon.</p></div>
+  {% endif %}
+</section>
+
+{% if past %}
+<section>
+  <div class="section-head"><h2>Results</h2></div>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Tournament</th><th>Date</th><th>Format</th><th></th></tr></thead>
+    {% for r in past %}
+    <tr><td>{{ r.t.settings.name }}</td><td>{{ event_when(r.t.settings.date, "") }}</td><td>{{ r.format }}</td>
+      <td><a href="{{ url_for('home', event=r.event.id) }}">Results</a></td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

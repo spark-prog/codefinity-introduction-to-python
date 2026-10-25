@@ -1,4 +1,4 @@
-# Putting the app online
+# Putting Control Table online
 
 The league needs the app on the internet so teams can register from their phones days ahead and check the board on tournament night. This guide uses **Railway**, which runs the included `Dockerfile` straight from GitHub and offers a persistent volume. Any host that can run a Docker image with a persistent disk works the same way (Render, Fly.io, a small VPS).
 
@@ -6,7 +6,7 @@ The league needs the app on the internet so teams can register from their phones
 
 | Need | Why |
 |---|---|
-| A **persistent volume** mounted at `/data` | The tournament, undo history and text log are saved there. Without it, a restart or redeploy wipes the tournament. |
+| A **persistent volume** mounted at `/data` | Every tournament, its undo history and text log are saved there. Without it, a restart or redeploy wipes them. |
 | **Always on** (no sleeping) | The check-in clock gives grace periods and records forfeits even when nobody has a page open. |
 | **One instance** | The app keeps the tournament in one process. Don't scale it to more than one copy. |
 | HTTPS | Railway and similar hosts provide it automatically. |
@@ -48,7 +48,7 @@ Until Twilio is set up, everything else works, and texts are only logged under *
 
 ## Backups
 
-Everything is in one file, `/data/tournament.json`, plus `history.json` (undo) and `texts.log`. Railway can snapshot volumes, and you can also copy the file down after each tournament. **Archive and start over** keeps old tournaments in `/data` as `tournament-<date>.json` (with their texts). They're listed under **Past tournaments** on the director page, where you can delete them permanently; **Delete permanently and start over** skips the archive.
+Each tournament has its own folder, `/data/events/<id>/`, with `tournament.json`, `history.json` (undo) and `texts.log`; `/data/events.json` lists them. Rules, the background photo and the login key are shared at the top of `/data`. A volume from before Control Table hosted several tournaments is moved into `/data/events/` automatically on the first start. Railway can snapshot volumes, and you can also copy the file down after each tournament. **Archive and start over** keeps old tournaments in `/data` as `tournament-<date>.json` (with their texts). They're listed under **Past tournaments** on the director page, where you can delete them permanently; **Delete permanently and start over** skips the archive.
 
 ## Updating the app later
 

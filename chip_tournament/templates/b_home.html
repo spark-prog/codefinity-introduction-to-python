@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+{% set s = t.settings %}
+<header class="page-head split center">
+  <div class="hero-copy">
+    <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
+    <h1>{{ s.name }}</h1>
+    {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
+    <div class="button-row actions-row">
+      {% if t.status == SETUP %}<a class="button big" href="{{ url_for('register') }}">Register</a>{% endif %}
+      {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <p class="eyebrow">Event details</p>
+    <ul class="facts">
+      <li><span class="k">Format</span><span class="v">{{ t.format_name }} · {{ "singles" if s.team_size == 1 else "doubles" }}</span></li>
+      <li><span class="k">Races</span><span class="v">
+        {% if s.format == "round_robin" %}Race to {{ s.race_winners }}{% if s.advance %} · playoff final race to {{ s.race_finals }}{% endif %}
+        {% elif s.format == "single" %}Race to {{ s.race_winners }} · final race to {{ s.race_finals }}
+        {% else %}Winners side race to {{ s.race_winners }} · losers side race to {{ s.race_losers }} · {{ "finals" if s.format == "double" else "final" }} race to {{ s.race_finals }}{% endif %}</span></li>
+      <li><span class="k">Entry</span><span class="v">{{ s.entry_fee_cents|money }}{% if s.added_money_cents %} · {{ s.added_money_cents|money }} added{% endif %}</span></li>
+      <li><span class="k">Field</span><span class="v">{{ t.field_entries|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} entries{% if t.waitlist %} · {{ t.waitlist|length }} waiting{% endif %}</span></li>
+      {% if s.payouts %}<li><span class="k">Payouts</span><span class="v">{% for place, cents in t.payout_table() %}<span class="pill">{{ place }} {{ cents|money }}</span>{% endfor %}
+        {% if t.status == SETUP %}<br><span class="muted">Based on the entries so far.</span>{% endif %}</span></li>{% endif %}
+      {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} at the tournament desk.</span></li>{% endif %}
+    </ul>
+    {% if s.details %}<p class="details">{{ s.details }}</p>{% endif %}
+  </div>
+</header>
+
+{% if t.status == RUNNING %}
+<section>
+  <div class="section-head"><h2>Live</h2><a href="{{ url_for('board') }}">Open the board</a></div>
+  {% include "_b_tables.html" %}
+</section>
+{% endif %}
+
+{% if t.status != SETUP %}
+<section>
+  <div class="section-head"><h2>{{ "Groups & bracket" if t.groups else "Bracket" }}</h2></div>
+  {% include "_bracket.html" %}
+</section>
+{% endif %}
+
+{% set results = t.results() %}
+{% if t.status != SETUP %}
+<section class="card">
+  <div class="section-head"><h2>{{ "Final results" if t.status == FINISHED else "Standings" }}</h2></div>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Place</th><th>Entry</th><th>Status</th><th>Won</th></tr></thead>
+    {% for r in results %}
+    <tr><td>{{ r.place_text or "—" }}</td>
+      <td><a href="{{ url_for('b_entry', entry_id=r.entry.id) }}">{{ r.entry.name }}</a>{% if s.team_size > 1 %} <span class="muted">{{ r.entry.partners }}</span>{% endif %}</td>
+      <td>{{ {"active": "Still in", "eliminated": "Out", "champion": "Champion"}.get(r.entry.status, r.entry.status) }}</td>
+      <td>{{ r.entry.payout_cents|money if r.entry.payout_cents else "" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% else %}
+<section class="card">
+  <div class="section-head"><h2>Who's in</h2><span class="muted">{{ t.field_entries|length }} entries</span></div>
+  {% if t.field_entries %}
+  <ol class="entry-list">{% for e in t.field_entries %}<li>{{ e.name }}{% if s.team_size > 1 and e.name != e.partners %} <span class="muted">{{ e.partners }}</span>{% endif %}</li>{% endfor %}</ol>
+  {% else %}<p class="muted">Be the first to register.</p>{% endif %}
+  {% if t.waitlist %}<p class="muted">Waiting list: {% for i in t.waitlist %}{{ t.name_of(i) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

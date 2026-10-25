@@ -8,16 +8,19 @@ when they made it (/signin). The rules are in league/core.py.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
 from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import abort, flash, redirect, render_template, request, session, url_for
+from flask import Response, abort, flash, redirect, render_template, request, session, url_for
 
 from league.core import (
-    ALL, CLAIMED, DAY_NAMES, DAYS, FORMATS, GENERAL, LEAGUE_NIGHT, LEVELS, LOCATION_FIELDS, OPEN, REQUEST_TYPES, SCHEDULED,
+    ALL, CLAIMED, DAY_NAMES, DAYS, FORMATS, FROM_GOOGLE, GENERAL, LEAGUE_NIGHT, LEVELS, LOCATION_FIELDS, OPEN, REQUEST_TYPES, SCHEDULED,
     TYPES, League, LeagueError, day_label, label_rows, lines, month_grid,
 )
+from league import ics
 from league.throttle import Throttle
 
 ROLE_KEYS = {"host": "league_host", "rep": "league_rep", "player": "league_player", "captain": "league_captain"}
@@ -26,8 +29,7 @@ ROLE_KEYS = {"host": "league_host", "rep": "league_rep", "player": "league_playe
 def register(app, h) -> League:
     data_path, minutes = h["data_path"], h["minutes"]
     office_view, admin_required = h["office_view"], h["admin_required"]
-    league = League(data_path, today=h.get("today"))
-    app.config["league"] = league
+    league, sync, tz = h["league"], h["sync"], h["tz"]
     signin_by_ip = Throttle(limit=10, window=15 * 60)
 
     app.jinja_env.filters["day_label"] = day_label
@@ -37,7 +39,7 @@ def register(app, h) -> League:
     @app.context_processor
     def league_globals():
         return {"L_TYPES": TYPES, "L_DAYS": DAYS, "L_DAY_NAMES": DAY_NAMES, "L_FORMATS": FORMATS, "L_LEVELS": LEVELS, "L_ALL": ALL,
-                "L_REQUEST_TYPES": REQUEST_TYPES, "L_GENERAL": GENERAL, "L_LEAGUE_NIGHT": LEAGUE_NIGHT,
+                "L_REQUEST_TYPES": REQUEST_TYPES, "L_GENERAL": GENERAL, "L_LEAGUE_NIGHT": LEAGUE_NIGHT, "L_FROM_GOOGLE": FROM_GOOGLE,
                 "location_name": League.location_name, "league_roles": {k: bool(session.get(v)) for k, v in ROLE_KEYS.items()}}
 
     def change(fn, success: str | None = None):
@@ -84,6 +86,23 @@ def register(app, h) -> League:
 
     def plus(days: int) -> str:
         return (date.fromisoformat(today()) + timedelta(days=days)).isoformat()
+
+    def feed_token(loc_id: str | None) -> str:
+        """The secret part of a calendar feed link: one per location, one for the whole league."""
+        msg = f"feed:{loc_id or 'league'}".encode()
+        return hmac.new(app.secret_key.encode(), msg, hashlib.sha256).hexdigest()[:24]
+
+    def feed_url(loc_id: str | None = None) -> str:
+        return url_for("league_feed", token=feed_token(loc_id), _external=True)
+
+    @app.get("/feed/<token>.ics")
+    def league_feed(token):
+        s = league.load()
+        for loc_id in [None] + [l["id"] for l in s["locations"]]:
+            if hmac.compare_digest(token, feed_token(loc_id)):
+                return Response(ics.feed(league, s, tz, loc_id), mimetype="text/calendar",
+                                headers={"Cache-Control": "no-cache"})
+        abort(404)
 
     # ------------------------------------------------------------- public
 
@@ -217,6 +236,7 @@ def register(app, h) -> League:
                            "blackout": any(k == "blackout" for k, _, _ in items)})
             last_week = week
         return render_template("league_host.html", s=s, loc=loc, window=window, agenda=agenda,
+                               feed=feed_url(loc["id"]),
                                stats=stats, blackouts=blackouts, requests=requests_, reps=reps, today=today())
 
     @app.post("/host/blackout")
@@ -349,6 +369,15 @@ def register(app, h) -> League:
     @app.get("/office")
     @office_view
     def league_office():
+        return calendar_page("league_office")
+
+    @app.get("/rep/calendar")
+    @role_required("rep", "reps")
+    def league_rep_calendar(s, rep):
+        return calendar_page("league_rep_calendar", rep)
+
+    def calendar_page(endpoint: str, rep=None):
+        """The master calendar: the league office edits it; division reps see it."""
         s = league.load()
         month = request.args.get("month") or today()[:7]
         try:
@@ -380,13 +409,17 @@ def register(app, h) -> League:
         req = next((r for r in s["requests"] if r["id"] == schedule and r["status"] == CLAIMED), None)
         if req:
             loc = league.location(s, req["loc"])
-            rep = next((r for r in s["reps"] if r["id"] == req["rep"]), None)
+            claimer = next((r for r in s["reps"] if r["id"] == req["rep"]), None)
             prefill = {"type": req["type"], "loc": req["loc"], "date": req["date"], "time": "12:00 PM",
                        "title": f"{loc['name']} {TYPES[req['type']][0]}" if loc else "", "request": req["id"],
-                       "director": rep["name"] if rep else "", "notes": req["notes"]}
+                       "director": claimer["name"] if claimer else "", "notes": req["notes"]}
             day = day or req["date"]
+        editing = next((e for e in s["events"] if e["id"] == request.args.get("edit")), None)
+        if editing and not req:
+            prefill, day = dict(editing), day or editing["date"]
         return render_template(
-            "league_office.html", s=s, weeks=weeks, month=month, month_label=f"{first:%B %Y}",
+            "league_office.html", s=s, rep=rep, cal_ep=endpoint, editing=editing, feed=feed_url(),
+            gcal=s["gcal"] if sync else None, weeks=weeks, month=month, month_label=f"{first:%B %Y}",
             prev_m=prev_m, next_m=next_m, by_day=by_day, closed=closed, day=day, loc_filter=loc_filter,
             today=today(), conflicts=league.conflicts(s), counts=office_counts(s), prefill=prefill,
             stats={"league": sum(e["type"] == LEAGUE_NIGHT for e in next30),
@@ -404,6 +437,27 @@ def register(app, h) -> League:
         return redirect(url_for("league_office", month=request.form.get("date", "")[:7] or None,
                                 day=request.form.get("date") or None, schedule=request.form.get("request") or None)
                         + "#day")
+
+    @app.post("/office/event/<event_id>")
+    @admin_required
+    def league_office_event_edit(event_id):
+        ev = change(lambda: league.edit_event(event_id, request.form.to_dict()), "Saved.")
+        date_ = ev["date"] if ev else request.form.get("date", "")
+        return redirect(url_for("league_office", month=date_[:7] or None, day=date_ or None,
+                                edit=None if ev else event_id) + "#day")
+
+    @app.post("/office/sync")
+    @admin_required
+    def league_office_sync():
+        if sync is None:
+            abort(404)
+        report = sync.run()
+        if report["error"]:
+            flash(f"Google Calendar sync failed: {report['error']}", "error")
+        else:
+            flash(f"Synced with Google Calendar: {report['pulled']} change(s) in, {report['sent']} sent, "
+                  f"{report['deleted']} removed.", "ok")
+        return back("league_office_setup", "google")
 
     @app.post("/office/event/<event_id>/delete")
     @admin_required
@@ -456,6 +510,8 @@ def register(app, h) -> League:
         nights_text = {l["id"]: "\n".join(f"{DAYS[n['dow']]} {n['time']} {n['label']}" for n in l["nights"])
                        for l in s["locations"]}
         return render_template("league_setup.html", s=s, blackouts=blackouts, nights_text=nights_text,
+                               gcal=s["gcal"] if sync else None, feed=feed_url(), tz=tz,
+                               pending=sum(bool(r.get("sync")) for k in ("events", "blackouts", "locations") for r in s[k]),
                                counts=office_counts(s), edit=request.args.get("edit", ""))
 
     @app.post("/office/settings")

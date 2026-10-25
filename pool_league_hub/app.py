@@ -1,5 +1,8 @@
 """Pool League Hub: the league calendar, host locations and player match-ups.
 
+With GOOGLE_CALENDAR_ID and a service account key set, the calendar syncs both ways with
+the league's Google Calendar (league/gcal.py).
+
 Run it with:  python app.py   (then open http://localhost:5000)
 In production: gunicorn --workers 1 --threads 8 "app:create_app()"
 (one worker only: league.json is written by one process)
@@ -9,6 +12,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import threading
 from functools import wraps
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -17,10 +21,12 @@ from flask import Flask, flash, redirect, render_template, request, session, url
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import views
+from league import gcal
+from league.core import League
 from league.throttle import Throttle
 
 
-def create_app(data_dir: str | None = None) -> Flask:
+def create_app(data_dir: str | None = None, gcal_client=None) -> Flask:
     app = Flask(__name__)
     data_path = Path(data_dir or os.environ.get("LEAGUE_DATA_DIR", Path(__file__).parent / "data"))
     data_path.mkdir(parents=True, exist_ok=True)
@@ -110,8 +116,27 @@ def create_app(data_dir: str | None = None) -> Flask:
     def healthz():
         return {"ok": True}
 
+    # Google Calendar two-way sync (league/gcal.py), on when GOOGLE_CALENDAR_ID and a service account key are set.
+    league = League(data_path)
+    app.config["league"] = league
+    tz = os.environ.get("LEAGUE_TIMEZONE", "America/New_York")
+    client = gcal_client or gcal.client_from_env(os.environ)
+    sync = gcal.Sync(league, client, tz) if client else None
+    app.config["sync"] = sync
+    if sync:
+        league.on_change = sync.wake.set
+        sync_started = threading.Event()
+
+        @app.before_request
+        def start_sync():
+            # Started on the first request so it runs in the serving process only.
+            if not app.testing and not sync_started.is_set():
+                sync_started.set()
+                every = int(os.environ.get("GOOGLE_SYNC_MINUTES", "5"))
+                threading.Thread(target=sync.loop, args=(every, app.logger.warning), daemon=True).start()
+
     views.register(app, {"data_path": data_path, "minutes": minutes, "office_view": office_view,
-                         "admin_required": admin_required})
+                         "admin_required": admin_required, "league": league, "sync": sync, "tz": tz})
     return app
 
 

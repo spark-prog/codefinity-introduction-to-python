@@ -45,6 +45,14 @@
   {% endif %}
 </section>
 
+<section class="card">
+  <h2>Put this schedule in your Google Calendar</h2>
+  <p class="muted">In Google Calendar, choose Other calendars → + → From URL and paste this link. Your league nights, events,
+    league-wide dates and blackouts show up there and stay up to date on their own (Google checks every few hours).
+    It works in Apple and Outlook calendars too. Keep the link to yourself: anyone with it can see this schedule.</p>
+  <p class="contact">{{ feed }}</p>
+</section>
+
 <section class="split jump-target" id="blackouts">
   <form method="post" action="{{ url_for('league_host_blackout') }}" class="card form">
     <h2>Add a blackout</h2>

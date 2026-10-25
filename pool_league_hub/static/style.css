@@ -133,14 +133,15 @@ summary.button::-webkit-details-marker { display: none; }
 .contact { font-family: var(--mono); font-size: .9rem; background: var(--sunk); padding: 6px 10px; border-radius: 6px; overflow-wrap: anywhere; user-select: all; }
 .msg-new { border-left: 4px solid var(--red); }
 
-/* pool balls as event-type markers (1 yellow, 2 blue, 3 red, 4 purple, 5 orange, 8 black) */
+/* pool balls as event-type markers (1 yellow, 2 blue, 3 red, 4 purple, 5 orange, 6 green, 8 black) */
 .ball { --c: #f0bd22; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none; vertical-align: -4px;
   background: var(--c); box-shadow: inset -2px -3px 0 rgba(0, 0, 0, .19), 0 0 0 1px rgba(0, 0, 0, .15); }
 .ball::after { content: attr(data-n); width: 11px; height: 11px; border-radius: 50%; background: #fff; color: #111; font: 700 8px/11px var(--sans); text-align: center; }
 .ball.sm { width: 14px; height: 14px; vertical-align: -2px; }
 .ball.sm::after { width: 7px; height: 7px; font-size: 0; }
 .ball.t-general { --c: #f0bd22; } .ball.t-league { --c: #2356c4; } .ball.t-singles_tourney { --c: #cf3a2e; }
-.ball.t-doubles_tourney { --c: #6b3fa2; } .ball.t-singles_board { --c: #e9781f; } .ball.t-blackout { --c: #1b1b1b; }
+.ball.t-doubles_tourney { --c: #6b3fa2; } .ball.t-singles_board { --c: #e9781f; } .ball.t-calendar { --c: #1f8a4c; }
+.ball.t-blackout { --c: #1b1b1b; }
 @media (prefers-color-scheme: dark) { .ball.t-blackout { --c: #e8e8e8; } }
 .legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: .9rem; color: var(--muted); margin: 0 0 12px; }
 .legend span { display: inline-flex; gap: 6px; align-items: center; }

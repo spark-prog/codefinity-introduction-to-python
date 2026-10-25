@@ -7,7 +7,9 @@ Who does what:
   player          a "looking for a team" listing and an inbox of team invites
   team captain    a team with open spots, browsing players and sending invites
 
-Everything is kept in league.json in the data folder.
+Everything is kept in league.json in the data folder. When Google Calendar sync is on
+(league/gcal.py), every change to an event, league night or blackout marks it to be
+sent to Google, and events added or changed in Google come back in.
 League nights repeat every week at each location (between the season dates, when set);
 other events are single dates. A host's blackout dates block new events there, and
 anything already on the calendar that lands on one is flagged as a conflict.
@@ -32,7 +34,9 @@ TYPES = {  # event type -> (label, pool-ball number for its color)
     "singles_tourney": ("Singles tournament", 3),
     "doubles_tourney": ("Doubles tournament", 4),
     "singles_board": ("Singles board", 5),
+    "calendar": ("From Google Calendar", 6),
 }
+FROM_GOOGLE = "calendar"
 REQUEST_TYPES = ["singles_board", "doubles_tourney", "singles_tourney"]
 FORMATS = ["8-Ball", "9-Ball", "Scotch Doubles"]
 LEVELS = ["Beginner", "Intermediate", "Advanced"]
@@ -85,10 +89,32 @@ def label_rows(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def parse_clock(text: str) -> tuple[int, int] | None:
+    """'7:00 PM', '7pm', '12:30 p.m.' or '19:30' -> (hour, minute); anything else (e.g. 'All day') -> None."""
+    m = re.match(r"^\s*(\d{1,2})(?::(\d\d))?\s*([ap])?\.?\s*m?\.?\s*$", (text or "").lower())
+    if not m:
+        return None
+    hour, minute, half = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+    if half:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if half == "p" else 0)
+    elif not m.group(2):
+        return None  # a bare number isn't a time
+    return (hour, minute) if hour < 24 and minute < 60 else None
+
+
+def mark(row: dict) -> None:
+    """Mark a calendar row (event, blackout, or a location's league nights) to be sent to Google."""
+    row["sync"] = secrets.token_hex(4)
+
+
 def empty() -> dict:
     return {"settings": {"name": "Pool League Hub", "season_start": "", "season_end": ""},
             "locations": [], "reps": [], "events": [], "blackouts": [], "requests": [],
-            "signups": [], "players": [], "teams": [], "invites": []}
+            "signups": [], "players": [], "teams": [], "invites": [],
+            # Google Calendar sync: where the last pull left off, and Google events to delete
+            "gcal": {"sync_token": "", "last_sync": "", "error": "", "deleted": []}}
 
 
 class League:
@@ -96,6 +122,7 @@ class League:
         self.path = Path(data_dir) / "league.json"
         self.lock = threading.RLock()
         self._today = today  # tests pass a fixed day
+        self.on_change = None  # called after every save (wakes the Google Calendar sync)
 
     def today(self) -> str:
         return (self._today() if callable(self._today) else self._today or date.today()).isoformat()
@@ -108,6 +135,7 @@ class League:
             saved = json.loads(self.path.read_text())
             data.update(saved)
             data["settings"] = {**empty()["settings"], **saved.get("settings", {})}
+            data["gcal"] = {**empty()["gcal"], **saved.get("gcal", {})}
         return data
 
     @contextmanager
@@ -119,6 +147,8 @@ class League:
             tmp = self.path.with_suffix(".tmp")
             tmp.write_text(json.dumps(s, indent=1))
             tmp.replace(self.path)
+        if self.on_change:
+            self.on_change()
 
     @staticmethod
     def _id(prefix: str, rows: list[dict]) -> str:
@@ -127,6 +157,12 @@ class League:
             new = prefix + secrets.token_hex(3)
             if new not in used:
                 return new
+
+    @staticmethod
+    def forget(s: dict, row: dict) -> None:
+        """A calendar row is going away: delete its Google copy (or copies, for league nights) too."""
+        ids = [n.get("google_id") for n in row.get("nights", [])] if "nights" in row else [row.get("google_id")]
+        s["gcal"]["deleted"] += [i for i in ids if i]
 
     @staticmethod
     def find(s: dict, kind: str, row_id: str) -> dict:
@@ -208,6 +244,9 @@ class League:
         if start and end and end < start:
             raise LeagueError("The season ends before it starts.")
         with self.change() as s:
+            if (start, end) != (s["settings"]["season_start"], s["settings"]["season_end"]):
+                for loc in s["locations"]:
+                    mark(loc)  # league nights repeat between the season dates
             s["settings"].update(name=name.strip() or "Pool League Hub", season_start=start, season_end=end)
 
     def save_location(self, loc_id: str | None, fields: dict, nights: list[dict] | None = None) -> dict:
@@ -221,11 +260,20 @@ class League:
                 s["locations"].append(loc)
             else:
                 loc = self.find(s, "locations", loc_id)
+            before = (loc["name"], loc["address"])
             for k in LOCATION_FIELDS:
                 if k in fields:
                     loc[k] = (fields[k] or "").replace("\r\n", "\n").strip()
-            if nights is not None:
+            key = lambda n: (n["dow"], n["time"], n["label"])  # noqa: E731
+            if nights is not None and sorted(map(key, nights)) != sorted(map(key, loc["nights"])):
+                self.forget(s, loc)
                 loc["nights"] = sorted(nights, key=lambda n: n["dow"])
+                mark(loc)
+            if (loc["name"], loc["address"]) != before:  # Google shows the location on every event there
+                mark(loc)
+                for row in s["events"] + s["blackouts"]:
+                    if row["loc"] == loc["id"]:
+                        mark(row)
             return loc
 
     @staticmethod
@@ -243,7 +291,10 @@ class League:
 
     def delete_location(self, loc_id: str) -> None:
         with self.change() as s:
-            self.find(s, "locations", loc_id)
+            self.forget(s, self.find(s, "locations", loc_id))
+            for row in s["events"] + s["blackouts"]:
+                if row["loc"] == loc_id:
+                    self.forget(s, row)
             team_ids = {t["id"] for t in s["teams"] if t["loc"] == loc_id}
             for kind in ("events", "blackouts", "requests", "signups", "teams"):
                 s[kind] = [r for r in s[kind] if r["loc"] != loc_id]
@@ -274,41 +325,64 @@ class League:
             row["pin"] = new_pin(6 if kind in ("locations", "reps") else 4)
             return row["pin"]
 
-    def add_event(self, f: dict) -> dict:
+    def _event_fields(self, s: dict, f: dict) -> dict:
+        """Check an event form against the rules; the fields to save."""
         kind = f.get("type", "")
         if kind not in TYPES or kind == LEAGUE_NIGHT:
             raise LeagueError("Pick an event type.")
         loc = ALL if kind == GENERAL else f.get("loc", "")
+        if kind == FROM_GOOGLE and not self.location(s, loc):
+            loc = ALL  # an event from Google may be for the whole league
         title = (f.get("title") or "").strip()
         if not title:
             raise LeagueError("Give the event a title.")
         day = parse_day(f.get("date", ""))
+        if loc != ALL and not self.location(s, loc):
+            raise LeagueError("Pick a host location, or make it a league-wide date.")
+        b = loc != ALL and self.blackout_on(s, loc, day)
+        if b:
+            raise LeagueError(f"{self.location_name(s, loc)} is unavailable {day_label(day)} ({b['reason']}). "
+                              "Pick another date or ask the host to lift the blackout.")
+        return {"date": day, "loc": loc, "type": kind, "title": title, "time": (f.get("time") or "").strip(),
+                "director": (f.get("director") or "").strip(), "notes": (f.get("notes") or "").strip()}
+
+    def add_event(self, f: dict) -> dict:
         with self.change() as s:
-            if loc != ALL and not self.location(s, loc):
-                raise LeagueError("Pick a host location, or make it a league-wide date.")
-            b = loc != ALL and self.blackout_on(s, loc, day)
-            if b:
-                raise LeagueError(f"{self.location_name(s, loc)} is unavailable {day_label(day)} ({b['reason']}). "
-                                  "Pick another date or ask the host to lift the blackout.")
-            event = {"id": self._id("ev", s["events"]), "date": day, "loc": loc, "type": kind, "title": title,
-                     "time": (f.get("time") or "").strip(), "director": (f.get("director") or "").strip(),
-                     "notes": (f.get("notes") or "").strip(), "request": ""}
+            event = {"id": self._id("ev", s["events"]), **self._event_fields(s, f), "request": "", "google_id": ""}
+            mark(event)
             if f.get("request"):
                 req = self.find(s, "requests", f["request"])
                 if req["status"] != CLAIMED:
                     raise LeagueError("That request isn't claimed by a rep yet.")
-                req["status"], req["date"], event["request"] = SCHEDULED, day, req["id"]
+                req["status"], req["date"], event["request"] = SCHEDULED, event["date"], req["id"]
             s["events"].append(event)
             return event
 
-    def delete_event(self, event_id: str) -> None:
+    def edit_event(self, event_id: str, f: dict) -> dict:
         with self.change() as s:
             event = self.find(s, "events", event_id)
-            if event.get("request"):
-                req = next((r for r in s["requests"] if r["id"] == event["request"]), None)
-                if req:
-                    req["status"] = CLAIMED if req.get("rep") else OPEN  # back to the board, still with its rep
+            fields = self._event_fields(s, f)
+            event.update(fields)
+            mark(event)
+            req = next((r for r in s["requests"] if r["id"] == event.get("request")), None)
+            if req:
+                req["date"] = fields["date"]
+            return event
+
+    def delete_event(self, event_id: str, from_google: bool = False) -> None:
+        with self.change() as s:
+            event = self.find(s, "events", event_id)
+            self.unschedule(s, event)
+            if not from_google:
+                self.forget(s, event)
             s["events"].remove(event)
+
+    @staticmethod
+    def unschedule(s: dict, event: dict) -> None:
+        """An event made from a host request is going: the request goes back on the board, still with its rep."""
+        req = next((r for r in s["requests"] if r["id"] == event.get("request")), None)
+        if req:
+            req["status"] = CLAIMED if req.get("rep") else OPEN
 
     def decline_request(self, req_id: str) -> None:
         with self.change() as s:
@@ -344,8 +418,10 @@ class League:
             raise LeagueError("Give a reason (the league office sees it).")
         with self.change() as s:
             self.find(s, "locations", loc_id)
-            s["blackouts"].append({"id": self._id("bk", s["blackouts"]), "loc": loc_id, "start": start, "end": end,
-                                   "reason": reason.strip()})
+            blackout = {"id": self._id("bk", s["blackouts"]), "loc": loc_id, "start": start, "end": end,
+                        "reason": reason.strip(), "google_id": ""}
+            mark(blackout)
+            s["blackouts"].append(blackout)
             return sum(e["loc"] == loc_id for e in self.events_between(s, start, end, loc_id))
 
     def delete_blackout(self, loc_id: str, blackout_id: str) -> None:
@@ -353,6 +429,7 @@ class League:
             b = self.find(s, "blackouts", blackout_id)
             if b["loc"] != loc_id:
                 raise LeagueError("That blackout belongs to another location.")
+            self.forget(s, b)
             s["blackouts"].remove(b)
 
     def add_request(self, loc_id: str, kind: str, day: str, alt: str, notes: str) -> dict:

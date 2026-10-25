@@ -20,7 +20,8 @@
   {% if league_roles.captain %}<a href="{{ url_for('league_captain') }}" class="{{ 'active' if ep == 'league_captain' }}">My team</a>
   {% else %}<a href="{{ url_for('league_team_new') }}" class="{{ 'active' if ep == 'league_team_new' }}">Find players</a>{% endif %}
   {% if league_roles.host %}<a href="{{ url_for('league_host') }}" class="{{ 'active' if ep == 'league_host' }}">My location</a>{% endif %}
-  {% if league_roles.rep %}<a href="{{ url_for('league_rep') }}" class="{{ 'active' if ep == 'league_rep' }}">Request board</a>{% endif %}
+  {% if league_roles.rep %}<a href="{{ url_for('league_rep') }}" class="{{ 'active' if ep == 'league_rep' }}">Request board</a>
+  {% if not (is_admin or is_viewer) %}<a href="{{ url_for('league_rep_calendar') }}" class="{{ 'active' if ep == 'league_rep_calendar' }}">Calendar</a>{% endif %}{% endif %}
   {% if is_admin or is_viewer %}
   <a href="{{ url_for('league_office') }}" class="{{ 'active' if ep == 'league_office' }}">Calendar</a>
   <a href="{{ url_for('league_office_requests') }}" class="{{ 'active' if ep == 'league_office_requests' }}">Requests{% if counts and counts.requests %} ({{ counts.requests }}){% endif %}</a>

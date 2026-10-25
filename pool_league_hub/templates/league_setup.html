@@ -32,6 +32,29 @@
   </form>
 </section>
 
+<section class="card jump-target" id="google">
+  <h2>Google Calendar</h2>
+  {% if gcal %}
+  <p class="muted">The calendar syncs both ways with the league's Google Calendar every few minutes and soon after any change here.
+    Events, league nights and blackouts go out to Google. Events added in Google come in as “From Google Calendar”
+    (at a host location when the Google event's location names one), and changes to an event's title, date, time or notes
+    made in Google come back. League nights and blackouts are owned here: changes to them in Google are put back,
+    except moving or cancelling a single week of a league night.</p>
+  <ul class="facts">
+    <li><span class="k">Last sync</span><span class="v">{{ gcal.last_sync.replace("T", " ") if gcal.last_sync else "Not yet" }}</span></li>
+    <li><span class="k">Waiting to send</span><span class="v">{{ pending }} change{{ "s" if pending != 1 }}{% if gcal.deleted %}, {{ gcal.deleted|length }} to remove{% endif %}</span></li>
+    <li><span class="k">Time zone</span><span class="v">{{ tz }}</span></li>
+  </ul>
+  {% if gcal.error %}<p class="banner danger">The last sync failed: {{ gcal.error }}</p>{% endif %}
+  {% if is_admin %}<form method="post" action="{{ url_for('league_office_sync') }}" style="margin-top: 12px"><button class="button small">Sync now</button></form>{% endif %}
+  {% else %}
+  <p class="muted">Not connected. To sync the calendar both ways with the league's Google Calendar, set
+    <code>GOOGLE_CALENDAR_ID</code> and <code>GOOGLE_SERVICE_ACCOUNT_FILE</code> (see the README), then restart.</p>
+  {% endif %}
+  <p class="muted" style="margin-top: 16px">Subscribe link for the whole league schedule (reps and the office can add it to their own calendars; each host has its own link on its page):</p>
+  <p class="contact">{{ feed }}</p>
+</section>
+
 <section class="card jump-target" id="locations">
   <h2>Host locations</h2>
   <p class="muted">Each location signs in with its host PIN to see its schedule, block dates, request events and keep its page current (hours, specials, menu, rates).</p>

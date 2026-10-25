@@ -1,4 +1,4 @@
-# Production image for the chip tournament app.
+# Production image for Control Table.
 FROM python:3.13-slim
 
 # tzdata lets the TZ setting (e.g. America/Chicago) show venue-local times.

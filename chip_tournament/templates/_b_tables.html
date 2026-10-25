@@ -1,0 +1,28 @@
+{% set playing = t.in_play() %}
+{% set queue = t.ready_queue() %}
+<div class="split">
+  <div>
+    <h3>Now playing</h3>
+    {% if playing %}
+    <div class="tables">
+      {% for m in playing %}
+      <div class="table-card">
+        <div class="table-no">Table {{ m.table }}</div>
+        <div class="vs"><span>{{ t.name_of(m.a) }}</span><b>{{ m.score_a }}</b></div>
+        <div class="vs"><span>{{ t.name_of(m.b) }}</span><b>{{ m.score_b }}</b></div>
+        <div class="muted">Race to {{ m.race_to }} · {{ t.match_label(m) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
+    {% if t.settings.tables_down %}<p class="muted">Out of service: table {{ t.settings.tables_down|join(", ") }}.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h3>Up next</h3>
+    {% if queue %}
+    <ol class="queue">
+      {% for m in queue[:12] %}<li><b>{{ t.name_of(m.a) }}</b> vs <b>{{ t.name_of(m.b) }}</b> <span class="muted">· #{{ m.num }}</span></li>{% endfor %}
+    </ol>
+    {% else %}<p class="muted">Nobody is waiting for a table.</p>{% endif %}
+  </div>
+</div>

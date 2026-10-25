@@ -1,0 +1,59 @@
+{% if is_viewer %}
+<script>
+// View-only login: turn every control off (the server refuses changes either way).
+document.querySelectorAll("main form").forEach(function (f) {
+  f.querySelectorAll("button, input, select, textarea").forEach(function (el) { el.disabled = true; });
+});
+</script>
+{% endif %}
+<dialog class="result-dialog" id="confirm-dialog">
+  <h2 id="confirm-title"></h2>
+  <p id="confirm-text"></p>
+  <div class="button-row">
+    <button class="button big" id="confirm-ok">Submit</button>
+    <button class="button big secondary" id="confirm-back">Go back</button>
+  </div>
+</dialog>
+<script>
+(function () {
+  // Section buttons stay under the menu bar; the one on screen is underlined.
+  var topbar = document.querySelector(".topbar"), jump = document.querySelector(".jump-nav");
+  if (jump) {
+    var offsets = function () {
+      var h = topbar ? topbar.offsetHeight : 0;
+      document.documentElement.style.setProperty("--topbar-h", h + "px");
+      document.documentElement.style.setProperty("--jump-offset", (h + jump.offsetHeight + 16) + "px");
+    };
+    offsets(); window.addEventListener("resize", offsets);
+    var links = {}, targets = [];
+    jump.querySelectorAll("a").forEach(function (a) {
+      var el = document.getElementById(a.getAttribute("href").slice(1));
+      if (el) { links[el.id] = a; targets.push(el); }
+    });
+    var mark = function () {
+      var line = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--jump-offset"), 10) + 8, current = targets[0];
+      targets.forEach(function (el) { if (el.getBoundingClientRect().top <= line) current = el; });
+      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) current = targets[targets.length - 1];
+      targets.forEach(function (el) { links[el.id].classList.toggle("active", el === current); });
+    };
+    if (targets.length) { mark(); window.addEventListener("scroll", mark, { passive: true }); }
+  }
+  // Confirm pop-ups for forms with data-dialog-title.
+  var d = document.getElementById("confirm-dialog"), pending = null;
+  if (!d || !d.showModal) return;
+  document.querySelectorAll("form[data-dialog-title]").forEach(function (f) {
+    f.addEventListener("submit", function (e) {
+      if (f.dataset.confirmed) return;
+      e.preventDefault(); pending = f;
+      document.getElementById("confirm-title").textContent = f.dataset.dialogTitle;
+      document.getElementById("confirm-text").textContent = f.dataset.dialogText || "";
+      document.getElementById("confirm-ok").textContent = f.dataset.dialogOk || "Submit";
+      d.showModal();
+    });
+  });
+  document.getElementById("confirm-ok").addEventListener("click", function () {
+    if (pending) { pending.dataset.confirmed = "1"; d.close(); pending.submit(); }
+  });
+  document.getElementById("confirm-back").addEventListener("click", function () { pending = null; d.close(); });
+})();
+</script>

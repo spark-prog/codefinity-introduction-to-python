@@ -8,6 +8,7 @@
     <h1>Tournament director</h1>
   </div>
   <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
     {% if t.status == SETUP and not is_viewer %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
@@ -20,7 +21,7 @@
   <a href="#teams">Teams &amp; chips</a>
   <a href="#texts">Texts &amp; log</a>
   <a href="#settings">Settings</a>
-  <a href="#new-tournament">New tournament</a>
+  <a href="#new-tournament">Start over</a>
 </nav>
 <div id="summary" class="jump-target">
 {% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
@@ -408,8 +409,9 @@
 
 <section class="card jump-target" id="new-tournament">
   <p class="eyebrow">Danger zone</p>
-  <h2>New tournament</h2>
-  <p class="muted">Starts a fresh tournament. <b>Archive</b> keeps this one under Past tournaments (you can delete it later).
+  <h2>Start this tournament over</h2>
+  <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
+    Starting over clears this one. <b>Archive</b> keeps this one under Past tournaments (you can delete it later).
     <b>Delete permanently</b> erases it now, with its rosters, phone numbers and texts. Deleting can't be undone.</p>
   <form method="post" action="{{ url_for('admin_reset') }}" class="reset-row">
     <input name="confirm" placeholder="Type RESET" autocomplete="off">

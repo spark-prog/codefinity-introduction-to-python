@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Director — Control Table{% endblock %}
+{% block content %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Director</p>
+    <h1>Control Table</h1>
+    <p class="lede">Every tournament, each with its own registration, tables, texts and undo. Open one to run it.</p>
+  </div>
+  <div class="button-row" style="justify-content: flex-end">
+    {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
+  </div>
+</header>
+{% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>.</p>{% endif %}
+
+<section class="card">
+  <div class="section-head"><h2>Tournaments</h2></div>
+  {% if rows %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Tournament</th><th>Type</th><th>Date</th><th>Status</th><th>Field</th><th></th></tr></thead>
+    {% for r in rows %}{% set s = r.t.settings %}
+    <tr>
+      <td><b>{{ s.name }}</b><div class="muted small-note">/t/{{ r.event.id }}</div></td>
+      <td>{{ r.format }}</td>
+      <td>{{ event_when(s.date, s.start_time) or "—" }}</td>
+      <td><span class="event-status {{ r.t.status }}">{{ {"setup": "Setting up", "running": "Live", "finished": "Finished"}[r.t.status] }}</span></td>
+      <td>{{ r.count }}</td>
+      <td class="nowrap">
+        <a class="button small" href="{{ url_for('admin', event=r.event.id) }}">Run it</a>
+        <a class="button small secondary" href="{{ url_for('home', event=r.event.id) }}">Public page</a>
+        <a class="button small secondary" href="{{ url_for('board', event=r.event.id) }}">Board</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <p class="muted">No tournaments yet. Create the first one below.</p>
+  {% endif %}
+</section>
+
+<section class="card" id="new">
+  <h2>New tournament</h2>
+  <form method="post" action="{{ url_for('new_event') }}" class="form settings">
+    <label>Name <input name="name" required placeholder="Friday 9-Ball"></label>
+    <label>Type
+      <select name="kind">
+        <optgroup label="Brackets">
+          {% for key, name in formats %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+        </optgroup>
+        <optgroup label="Chips"><option value="{{ CHIP }}">Chip tournament (teams, chips, cash-in)</option></optgroup>
+      </select></label>
+    <label>Date <input name="date" type="date" value="{{ today }}"></label>
+    <label>Start time <input name="start_time" placeholder="7:00 PM"></label>
+    <label class="wide">Venue <input name="venue" placeholder="Corner Pocket Billiards"></label>
+    <p class="muted wide">Modified single elimination is double elimination down to a final {{ final_cuts|join("/") }}, then single elimination.
+      Round robin can send the top entries of each group to a playoff. You'll set races, tables, payouts and the rest next.</p>
+    <button class="button big">Create tournament</button>
+  </form>
+</section>
+
+{% if rows and not is_viewer %}
+<section class="card">
+  <p class="eyebrow">Danger zone</p>
+  <h2>Delete a tournament</h2>
+  <p class="muted">Deletes it with its rosters, phone numbers, texts and archives. This can't be undone.</p>
+  {% for r in rows %}
+  <form method="post" action="{{ url_for('delete_event', event_id=r.event.id) }}" class="reset-row">
+    <span><b>{{ r.t.settings.name }}</b></span>
+    <input name="confirm" placeholder="Type DELETE" autocomplete="off">
+    <button class="button danger small">Delete</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

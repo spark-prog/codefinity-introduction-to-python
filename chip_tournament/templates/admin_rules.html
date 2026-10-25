@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Edit rules — {{ t.settings.name }}{% endblock %}
+{% block title %}Edit rules — {{ t.settings.name if t else "Control Table" }}{% endblock %}
 {% block content %}
 <header class="page-head split center">
   <div>
@@ -9,7 +9,7 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('rules_page') }}">View the Rules page</a>
-    <a class="button secondary" href="{{ url_for('admin') }}">← Back to the director page</a>
+    <a class="button secondary" href="{{ url_for('director') }}">← Back to the director page</a>
   </div>
 </header>
 

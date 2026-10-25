@@ -1,0 +1,55 @@
+{# The bracket: round robin groups, then the elimination stages as columns of rounds. #}
+{% macro side(m, which) -%}
+  {%- set id = m[which] -%}
+  {%- set won = m.status == "done" and m.winner == id and id != "bye" -%}
+  <div class="bm-side{% if won %} won{% elif m.status == 'done' and id and id != 'bye' %} lost{% endif %}{% if id == 'bye' %} bye{% endif %}">
+    <span class="bm-name">{% if id and id != "bye" %}<a href="{{ url_for('b_entry', entry_id=id) }}">{{ t.slot_label(m, which) }}</a>{% else %}{{ t.slot_label(m, which) }}{% endif %}</span>
+    {% if m.status in ("called", "done") and not m.is_bye %}<b class="bm-score">{{ m["score_" ~ which] }}</b>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% if t.groups %}
+<div class="group-grid">
+  {% for g, members in t.groups.items() %}
+  <div class="card group-card">
+    <h3>Group {{ g }}{% if t.group_complete(g) %} <span class="pill">final</span>{% endif %}</h3>
+    <div class="table-wrap"><table class="grid small">
+      <thead><tr><th>#</th><th>Entry</th><th title="Played">P</th><th>W</th><th>L</th><th title="Games won minus games lost">+/−</th></tr></thead>
+      {% for row in t.group_standings(g) %}
+      <tr{% if t.settings.advance and loop.index <= t.settings.advance %} class="advancing"{% endif %}>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('b_entry', entry_id=row.entry.id) }}">{{ row.entry.name }}</a></td>
+        <td>{{ row.played }}</td><td>{{ row.wins }}</td><td>{{ row.losses }}</td><td>{{ "%+d"|format(row["for"] - row["against"]) }}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% if t.settings.advance %}<p class="muted small-note">Top {{ t.settings.advance }} go on to the playoff.</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for stage in t.bracket() %}
+<div class="bracket-stage">
+  <h3>{{ stage.title }}</h3>
+  <div class="bracket" role="region" aria-label="{{ stage.title }}" tabindex="0">
+    {% for rnd in stage.rounds %}
+    <div class="bracket-round">
+      <p class="eyebrow">{{ rnd.title }}</p>
+      <div class="bracket-matches">
+        {% for m in rnd.matches %}
+        <div class="bm {{ m.status }}{% if m.is_bye %} is-bye{% endif %}" id="m{{ m.num }}">
+          <div class="bm-head"><span>#{{ m.num }}</span>
+            {% if m.status == "called" %}<span class="pill live">Table {{ m.table }}</span>
+            {% elif m.status == "ready" %}<span class="pill">Waiting for a table</span>
+            {% elif m.status == "void" %}<span class="muted">Not needed</span>{% endif %}
+            {% if m.forfeit %}<span class="muted">forfeit</span>{% endif %}</div>
+          {{ side(m, "a") }}{{ side(m, "b") }}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}

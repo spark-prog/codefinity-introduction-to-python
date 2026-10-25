@@ -1,6 +1,38 @@
-# Chip Tournament Manager
+# Control Table
 
-A web app for running a billiards league **chip tournament**: team registration, tournament details and location, roster updates, scorekeeping, winners/losers-list pairing, chip tracking, payouts and text alerts.
+A web app for running billiards tournaments, several at once: **bracket tournaments** (single elimination, double elimination, modified single elimination and round robin) and the league **chip tournament**. Each tournament has its own registration, live tables, bracket or chip board, scorekeeping, payouts, text alerts and undo.
+
+(Formerly *Chip Tournament Manager*. The code still lives in the `chip_tournament/` folder and keeps its `CHIPS_*` settings, so existing deployments keep working.)
+
+## Tournaments
+
+The page at `/` lists every open tournament, with past results below. Each tournament lives at its own address, `/t/<id>/` (e.g. `/t/saturday-9-ball/`), and everything in the tables below is under that address. The director page at `/admin` lists all of them: **Run it** opens one, **New tournament** creates one (pick a bracket format or a chip tournament), and **Delete a tournament** removes one with its rosters and texts. The director password covers every tournament.
+
+Old links keep working: `/team/<id>` from texts sent before the move finds the right tournament, and `/board` and `/register` go to the open tournament when there's only one.
+
+## Bracket tournaments
+
+Modeled on the tournament tools in CompuSport: online brackets, automatic table assignment, live score entry by players, and payouts as players finish.
+
+| Format | How it works |
+|---|---|
+| **Single elimination** | One loss and you're out. Byes go to the top seeds. |
+| **Double elimination** | A first loss drops you to the losers side; a second puts you out. Losers drop in alternating order to avoid quick rematches. The losers-side champion meets the winners-side champion in the grand final; with *true double* on (the default), a second final is played if the losers-side champion wins the first. |
+| **Modified single elimination** | Double elimination until the final 4, 8, 16 or 32 are left (half from each side), then single elimination. |
+| **Round robin** | Groups (snake-seeded); everyone in a group plays everyone once. Standings go by wins, then game difference, then games won. Optionally the top N of each group go on to a single-elimination playoff, with group winners seeded first. |
+
+- **Entries** are singles or doubles. Players register themselves on the Register page (with text-alert consent), or the director adds them one at a time or pastes many at once (`Name` or `Name, cell`; for doubles `Ann & Bob` or `Sharks: Ann & Bob`). Field cap and waiting list, desk check-in and no-shows work as in the chip tournament.
+- **Seeding** is a random draw when the bracket is drawn, or *manual*: the order on the Entries list (↑/↓ and Shuffle), seed 1 at the top.
+- **Races** are set separately for the winners side (or main bracket), the losers side and the final(s). A change applies to matches not yet called.
+- **Tables.** Ready matches go to free tables automatically, first ready first called, and an entry is never on two tables at once. The director can send a match to a particular table, push one to the front, move a match to another table, or take a table out of service (its match moves to a free table, or back to the front of the line with its score kept). Turn off auto-call to send every match yourself. Long matches turn amber and red, as in the chip tournament.
+- **Scoring.** Players sign in on their own page with the PIN they got at registration and keep score with + and −; when one side reaches the race, either player can submit. The director can score, submit, pick a winner, or record a forfeit from the Tables section. **Fix result** swaps the winner of a finished match until a later match has used it; **Undo** reverses the last action. **Withdraw** forfeits everything an entry has left.
+- **Places and payouts.** Payouts are percents of the pot by place (e.g. `50, 30, 20`); tied places split their shares evenly. A place is final as soon as nobody still playing can finish at or below it, and the entry is texted what it won right then.
+- **Texts** (for players who opted in): registration with PIN, every table call ("Table 3: Ann vs Bob, race to 5 (Losers round 2, match #21). Good luck!"), table changes, results, and payouts.
+- The **board** (`/t/<id>/board`) shows the tables, who's up next and the whole bracket, refreshing every 15 seconds.
+
+The bracket rules are in `chips/bracket.py` (no web code) and tested in `tests/test_bracket.py`, which plays out every format for many field sizes and checks loss counts, places and payouts.
+
+## Chip tournaments
 
 ## Run it
 
@@ -15,11 +47,13 @@ pip install -r requirements-dev.txt
 ADMIN_PASSWORD=choose-one python app.py
 ```
 
-Open http://localhost:5000. Players use **Home**, **Board** and **Register**. The tournament director uses **Director** (password from `ADMIN_PASSWORD`; it's `admin` if you don't set one, which is only allowed when running locally).
+Open http://localhost:5000. The director signs in under **Director** (password from `ADMIN_PASSWORD`; it's `admin` if you don't set one, which is only allowed when running locally) and creates the first tournament. Players use each tournament's **Home**, **Board** and **Register**.
 
 Run the tests with `python -m pytest`.
 
 ## Pages
+
+For a chip tournament. Paths are inside the tournament's address (`/t/<id>/board`, and so on), except `/rules` and `/admin/rules`, which every tournament shares.
 
 New director? Read the **Director's guide** in the app (`/guide`, linked from the Director page). It covers tournament night step by step and can be printed.
 
@@ -106,7 +140,7 @@ A player who doesn't have a partner yet can register alone to **hold a real spot
 
 Set **Check in at the desk by** (e.g. 6:30 PM) in Settings. It shows on the home page, the registration page and each team's page. On tournament day:
 - Press **Check in** next to each team as it arrives. The time is recorded, and the director page counts how many are checked in. To find a team fast, type part of its name, a player's name or the last 4 digits of a cell in the search box above the team list. Tick **Not checked in only** to see who's still missing. The search stays in place after each check-in, so you can type the next team.
-- The buttons across the top of the director page (Summary, Tables, Teams & chips, Texts & log, Settings, New tournament) jump straight to each section and stay on screen as you scroll.
+- The buttons across the top of the director page (Summary, Tables, Teams & chips, Texts & log, Settings, Start over) jump straight to each section and stay on screen as you scroll.
 - Press **No-show** for a team that doesn't come, or **Mark all not checked in as no-shows** once check-in closes. The team is taken out of the field and texted, and the next team on the waiting list moves in (and is texted). **Restore** undoes a no-show. If a no-show team walks in after the start, **Arrived late: restore** adds it as a late entry (it pays the fee and gets its chips), up until last call.
 - **Start tournament** stays disabled until every team in the field is checked in or marked a no-show. That requirement can be turned off in Settings.
 - No-shows don't appear on public pages and don't pay into the pot.
@@ -172,9 +206,9 @@ Without these, texts are only logged (see **Recent texts** on the director page)
 
 ## Data
 
-Everything is saved in `chip_tournament/data/` (`tournament.json`, the undo history and `texts.log`). Set `CHIPS_DATA_DIR` to store the data somewhere else.
+Everything is saved in `chip_tournament/data/`: `events.json` lists the tournaments, and each has its own folder `events/<id>/` with `tournament.json`, the undo history and `texts.log`. Rules, the background photo and the login key are shared. Set `CHIPS_DATA_DIR` to store the data somewhere else. A data folder from the single-tournament version is moved into `events/` automatically the first time Control Table starts.
 
-To start the next tournament, type RESET under **New tournament** on the director page and choose:
+To run another tournament, create it from **All tournaments** (`/admin`). To start the same one over, type RESET under **Start over** on its director page and choose:
 
 - **Archive and start over** keeps the old tournament and its texts. It's listed under **Past tournaments**, where you can delete it later.
 - **Delete permanently and start over** erases the old tournament, its undo history and its texts right away.
@@ -188,7 +222,10 @@ To start the next tournament, type RESET under **New tournament** on the directo
 
 ## Code layout
 
-- `chips/engine.py`: all tournament rules (no web code), tested in `tests/test_engine.py`
+- `chips/engine.py`: all chip tournament rules (no web code), tested in `tests/test_engine.py`
+- `chips/bracket.py`: bracket tournament rules, tested in `tests/test_bracket.py`
+- `chips/hub.py`: the list of tournaments, one folder each, and moving old data in
+- `bracket_web.py`: the bracket tournament pages
 - `chips/storage.py`: JSON save/load and undo
 - `chips/alerts.py`: Twilio texts with a log-only fallback
-- `app.py`: Flask routes, with `templates/` and `static/` for the pages
+- `app.py`: Flask routes (the hub, chip tournament pages, and sending each tournament to its own pages), with `templates/` and `static/`; hub and bracket tests in `tests/test_hub.py`

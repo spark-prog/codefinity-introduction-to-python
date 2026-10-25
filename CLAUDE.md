@@ -22,7 +22,7 @@ Everything lives in `chip_tournament/`. The `variables_and_types/` folder is an 
 | `templates/`, `static/style.css` | Jinja pages (files starting `_` are partials; `b_*` are bracket pages) and styles. Themes are `[data-theme="..."]` blocks at the end of `style.css`. |
 | `tests/` | pytest tests, one file per module |
 | `README.md` | The full feature and rules description. Read it before changing behavior. |
-| `DEPLOY.md` | Railway hosting guide |
+| `DEPLOY.md` | Hosting guide. The app is hosted on **Render**; this guide still describes Railway and is out of date. |
 
 ## Run and test
 
@@ -50,5 +50,5 @@ python -m pytest                          # run before every commit
 - Add or update tests for any rule change. `tests/test_bracket.py` plays out every format for many field sizes; keep it passing.
 - Pages must work on phones (players score from their phones at the table) and on the TV board.
 - Write player-facing text plainly and briefly; no jargon.
-- Pushing to the deployed branch redeploys the live app on Railway and restarts it for a few seconds. Don't push during a tournament night, and work on a branch with a pull request for anything bigger than a small fix.
+- The live app is hosted on **Render**. Tournament data must sit on a persistent disk (the `Dockerfile` points `CHIPS_DATA_DIR` at `/data`), or a redeploy wipes it. Pushing to the deployed branch redeploys it and restarts it for a few seconds. Don't push during a tournament night, and work on a branch with a pull request for anything bigger than a small fix.
 - Never commit `data/`, passwords, or Twilio keys.

@@ -215,6 +215,7 @@ class Settings:
     sms_name: str = ""  # starts every text, e.g. "First Coast APA"
     theme: str = "electric"  # color theme for this tournament's pages (see chips/themes.py)
     contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
+    rule_set: str = ""  # id of the league rule set this event plays by (its Rules tab shows only that one)
 
 
 @dataclass

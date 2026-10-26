@@ -379,6 +379,11 @@
     <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
     <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+    <label>Rules this event plays by
+      <select name="rule_set">
+        <option value="">Not chosen yet</option>
+        {% for r in rule_choices() %}<option value="{{ r.id }}" {% if s.rule_set == r.id %}selected{% endif %}>{{ r.title }}</option>{% endfor %}
+      </select></label>
     <div class="settings-group">Money &amp; field</div>
     <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>

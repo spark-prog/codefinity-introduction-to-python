@@ -121,6 +121,7 @@ def register(app, h) -> dict:
             s.sms_name = f.get("sms_name", "").strip()
             s.contact_phone = f.get("contact_phone", "").strip()
             s.theme = themes.theme_key(f.get("theme", s.theme))
+            s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

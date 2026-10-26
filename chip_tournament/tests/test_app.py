@@ -210,7 +210,8 @@ def test_home_shows_the_date_in_words(client):
 
 
 def test_rules_editor_and_page(client):
-    page = client.get("/rules").data
+    league = FlaskClient(client.application)  # the league rules page, outside any event
+    page = league.get("/rules").data
     for title in (b"8-Ball Rules", b"9-Ball Rules", b"Fast 8 Rules", b"Fast Saratoga Rules"):
         assert title in page
     assert b"coming soon" in page and b'id="rule-search"' in page
@@ -219,7 +220,7 @@ def test_rules_editor_and_page(client):
     body = "# The break\n- A scratch on the break is a **foul**\n1. Rack the balls\n<script>alert(1)</script>"
     page = client.post("/admin/rules/8-ball-rules", data={"title": "8-Ball Rules", "body": body}, follow_redirects=True).data
     assert b"Saved 8-Ball Rules" in page
-    page = client.get("/rules").data
+    page = league.get("/rules").data
     assert b'<h3 class="rule-block">The break</h3>' in page
     assert b"<b>foul</b>" in page and b"<ol>" in page
     assert b"<script>alert(1)</script>" not in page and b"&lt;script&gt;" in page

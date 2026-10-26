@@ -216,6 +216,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             "has_custom_background": bg is not None,
             "THEMES": themes.THEMES,
             "theme_key": themes.theme_key,
+            "rule_choices": rule_book.load,
             "is_admin": session.get("admin", False),
             "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
             "ACTIVE": ACTIVE,
@@ -607,6 +608,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.sms_name = f.get("sms_name", s.sms_name).strip()
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
+            s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")
@@ -681,8 +683,16 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.get("/t/<event>/rules")
     @app.get("/rules")
     def rules_page():
-        sets = [{**r, "html": rulebook.render(r["body"])} for r in rule_book.load()]
-        return render_template("rules.html", t=current_t(), rule_sets=sets)
+        """League-wide: every rule set. Inside an event: only the set that event plays by."""
+        t, sets = current_t(), rule_book.load()
+        if t is not None:
+            sets = [r for r in sets if r["id"] == t.settings.rule_set]
+        sets = [{**r, "html": rulebook.render(r["body"])} for r in sets]
+        return render_template("rules.html", t=t, rule_sets=sets)
+
+    def event_rule_set(rule_id: str) -> str:
+        """A rule set id an event can use: one that exists, or "" for none chosen yet."""
+        return rule_id if any(r["id"] == rule_id for r in rule_book.load()) else ""
 
     @app.get("/admin/rules")
     @admin_required
@@ -1058,7 +1068,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
-        "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes,
+        "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
     })
 
     @app.before_request

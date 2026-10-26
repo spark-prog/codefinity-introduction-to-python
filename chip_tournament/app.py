@@ -163,6 +163,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["event_when"] = event_when
     # Who runs the text program, shown on the Terms and Privacy pages (they must match the
     # carrier registration). Override with environment variables if they ever change.
+    # The number tournament texts come from, so players can save it as a contact (Twilio setting).
+    sender_digits = "".join(c for c in os.environ.get("TWILIO_FROM_NUMBER", "") if c.isdigit())[-10:]
+    app.jinja_env.globals["text_sender"] = (
+        f"({sender_digits[:3]}) {sender_digits[3:6]}-{sender_digits[6:]}" if len(sender_digits) == 10 else "")
     app.jinja_env.globals["legal"] = {
         "company": os.environ.get("LEGAL_NAME", "Maximum English LLC"),
         "brand": os.environ.get("BRAND_NAME", "First Coast APA"),
@@ -188,6 +192,20 @@ def create_app(data_dir: str | None = None) -> Flask:
             return send_file(Path(app.static_folder) / "img" / "billiard-room.jpg", max_age=86400)
         mime = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[path.suffix[1:]]
         return send_file(path, mimetype=mime, max_age=86400)
+
+    @app.get("/contact.vcf")
+    def save_contact():
+        """A contact card for the number tournament texts come from (one tap on a phone adds it)."""
+        number = os.environ.get("TWILIO_FROM_NUMBER", "")
+        if not number:
+            abort(404)
+        brand = app.jinja_env.globals["legal"]["brand"]
+        card = "\r\n".join([
+            "BEGIN:VCARD", "VERSION:3.0", f"FN:{brand} Tournaments", f"N:;{brand} Tournaments;;;", f"ORG:{brand}",
+            f"TEL;TYPE=CELL:{number}", "NOTE:Tournament text alerts: table calls, results, cash-in and last call.",
+            "END:VCARD", ""])
+        return app.response_class(card, mimetype="text/vcard",
+                                  headers={"Content-Disposition": f'attachment; filename="{brand.replace(" ", "-")}-Tournaments.vcf"'})
 
     @app.context_processor
     def globals_():

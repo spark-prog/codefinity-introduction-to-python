@@ -9,7 +9,7 @@ from app import create_app
 # Pages every tournament shares (or that cover all of them) stay where they are; the rest of a
 # chip tournament's pages live under /t/<id>/, so the client below adds that for these tests.
 GLOBAL_PATHS = ("/t/", "/static", "/admin/login", "/admin/logout", "/admin/rules", "/healthz", "/favicon.ico",
-                "/background")
+                "/background", "/contact.vcf")
 
 
 class ChipEventClient(FlaskClient):
@@ -749,3 +749,19 @@ def test_director_picks_a_theme_for_every_page(client):
     assert 'data-theme="electric"' in client.get("/").get_data(as_text=True)
     css = client.get("/static/style.css").get_data(as_text=True)
     assert all(f'[data-theme="{key}"]' in css for key, *_ in THEMES if key != "electric")
+
+
+def test_save_contact_note_and_card(tmp_path, monkeypatch, client):
+    assert "Save contact" not in client.get("/register").get_data(as_text=True)  # no sending number set
+    assert client.get("/contact.vcf").status_code == 404
+    monkeypatch.setenv("TWILIO_FROM_NUMBER", "+19049135680")
+    app = create_app(str(tmp_path / "other"))
+    app.testing = True
+    event = app.config["hub"].create("Chip Tournament", "chip")
+    c = app.test_client()
+    page = c.get(f"/t/{event.id}/register").get_data(as_text=True)
+    assert "Texts come from <b class=\"nowrap\">(904) 913-5680</b>" in page and 'href="/contact.vcf"' in page
+    card = c.get("/contact.vcf")
+    assert card.mimetype == "text/vcard" and "attachment" in card.headers["Content-Disposition"]
+    body = card.get_data(as_text=True)
+    assert "FN:First Coast APA Tournaments" in body and "TEL;TYPE=CELL:+19049135680" in body

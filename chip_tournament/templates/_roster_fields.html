@@ -41,6 +41,7 @@
     <span>Yes, text me tournament alerts at the Partner 1 cell number above. I agree to receive text messages from
       {{ legal.brand }} ({{ legal.company }}) about this tournament: registration and team PIN, table calls, results, cash-in and last call.
       Message frequency varies. Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out. Consent is not required to register.</span></label>
+  {% include "_save_contact.html" %}
   <label class="checkbox"><input type="checkbox" name="agree_terms" value="1" required {% if form and form.get("agree_terms") == "1" %}checked{% endif %}>
     <span>I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms &amp; Conditions</a> and
       <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</span></label>

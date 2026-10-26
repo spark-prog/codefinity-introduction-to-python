@@ -1469,6 +1469,7 @@ class Tournament:
             else:
                 self._cash_out(champ, "Last team standing")
                 self._text_team(champ, f"{champ.name}: you're the last team standing! Payout {money(champ.payout_cents)}.")
+        self.winners_list, self.losers_list = [], []  # nobody is waiting for a match any more
         self.status = FINISHED
         self._say("Tournament finished.")
         return True

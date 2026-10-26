@@ -69,13 +69,14 @@ class Hub:
         tmp.replace(self.index_path)
 
     def _event(self, row: dict) -> Event:
-        ev = self._events.get(row["id"])
-        if ev is None:
-            folder = self.root / "events" / row["id"]
-            ev = Event(id=row["id"], kind=row["kind"], dir=folder, store=Store(folder, KINDS[row["kind"]]),
-                       sms=SmsSender(folder / "texts.log"), created=row.get("created", ""))
-            self._events[row["id"]] = ev
-        return ev
+        with self.lock:  # one Store (and one lock) per tournament, even when two requests arrive at once
+            ev = self._events.get(row["id"])
+            if ev is None:
+                folder = self.root / "events" / row["id"]
+                ev = Event(id=row["id"], kind=row["kind"], dir=folder, store=Store(folder, KINDS[row["kind"]]),
+                           sms=SmsSender(folder / "texts.log"), created=row.get("created", ""))
+                self._events[row["id"]] = ev
+            return ev
 
     def get(self, event_id: str) -> Event | None:
         for row in self._index():
@@ -120,6 +121,10 @@ class Hub:
             self._events.pop(event_id, None)
             shutil.rmtree(self.root / "events" / event_id, ignore_errors=True)
             return True
+
+    def is_migrated(self, event_id: str) -> bool:
+        """The tournament that came from the data folder before Control Table hosted several."""
+        return any(r["id"] == event_id and r.get("migrated") for r in self._index())
 
     def find_team(self, team_id: str) -> Event | None:
         """The tournament a team (or bracket entry) id belongs to, newest first."""

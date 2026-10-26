@@ -374,7 +374,7 @@ def register(app, h) -> dict:
         act("Fix result", lambda t: t.fix_result(match_id), "Result corrected. Both sides were texted.")
         return redirect(back("results"))
 
-    @app.post("/t/<event>/admin/table/<table>")
+    @app.post("/t/<event>/admin/table/<path:table>")
     @admin_required
     def b_table(table):
         down = request.form.get("down") == "1"

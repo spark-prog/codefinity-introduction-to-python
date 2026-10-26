@@ -135,6 +135,7 @@ class Entry:
     out_match: str | None = None
     payout_cents: int = 0
     payout_texted: bool = False
+    payout_texted_cents: int = 0  # the amount in that text, so a later correction can be texted
 
     @property
     def phones(self) -> list[str]:
@@ -799,6 +800,10 @@ class BracketTournament:
             for entry_id, (lo, _hi) in places.items():
                 if lo == 1:
                     self.entries[entry_id].status = CHAMPION
+            # Everyone else is done too (a round robin without a playoff knocks nobody out).
+            for e in self.entries.values():
+                if e.status == ACTIVE and e.seed is not None:
+                    e.status = ELIMINATED
         self._pay(places)
 
     def _pay(self, places: dict[str, tuple[int, int]]) -> None:
@@ -819,9 +824,19 @@ class BracketTournament:
         for entry_id, (lo, hi) in places.items():
             e = self.entries[entry_id]
             if e.payout_cents and not e.payout_texted and (self.status == FINISHED or lo > 1):
-                e.payout_texted = True
+                e.payout_texted, e.payout_texted_cents = True, e.payout_cents
                 self._text(e, f"{e.name} finished {place_text((lo, hi))} and won {money(e.payout_cents)}. "
                               "Collect it at the tournament desk. Congratulations!")
+        # A result fixed after payout texts went out: tell each player their corrected amount.
+        for e in self.entries.values():
+            if e.payout_texted and not e.payout_texted_cents:  # saved before amounts were remembered
+                e.payout_texted_cents = e.payout_cents
+            if e.payout_texted and e.payout_cents != e.payout_texted_cents:
+                where = f"finished {place_text(places[e.id])}" if e.id in places else "is no longer in the money"
+                e.payout_texted_cents = e.payout_cents
+                self._text(e, f"Correction: {e.name} {where}"
+                              + (f" and won {money(e.payout_cents)}." if e.payout_cents else ".")
+                              + " See the tournament desk with any questions.")
 
     def places(self) -> dict[str, tuple[int, int]]:
         """Final places so far: entry id -> (first, last) place it shares."""

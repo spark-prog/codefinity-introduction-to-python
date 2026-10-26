@@ -151,7 +151,7 @@ def test_finished_chip_tournament_leaves_nobody_in_line():
     t = Tournament()
     t.settings.require_checkin, t.settings.race_to = False, 1
     for i in range(3):
-        t.register_team(f"Team {i}", [Player("A", f"555000000{i}", 6), Player("B", "", 5)])  # 2 chips each
+        t.register_team(f"Team {i}", [Player("A", f"555000000{i}", 5), Player("B", "", 5)])
     t.start(random.Random(1))
     while t.status == "running":
         m = next(m for m in t.matches if m.status == "called")

@@ -765,3 +765,10 @@ def test_save_contact_note_and_card(tmp_path, monkeypatch, client):
     assert card.mimetype == "text/vcard" and "attachment" in card.headers["Content-Disposition"]
     body = card.get_data(as_text=True)
     assert "FN:First Coast APA Tournaments" in body and "TEL;TYPE=CELL:+19049135680" in body
+
+
+def test_house_icon_goes_to_all_events(client):
+    page = client.get("/").get_data(as_text=True)  # an event's home page
+    assert '<a class="home-icon" href="/" title="All events"' in page
+    assert f'<a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page
+    assert ">Home</a>" in page and "All events</a>" not in page

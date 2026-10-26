@@ -468,7 +468,9 @@ mark { background: var(--accent); color: var(--on-accent); border-radius: 3px; p
   width: 40px; height: 40px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
   color: var(--accent); border: 1.5px solid rgba(var(--accent-rgb), .55); transition: background .15s, color .15s;
 }
-.brand:hover .home-icon { background: var(--accent); color: var(--on-accent); }
+.home-icon:hover { background: var(--accent); color: var(--on-accent); }
+.brand-name { color: var(--ink); text-decoration: none; }
+.brand-name:hover { color: var(--accent-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 560px) {
   .brand-row { gap: 12px; width: 100%; }
@@ -514,8 +516,7 @@ mark { background: var(--accent); color: var(--on-accent); border-radius: 3px; p
 .team-search input[type=search]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb), .18); }
 @media (max-width: 560px) { .jump-nav a { padding: 8px 12px; font-size: .72rem; } }
 @media (max-width: 560px) {
-  /* Signed in, the menu gets Log out; the house icon already goes home, so drop the Home word to fit. */
-  .nav.signed-in .nav-home { display: none; }
+  /* Tighter menu spacing when signed in */
   .nav.signed-in a, .nav.signed-in .link { padding-left: 6px; padding-right: 6px; }
   .page-head .button-row { justify-content: flex-start !important; }
   .page-head .button, .button.big, .reset-row .button { white-space: normal; text-align: center; }
@@ -724,7 +725,6 @@ body.default-bg {
 .show-sm { display: none; }
 @media (max-width: 560px) {
   .show-sm { display: inline; }
-  .nav .nav-home { display: none; }  /* the house icon next to the event name goes home */
   .nav a, .nav .link, .nav.signed-in a, .nav.signed-in .link { padding: 8px 5px; letter-spacing: .06em; }
   .nav a.nav-cta { padding: 7px 9px; }
   /* Signed in: Log out becomes an icon at the end of the top row, so the menu keeps one row */

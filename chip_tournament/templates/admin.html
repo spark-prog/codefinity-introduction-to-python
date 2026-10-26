@@ -294,6 +294,11 @@
       <textarea name="body" rows="2" maxlength="300" required placeholder="e.g. 15 minute break — back at 9:45"></textarea></label>
     <button class="button">Send text</button>
   </form>
+  <form method="post" action="{{ url_for('admin_text_pins') }}" class="form"
+        onsubmit="return confirm('Text every registered team its own PIN and team-page link? Only players who turned on text alerts get it.')">
+    <button class="button secondary">Resend PIN and team link</button>
+    <p class="muted small">Each team gets its own PIN. Players who haven't turned on text alerts are skipped.</p>
+  </form>
   <details><summary>Recent texts ({{ texts|length }})</summary>
     <div class="table-wrap"><table class="grid small">
       {% for x in texts %}<tr><td>{{ x.at[11:] }}</td>{% if is_viewer %}<td>ending in {{ x.to|last4 }}</td><td class="muted">(hidden in view-only)</td>{% else %}<td>{{ x.to }}</td><td>{{ x.body }}</td>{% endif %}<td>{{ x.status }}</td></tr>{% endfor %}

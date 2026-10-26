@@ -272,6 +272,10 @@
     <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="300"></textarea></label>
     <button class="button small">Send</button>
   </form>
+  <form method="post" action="{{ url_for('admin_text_pins') }}" class="form"
+        onsubmit="return confirm('Text every entry its own PIN and page link? Only players who turned on text alerts get it.')">
+    <button class="button small secondary">Resend PIN and page link</button>
+  </form>
   {% if not sms_enabled %}<p class="muted">Texting isn't set up (no Twilio settings), so texts are only logged below.</p>{% endif %}
   <details><summary>Recent texts ({{ texts|length }})</summary>
     <table class="grid small">{% for x in texts %}<tr><td>{{ x.at|clock }}</td><td>···{{ x.to|last4 }}</td><td>{{ x.body }}</td><td class="muted">{{ x.status }}</td></tr>{% endfor %}</table>

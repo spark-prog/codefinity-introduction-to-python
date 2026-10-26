@@ -144,3 +144,17 @@ def test_one_store_per_tournament_even_under_a_race(tmp_path):
         [th.start() for th in threads]
         [th.join() for th in threads]
         assert len({id(s) for s in got}) == 1
+
+
+def test_finished_chip_tournament_leaves_nobody_in_line():
+    from chips.engine import Tournament
+    t = Tournament()
+    t.settings.require_checkin, t.settings.race_to = False, 1
+    for i in range(3):
+        t.register_team(f"Team {i}", [Player("A", f"555000000{i}", 6), Player("B", "", 5)])  # 2 chips each
+    t.start(random.Random(1))
+    while t.status == "running":
+        m = next(m for m in t.matches if m.status == "called")
+        t.score(m.id, "a", 1)
+        t.submit_result(m.id)
+    assert t.winners_list == [] and t.losers_list == []

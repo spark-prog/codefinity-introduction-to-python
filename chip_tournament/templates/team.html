@@ -116,6 +116,7 @@
   <h2>Get tournament texts</h2>
   <p class="muted">Table calls, results, cash-in and last call, sent to each partner who turns them on. Msg frequency varies. Msg &amp; data rates may apply.
     Reply HELP for help, STOP to opt out. <a href="{{ url_for('terms') }}">Terms</a> · <a href="{{ url_for('privacy') }}">Privacy</a></p>
+  {% include "_save_contact.html" %}
   {% for p in team.players if p.phone %}
     {% if p.sms_consent %}
       <p><span class="arrived">✓ Text alerts on</span> for {{ p.name }} (cell ending in {{ p.phone|last4 }})</p>

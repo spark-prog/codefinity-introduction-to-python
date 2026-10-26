@@ -1,0 +1,6 @@
+{% if text_sender %}
+<div class="save-contact">
+  <p>Texts come from <b class="nowrap">{{ text_sender }}</b>. Save it as a contact so table calls don't land in your spam or Unknown Senders folder.</p>
+  <a class="button small secondary" href="{{ url_for('save_contact') }}">Save contact</a>
+</div>
+{% endif %}

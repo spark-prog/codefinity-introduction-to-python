@@ -25,6 +25,7 @@
     {% endfor %}
     <label class="checkbox sms-consent"><input type="checkbox" name="sms_consent" value="1" {% if form.get('sms_consent') %}checked{% endif %}>
       Text me table calls and results for this tournament at the first cell number above. Msg frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help.</label>
+    {% include "_save_contact.html" %}
     <label class="checkbox"><input type="checkbox" name="agree_terms" value="1" required>
       I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms &amp; Conditions</a> and <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</label>
     <button class="button big block">Register</button>

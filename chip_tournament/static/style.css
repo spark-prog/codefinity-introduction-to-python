@@ -714,3 +714,8 @@ body.default-bg {
   --accent: #5b94ff; --accent-rgb: 91, 148, 255; --accent-hi: #c2d6ff; --accent-dark: #2a5bd0; --accent-2: #dfe6f2; --accent-alt: #c0c8d6;
   --on-accent: #050c22; --bg-tint: #2a4d9b; --felt-rgb: 50, 90, 180; --felt-muted: #cfdaf0;
 }
+
+/* "Save contact" note for the number tournament texts come from */
+.save-contact { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 16px; margin: 12px 0;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: rgba(var(--bg-rgb), .6); }
+.save-contact p { margin: 0; flex: 1 1 240px; font-size: var(--fs-small); text-shadow: none; }

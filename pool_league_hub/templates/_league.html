@@ -1,0 +1,53 @@
+{# League hub pieces shared by every league page: {% import "_league.html" as lg with context %} #}
+{% macro ball(type, sm=false) -%}
+<span class="ball t-{{ type }}{{ ' sm' if sm }}" data-n="{{ L_TYPES[type][1] if type in L_TYPES else 8 }}" aria-hidden="true"></span>
+{%- endmacro %}
+
+{% macro type_label(type) %}{{ L_TYPES[type][0] if type in L_TYPES else "Blackout" }}{% endmacro %}
+
+{% macro legend(types=none) -%}
+<div class="legend">
+  {% for k in (types or L_TYPES.keys()|list + ["blackout"]) %}<span>{{ ball(k, true) }}{{ type_label(k) }}</span>{% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro nav(counts=none) -%}
+{% set ep = request.endpoint or "" %}
+<nav class="jump-nav" aria-label="League hub">
+  <a href="{{ url_for('league_home') }}" class="{{ 'active' if ep in ('league_home', 'league_location') }}">Locations</a>
+  {% if league_roles.player %}<a href="{{ url_for('league_player') }}" class="{{ 'active' if ep == 'league_player' }}">My listing</a>
+  {% else %}<a href="{{ url_for('league_player_new') }}" class="{{ 'active' if ep == 'league_player_new' }}">Find a team</a>{% endif %}
+  {% if league_roles.captain %}<a href="{{ url_for('league_captain') }}" class="{{ 'active' if ep == 'league_captain' }}">My team</a>
+  {% else %}<a href="{{ url_for('league_team_new') }}" class="{{ 'active' if ep == 'league_team_new' }}">Find players</a>{% endif %}
+  {% if league_roles.host %}<a href="{{ url_for('league_host') }}" class="{{ 'active' if ep == 'league_host' }}">My location</a>{% endif %}
+  {% if league_roles.rep %}<a href="{{ url_for('league_rep') }}" class="{{ 'active' if ep == 'league_rep' }}">Request board</a>
+  {% if not (is_admin or is_viewer) %}<a href="{{ url_for('league_rep_calendar') }}" class="{{ 'active' if ep == 'league_rep_calendar' }}">Calendar</a>{% endif %}{% endif %}
+  {% if is_admin or is_viewer %}
+  <a href="{{ url_for('league_office') }}" class="{{ 'active' if ep == 'league_office' }}">Calendar</a>
+  <a href="{{ url_for('league_office_requests') }}" class="{{ 'active' if ep == 'league_office_requests' }}">Requests{% if counts and counts.requests %} ({{ counts.requests }}){% endif %}</a>
+  <a href="{{ url_for('league_office_signups') }}" class="{{ 'active' if ep == 'league_office_signups' }}">Sign-ups{% if counts and counts.signups %} ({{ counts.signups }}){% endif %}</a>
+  <a href="{{ url_for('league_office_setup') }}" class="{{ 'active' if ep == 'league_office_setup' }}">Setup</a>
+  {% endif %}
+  {% if league_roles.values()|select|list %}
+  <form method="post" action="{{ url_for('league_signout') }}" class="inline"><button class="link" style="padding: 9px 8px">Sign out</button></form>
+  {% elif not (is_admin or is_viewer) %}
+  <a href="{{ url_for('league_signin') }}" class="{{ 'active' if ep == 'league_signin' }}">Sign in</a>
+  {% endif %}
+</nav>
+{%- endmacro %}
+
+{% macro event_item(e, s, show_loc=true, conflict=none, show_date=true) -%}
+<div class="lg-item">{{ ball(e.type) }}<div class="txt">
+  <div class="ttl">{{ e.title }}{% if e.loc == L_ALL %}<span class="tag claimed">League-wide</span>{% endif %}{% if conflict %}<span class="tag bad">Blackout conflict</span>{% endif %}</div>
+  <div class="meta">{{ e.date|day_label if show_date }}{% if e.time %}{{ " · " if show_date }}{{ e.time }}{% endif %}{% if show_loc and e.loc != L_ALL %} · {{ location_name(s, e.loc) }}{% endif %}
+    {%- if e.director %} · Run by {{ e.director }}{% endif %}</div>
+</div></div>
+{%- endmacro %}
+
+{% macro day_checks(name, picked) -%}
+<span class="checks">{% for d in L_DAYS %}<label class="checkbox"><input type="checkbox" name="{{ name }}" value="{{ d }}"{{ ' checked' if d in picked }}>{{ d }}</label>{% endfor %}</span>
+{%- endmacro %}
+
+{% macro format_checks(name, picked) -%}
+<span class="checks">{% for f in L_FORMATS %}<label class="checkbox"><input type="checkbox" name="{{ name }}" value="{{ f }}"{{ ' checked' if f in picked }}>{{ f }}</label>{% endfor %}</span>
+{%- endmacro %}

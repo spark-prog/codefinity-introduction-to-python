@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Find a team — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Players</p>
+  <h1>Find a team</h1>
+  <p class="lede">Post a listing so team captains can find you. You'll get a PIN to sign back in and read their invites.</p>
+</header>
+{{ lg.nav() }}
+<section class="card">
+  <form method="post" class="form settings">
+    {% with new=true %}{% include "_league_listing_fields.html" %}{% endwith %}
+    <button class="button">Post my listing</button>
+  </form>
+  <p class="muted">Already have a listing? <a href="{{ url_for('league_signin', role='player') }}">Sign in</a>.</p>
+</section>
+{% endblock %}

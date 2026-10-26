@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Find players — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Team captains</p>
+  <h1>Find players</h1>
+  <p class="lede">Post your team's open spots. Then browse players who are looking and send them your team info.</p>
+</header>
+{{ lg.nav() }}
+<section class="card">
+  {% if s.locations %}
+  <form method="post" class="form settings">
+    {% include "_league_team_fields.html" %}
+    <button class="button">Post my team</button>
+  </form>
+  {% else %}<p class="muted">The league office hasn't added host locations yet.</p>{% endif %}
+  <p class="muted">Already posted your team? <a href="{{ url_for('league_signin', role='captain') }}">Sign in</a>.</p>
+</section>
+{% endblock %}

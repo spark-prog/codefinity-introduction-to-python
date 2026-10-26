@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Setup — {{ s.settings.name }}{% endblock %}
+{% macro location_fields(l) %}
+  <label>Name <input name="name" required value="{{ l.name }}"></label>
+  <label>Area / neighborhood <input name="area" value="{{ l.area }}"></label>
+  <label>Address <input name="address" value="{{ l.address }}"></label>
+  <label>Phone <input name="phone" value="{{ l.phone }}"></label>
+  <label>Email <input name="email" value="{{ l.email }}"></label>
+  <label>Tables <input name="tables" value="{{ l.tables }}"></label>
+  <label class="wide">League nights <span class="muted">One per line: day, time, then the name, e.g. “Tue 7:00 PM 8-Ball Open · Division 1”</span>
+    <textarea name="nights" rows="3">{{ nights_text.get(l.id, "") if l.id else "" }}</textarea></label>
+{% endmacro %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">League office</p>
+  <h1>Setup</h1>
+  <p class="lede">The season, host locations and their league nights, division reps, and who's listed.</p>
+</header>
+{{ lg.nav(counts) }}
+{% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>.</p>{% endif %}
+{% set ro = not is_admin %}
+
+<section class="card jump-target" id="season">
+  <h2>Season</h2>
+  <p class="muted">League nights repeat every week between these dates. Leave them blank to repeat with no end.</p>
+  <form method="post" action="{{ url_for('league_office_settings') }}" class="form settings">
+    <label class="wide">Hub name <input name="name" value="{{ s.settings.name }}"></label>
+    <label>Season starts <input type="date" name="season_start" value="{{ s.settings.season_start }}"></label>
+    <label>Season ends <input type="date" name="season_end" value="{{ s.settings.season_end }}"></label>
+    <button class="button"{{ ' disabled' if ro }}>Save</button>
+  </form>
+</section>
+
+<section class="card jump-target" id="google">
+  <h2>Google Calendar</h2>
+  {% if gcal %}
+  <p class="muted">The calendar syncs both ways with the league's Google Calendar every few minutes and soon after any change here.
+    Events, league nights and blackouts go out to Google. Events added in Google come in as “From Google Calendar”
+    (at a host location when the Google event's location names one), and changes to an event's title, date, time or notes
+    made in Google come back. League nights and blackouts are owned here: changes to them in Google are put back,
+    except moving or cancelling a single week of a league night.</p>
+  <ul class="facts">
+    <li><span class="k">Last sync</span><span class="v">{{ gcal.last_sync.replace("T", " ") if gcal.last_sync else "Not yet" }}</span></li>
+    <li><span class="k">Waiting to send</span><span class="v">{{ pending }} change{{ "s" if pending != 1 }}{% if gcal.deleted %}, {{ gcal.deleted|length }} to remove{% endif %}</span></li>
+    <li><span class="k">Time zone</span><span class="v">{{ tz }}</span></li>
+  </ul>
+  {% if gcal.error %}<p class="banner danger">The last sync failed: {{ gcal.error }}</p>{% endif %}
+  {% if is_admin %}<form method="post" action="{{ url_for('league_office_sync') }}" style="margin-top: 12px"><button class="button small">Sync now</button></form>{% endif %}
+  {% else %}
+  <p class="muted">Not connected. To sync the calendar both ways with the league's Google Calendar, set
+    <code>GOOGLE_CALENDAR_ID</code> and <code>GOOGLE_SERVICE_ACCOUNT_FILE</code> (see the README), then restart.</p>
+  {% endif %}
+  <p class="muted" style="margin-top: 16px">Subscribe link for the whole league schedule (reps and the office can add it to their own calendars; each host has its own link on its page):</p>
+  <p class="contact">{{ feed }}</p>
+</section>
+
+<section class="card jump-target" id="locations">
+  <h2>Host locations</h2>
+  <p class="muted">Each location signs in with its host PIN to see its schedule, block dates, request events and keep its page current (hours, specials, menu, rates).</p>
+  {% if s.locations %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Location</th><th>League nights</th><th>Host PIN</th><th></th></tr></thead>
+    {% for l in s.locations %}
+    <tr><td><b>{{ l.name }}</b><div class="muted">{{ [l.area, l.address]|select|join(" · ") }}</div></td>
+      <td>{% for n in l.nights %}<div>{{ L_DAYS[n.dow] }} {{ n.time }} · {{ n.label }}</div>{% else %}<span class="muted">None</span>{% endfor %}</td>
+      <td class="nowrap">{% if is_admin %}<b>{{ l.pin }}</b>{% else %}••••••{% endif %}</td>
+      <td class="nowrap">
+        <a class="button small secondary" href="{{ url_for('league_location', loc_id=l.id) }}">Page</a>
+        {% if is_admin %}<a class="button small secondary" href="{{ url_for('league_office_setup', edit=l.id) }}#edit">Edit</a>
+        <form method="post" action="{{ url_for('league_office_pin', kind='locations', row_id=l.id) }}" class="inline" onsubmit="return confirm('Give {{ l.name }} a new PIN? The old one stops working.')"><button class="button small secondary">New PIN</button></form>{% endif %}
+      </td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% set editing = s.locations|selectattr("id", "equalto", edit)|first %}
+  {% if is_admin %}
+  {% if editing %}
+  <h3 id="edit" class="jump-target" style="margin-top: 32px">Edit {{ editing.name }}</h3>
+  <form method="post" action="{{ url_for('league_office_location', loc_id=editing.id) }}" class="form settings">
+    {{ location_fields(editing) }}
+    <button class="button">Save location</button>
+  </form>
+  <form method="post" action="{{ url_for('league_office_location_delete', loc_id=editing.id) }}" class="reset-row">
+    <span>Delete {{ editing.name }} with its events, blackouts, requests, sign-ups and teams.</span>
+    <input name="confirm" placeholder="Type DELETE" autocomplete="off"><button class="button danger small">Delete</button>
+  </form>
+  {% else %}
+  <h3 style="margin-top: 32px">Add a location</h3>
+  <form method="post" action="{{ url_for('league_office_location') }}" class="form settings">
+    {{ location_fields({"id": "", "name": "", "area": "", "address": "", "phone": "", "email": "", "tables": ""}) }}
+    <button class="button">Add location</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="card jump-target" id="reps">
+  <h2>Division reps</h2>
+  <p class="muted">Reps sign in with their PIN to claim host requests from the request board.</p>
+  {% if s.reps %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Rep</th><th>Division</th><th>PIN</th><th></th></tr></thead>
+    {% for r in s.reps %}
+    <tr><td><b>{{ r.name }}</b></td><td>{{ r.division or "—" }}</td><td>{% if is_admin %}<b>{{ r.pin }}</b>{% else %}••••••{% endif %}</td>
+      <td class="nowrap">{% if is_admin %}
+        <form method="post" action="{{ url_for('league_office_pin', kind='reps', row_id=r.id) }}" class="inline"><button class="button small secondary">New PIN</button></form>
+        <form method="post" action="{{ url_for('league_office_rep_delete', rep_id=r.id) }}" class="inline" onsubmit="return confirm('Remove {{ r.name }}? Requests they claimed go back on the board.')"><button class="button small danger-outline">Remove</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  {% if is_admin %}
+  <form method="post" action="{{ url_for('league_office_rep') }}" class="form settings" style="margin-top: 24px">
+    <label>Name <input name="name" required placeholder="Dana M."></label>
+    <label>Division <input name="division" placeholder="Division 2"></label>
+    <button class="button">Add rep</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card jump-target" id="blackouts">
+  <h2>Upcoming blackout dates</h2>
+  <p class="muted">Hosts manage these from their own sign-in; new events can't be scheduled on them.</p>
+  {% if blackouts %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>Location</th><th>Days</th><th>Reason</th></tr></thead>
+    {% for b in blackouts %}<tr><td>{{ location_name(s, b.loc) }}</td><td class="nowrap">{{ b.start|day_label }}{% if b.end != b.start %} – {{ b.end|day_label }}{% endif %}</td><td>{{ b.reason }}</td></tr>{% endfor %}
+  </table></div>
+  {% else %}<p class="muted">None.</p>{% endif %}
+</section>
+
+<section class="card jump-target" id="people">
+  <h2>Player listings and teams</h2>
+  <p class="muted">Remove a listing that shouldn't be there, or give a player or captain a new PIN when they forget theirs.</p>
+  <h3>Players looking ({{ s.players|length }})</h3>
+  {% if s.players %}
+  <div class="table-wrap"><table class="grid small">
+    <thead><tr><th>Player</th><th>Contact</th><th>Shown</th><th></th></tr></thead>
+    {% for p in s.players %}
+    <tr><td>{{ p.first }} {{ p.last }}<div class="muted">{{ [p.area, p.level]|select|join(" · ") }}</div></td><td>{{ p.contact }}</td><td>{{ "Yes" if p.visible else "Hidden" }}</td>
+      <td class="nowrap">{% if is_admin %}
+        <form method="post" action="{{ url_for('league_office_pin', kind='players', row_id=p.id) }}" class="inline"><button class="button small secondary">New PIN</button></form>
+        <form method="post" action="{{ url_for('league_office_remove', kind='players', row_id=p.id) }}" class="inline" onsubmit="return confirm('Remove this listing?')"><button class="button small danger-outline">Remove</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+  <h3 style="margin-top: 24px">Teams recruiting ({{ s.teams|length }})</h3>
+  {% if s.teams %}
+  <div class="table-wrap"><table class="grid small">
+    <thead><tr><th>Team</th><th>Plays</th><th>Captain</th><th>Open</th><th></th></tr></thead>
+    {% for t in s.teams %}
+    <tr><td>{{ t.name }}</td><td>{{ location_name(s, t.loc) }} · {{ t.night }} · {{ t.format }}</td><td>{{ t.captain }} · {{ t.contact }}</td><td>{{ t.spots }}</td>
+      <td class="nowrap">{% if is_admin %}
+        <form method="post" action="{{ url_for('league_office_pin', kind='teams', row_id=t.id) }}" class="inline"><button class="button small secondary">New PIN</button></form>
+        <form method="post" action="{{ url_for('league_office_remove', kind='teams', row_id=t.id) }}" class="inline" onsubmit="return confirm('Remove this team?')"><button class="button small danger-outline">Remove</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+</section>
+{% endblock %}

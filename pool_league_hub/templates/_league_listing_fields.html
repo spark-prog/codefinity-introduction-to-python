@@ -1,0 +1,15 @@
+{# A player's "looking for a team" listing; `player` is the listing (or what was typed), `new` for a first listing. #}
+{% import "_league.html" as lg with context %}
+<label>First name <input name="first" required value="{{ player.first }}"></label>
+<label>Last initial <input name="last" maxlength="3" value="{{ player.last }}"></label>
+<label>Area <span class="muted">Neighborhood or side of town</span><input name="area" value="{{ player.area }}"></label>
+<label>Level <select name="level">{% for x in L_LEVELS %}<option{{ ' selected' if player.level == x }}>{{ x }}</option>{% endfor %}</select></label>
+<label class="wide">Phone or email <span class="muted">Only you and the league office see it{{ "; you sign in with it" if new }}</span>
+  <input name="contact" {{ 'required' if new }} value="{{ player.contact if new else '' }}" placeholder="{{ '' if new else 'Leave blank to keep the one on file' }}"></label>
+<label class="wide">Formats {{ lg.format_checks("formats", player.formats) }}</label>
+<label class="wide">Nights {{ lg.day_checks("nights", player.nights) }}</label>
+<label class="wide">Preferred locations
+  <span class="checks">{% for l in s.locations %}<label class="checkbox"><input type="checkbox" name="locs" value="{{ l.id }}"{{ ' checked' if l.id in player.locs }}>{{ l.name }}</label>{% endfor %}</span></label>
+<label class="wide">About you <span class="muted">Experience, skill level, what you're looking for</span><textarea name="about" rows="3">{{ player.about }}</textarea></label>
+<label class="checkbox wide"><input type="checkbox" name="visible" value="1"{{ ' checked' if player.visible }}> Show my listing to team captains</label>
+<p class="muted wide">Captains see your first name, last initial, area, level and preferences. They never see your phone or email. When a team sends you its info, you decide whether to reach out.</p>

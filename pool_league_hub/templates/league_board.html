@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Request board — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">{{ "League office" if office else "Division rep" }}</p>
+  <h1>Request board</h1>
+  <p class="lede">Host locations post the events they want.
+    {% if office %}Division reps claim them; then you put them on the calendar.
+    {% else %}Signed in as {{ rep.name }}{% if rep.division %} ({{ rep.division }}){% endif %}. Claim an event to run it; the league office confirms the date.{% endif %}</p>
+</header>
+{{ lg.nav(counts) }}
+{% if office and is_viewer %}<p class="banner">You're signed in <b>view-only</b>.</p>{% endif %}
+{{ lg.legend(L_REQUEST_TYPES) }}
+
+{% for status, label, rows in groups %}
+<section>
+  <div class="section-head"><h2>{{ label }} · {{ rows|length }}</h2></div>
+  {% if rows %}
+  <div class="lg-grid">
+    {% for x in rows %}{% set r = x.r %}
+    <div class="card">
+      <div class="lg-item">{{ lg.ball(r.type) }}<div class="txt"><h3>{{ lg.type_label(r.type) }}</h3>
+        <div class="meta">{{ x.loc.name if x.loc else "A closed location" }}{% if x.loc and x.loc.area %} · {{ x.loc.area }}{% endif %}</div></div></div>
+      <ul class="facts">
+        <li><span class="k">{{ "Date" if status == "scheduled" else "Preferred" }}</span><span class="v">{{ r.date|day_label(true) }}</span></li>
+        {% if r.alt and status != "scheduled" %}<li><span class="k">Backup</span><span class="v">{{ r.alt|day_label(true) }}</span></li>{% endif %}
+        <li><span class="k">Status</span><span class="v"><span class="tag {{ r.status }}" style="margin: 0">{{ r.status }}</span>{% if x.rep %} {{ x.rep.name }}{% endif %}</span></li>
+      </ul>
+      {% if r.notes %}<p style="margin: 0">“{{ r.notes }}”</p>{% endif %}
+      {% if x.blackout and status != "scheduled" %}<p class="banner danger" style="margin: 0">The host has since blacked out this date.</p>{% endif %}
+      <div class="foot">
+        {% if not office and status == "open" %}
+        <form method="post" action="{{ url_for('league_rep_claim', req_id=r.id) }}"><button class="button small">Claim this event</button></form>
+        {% elif not office and status == "claimed" and r.rep == rep.id %}
+        <form method="post" action="{{ url_for('league_rep_release', req_id=r.id) }}"><button class="button small secondary">Release</button></form>
+        {% endif %}
+        {% if office and is_admin and status == "claimed" %}
+        <a class="button small" href="{{ url_for('league_office', schedule=r.id, month=r.date[:7], day=r.date) }}#day">Add to calendar</a>
+        {% endif %}
+        {% if office and is_admin and status != "scheduled" %}
+        <form method="post" action="{{ url_for('league_office_decline', req_id=r.id) }}" onsubmit="return confirm('Decline and remove this request?')"><button class="button small danger-outline">Decline</button></form>
+        {% endif %}
+        <span class="muted" style="margin-left: auto">Requested {{ r.created|day_label }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">Nothing here right now.</p></div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

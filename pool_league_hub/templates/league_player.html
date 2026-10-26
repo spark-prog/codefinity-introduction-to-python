@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}My listing — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Player</p>
+  <h1>{{ player.first }} {{ player.last }}</h1>
+  <p class="lede">{{ "Your listing is showing to team captains." if player.visible else "Your listing is hidden from team captains." }}</p>
+</header>
+{{ lg.nav() }}
+
+<section id="inbox" class="jump-target">
+  <div class="section-head"><h2>My inbox</h2><span class="muted">Teams that want you. Reach out to the captain if you're interested; your own info stays private.</span></div>
+  {% if invites %}
+  <div class="stack">
+    {% for i in invites %}{% set t = teams[i.team] %}
+    <div class="card{{ ' msg-new' if i.status == 'new' }}">
+      <div class="section-head"><h3 style="margin: 0">{{ t.name }} invited you to join</h3><span class="muted">{{ i.created|day_label }}</span></div>
+      <p class="muted">{{ location_name(s, t.loc) }} · {{ t.night }}s · {{ t.format }} · {{ t.spots }} spot{{ "s" if t.spots != 1 }} open</p>
+      <p>{{ i.message }}</p>
+      {% if i.status == "declined" %}<p class="muted">You passed on this one.</p>
+      {% else %}
+      <p class="contact">{{ t.captain }} · {{ t.contact }}</p>
+      <div class="button-row">
+        {% if i.status == "new" %}<form method="post" action="{{ url_for('league_player_invite', invite_id=i.id) }}"><input type="hidden" name="status" value="seen"><button class="button small secondary">Mark as read</button></form>{% endif %}
+        <form method="post" action="{{ url_for('league_player_invite', invite_id=i.id) }}"><input type="hidden" name="status" value="declined"><button class="button small secondary">Not interested</button></form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">No invites yet. {{ "Captains can see your listing." if player.visible else "Turn on “Show my listing” below so captains can find you." }}</p></div>
+  {% endif %}
+</section>
+
+<section class="card" id="listing">
+  <h2>My listing</h2>
+  <form method="post" class="form settings">
+    {% with new=false %}{% include "_league_listing_fields.html" %}{% endwith %}
+    <button class="button">Save listing</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Teams with open spots</h2>
+  <p class="muted">A captain's contact is shared only when the team sends you an invite.</p>
+  {% if open_teams %}<ul>{% for t in open_teams %}<li><b>{{ t.name }}</b> · {{ location_name(s, t.loc) }} · {{ t.night }}s · {{ t.format }} · {{ t.spots }} open</li>{% endfor %}</ul>
+  {% else %}<p class="muted">None right now.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Done looking?</h2>
+  <p class="muted">Hide your listing above, or delete it with its invites.</p>
+  <form method="post" action="{{ url_for('league_player_delete') }}" onsubmit="return confirm('Delete your listing and its invites?')"><button class="button danger-outline small">Delete my listing</button></form>
+</section>
+{% endblock %}

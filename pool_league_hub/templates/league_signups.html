@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_league.html" as lg with context %}
+{% block title %}Player sign-ups — {{ s.settings.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">League office</p>
+  <h1>Player sign-ups</h1>
+  <p class="lede">Players who asked to play out of a location. Only the league office sees their contact info.</p>
+</header>
+{{ lg.nav(counts) }}
+{% if signups %}
+<div class="stack">
+  {% for x in signups %}{% set teams = open_teams(s, x.loc) %}
+  <div class="card{{ ' msg-new' if x.status == 'new' }}">
+    <div class="section-head"><h3 style="margin: 0">{{ x.name }} wants to play out of {{ location_name(s, x.loc) }}</h3><span class="muted">{{ x.created|day_label }}</span></div>
+    <p class="muted">{{ x.formats|join(", ") or "Any format" }} · Nights: {{ x.nights|join(", ") or "any" }}</p>
+    {% if x.note %}<p>{{ x.note }}</p>{% endif %}
+    <p class="contact">{{ x.contact }}</p>
+    {% if teams %}<p><b>Teams there with open spots:</b> {% for t in teams %}{{ t.name }} ({{ t.night }}, {{ t.spots }} open, {{ t.captain }} · {{ t.contact }}){{ " · " if not loop.last }}{% endfor %}</p>
+    {% else %}<p class="muted">No teams at this location are looking for players right now.</p>{% endif %}
+    {% if is_admin %}
+    <div class="button-row">
+      {% if x.status == "new" %}<form method="post" action="{{ url_for('league_office_connected', signup_id=x.id) }}"><button class="button small">Mark connected</button></form>
+      {% else %}<span class="tag good" style="margin: 0">Connected</span>{% endif %}
+      <form method="post" action="{{ url_for('league_office_remove', kind='signups', row_id=x.id) }}" onsubmit="return confirm('Delete this sign-up?')"><button class="button small danger-outline">Delete</button></form>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><p class="muted" style="margin: 0">No sign-ups yet. They come from “Play out of here” on each location's page.</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}League office — Pool League Hub{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">League office</p>
+  <h1>Sign in</h1>
+  <p class="lede">The master calendar, host requests, player sign-ups and setup.</p>
+</header>
+<form method="post" class="card form narrow">
+  <label>Office password <input name="password" type="password" required autofocus></label>
+  <button class="button block">Sign in</button>
+  {% if default_password %}<p class="muted">Using the default password "office". Set OFFICE_PASSWORD before going live.</p>{% endif %}
+</form>
+{% endblock %}

@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 from .core import ALL, DAYS, FROM_GOOGLE, TYPES, League, mark, parse_clock
 
 MARKER = "Pool League Hub"  # the line that ends the description the hub writes
-EVENT_HOURS = 3
+EVENT_HOURS = 5  # the hub has only a start time; Google needs an end
 IMPORT_DAYS_BACK = 30  # events added in Google before this are history, not imported
 RRULE_DAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 

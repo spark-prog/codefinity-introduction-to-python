@@ -90,7 +90,7 @@ Each type is marked with a pool-ball color everywhere it appears.
 - **In from Google**: new events become "From Google Calendar" events, at a host location when the Google event's location or title names exactly one host, otherwise league-wide. Changes to an event's title, date, time or notes come back. Deleted in Google → deleted in the hub, and a request it came from goes back to its rep. Events more than 30 days old aren't imported.
 - **Conflicts**: if an event changed in both places since the last sync, the hub wins. League nights and blackouts changed or deleted in Google are put back, except a single week of a league night moved or cancelled there (a holiday), which stays as Google has it.
 - **When**: every few minutes, and within seconds of any change in the hub. Setup shows the last sync, what's waiting, and any error, with **Sync now**.
-- **How it signs in**: a Google service account that the league calendar is shared with ("Make changes to events"). Event times use the league's time zone (default America/New_York) and last 3 hours in Google unless edited there.
+- **How it signs in**: a Google service account that the league calendar is shared with ("Make changes to events"). Event times use the league's time zone (default America/New_York). The hub has only start times, so timed events last 5 hours in Google and in the subscribe links (a 1:00 PM tournament shows as 1:00–6:00 PM); an end time changed in Google isn't kept.
 
 ## Privacy rules
 - Captains never see a player's phone or email. A player sees a captain's contact only on an invite to them. The player decides whether to reach out.
@@ -110,7 +110,7 @@ The sync is tested against a fake Google Calendar that behaves like the real API
 - **Team recruiting import**: the prototype's teams came from a Google Form; a CSV import for those responses.
 - **Skipping a single league night** in the hub itself (it can be done in Google Calendar today) instead of only flagging the blackout conflict.
 - **Per-host Google calendars**: today each host subscribes to a read-only link; the sync could also write each host's schedule into a separate Google calendar shared with that host.
-- **Event end times**: events are 3 hours long in Google; an end time field in the hub.
+- **Event end times**: events are 5 hours long in Google; an end time field in the hub.
 - **Divisions as data** (reps and league nights name a division as text today).
 - **Links to Control Table**: an event could link to its Control Table tournament page for registration, without the two apps sharing code.
 - **Deployment** (Dockerfile and hosting guide, like Control Table's DEPLOY.md).

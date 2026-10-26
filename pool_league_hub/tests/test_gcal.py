@@ -113,7 +113,7 @@ def test_hub_sends_events_nights_and_blackouts(app, office, league, sync, google
     assert report["error"] == "" and report["sent"] == 4
     [tourney] = [i for i in google.live("event") if i["summary"] == "9-Ball Open"]
     assert tourney["start"] == {"dateTime": "2026-11-21T13:00:00", "timeZone": "America/New_York", "date": None}
-    assert tourney["end"]["dateTime"] == "2026-11-21T16:00:00"
+    assert tourney["end"]["dateTime"] == "2026-11-21T18:00:00"  # 5 hours
     assert tourney["location"] == "Corner Pocket, 1420 Main St"
     assert "$100 added" in tourney["description"] and "Run by Marcus T." in tourney["description"]
     assert tourney["extendedProperties"]["private"] == {"hub": "event", "hub_id": ev["id"]}
@@ -298,6 +298,7 @@ def test_feeds_for_hosts_and_the_league(app, office, league):
     text = cal.data.decode()
     assert "SUMMARY:9-Ball Open\\, Fall" in text and "Captains' meeting" in text and "Eight Ball" not in text
     assert "DTSTART;TZID=America/New_York:20261121T130000" in text
+    assert "DTEND;TZID=America/New_York:20261121T180000" in text
     assert "RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20261215T235959Z" in text
     assert "DTSTART;VALUE=DATE:20261126" in text and "DTEND;VALUE=DATE:20261128" in text
     assert all(len(line.encode()) <= 75 for line in text.split("\r\n"))

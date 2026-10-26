@@ -340,10 +340,18 @@ def create_app(data_dir: str | None = None) -> Flask:
         return wrapper
 
     # Wrong-guess limits: a 4-digit PIN or the password can't be guessed by trying over and over.
-    pin_by_ip = Throttle(limit=10, window=15 * 60)
+    # Players at the venue share one Wi-Fi address, so per-address limits are generous and the
+    # tight limits are per device (a random id kept in the signed session cookie).
+    pin_by_ip = Throttle(limit=60, window=15 * 60)
     pin_by_team = Throttle(limit=20, window=15 * 60)
     pin_by_device_team = Throttle(limit=10, window=15 * 60)  # who guessed wrong for which team
-    login_by_ip = Throttle(limit=5, window=15 * 60)
+    login_by_ip = Throttle(limit=30, window=15 * 60)
+    login_by_device = Throttle(limit=5, window=15 * 60)
+
+    def device_id() -> str:
+        if "device" not in session:
+            session["device"] = secrets.token_hex(8)
+        return f"{request.remote_addr or '?'}|{session['device']}"
 
     def minutes(seconds: int) -> str:
         n = max(1, (seconds + 59) // 60)
@@ -352,10 +360,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     def check_pin(team) -> bool:
         """Sign the team in if the PIN matches; count wrong guesses."""
         ip, key = request.remote_addr or "?", f"team:{team.id}"
-        pair = f"{ip}|{team.id}"
+        pair = f"{device_id()}|{team.id}"
         # A team under attack is locked only for devices that have guessed wrong for it, so strangers
-        # can't lock the real players out of their own team.
-        wait = max(pin_by_ip.wait(ip), pin_by_team.wait(key) if pin_by_device_team.failures(pair) else 0)
+        # (or a typo on the venue Wi-Fi) can't lock the real players out of their own team.
+        wait = max(pin_by_ip.wait(ip), pin_by_device_team.wait(pair),
+                   pin_by_team.wait(key) if pin_by_device_team.failures(pair) else 0)
         if wait:
             flash(f"Too many wrong PINs. Try again in {minutes(wait)}, or ask the director.", "error")
             return False
@@ -537,13 +546,14 @@ def create_app(data_dir: str | None = None) -> Flask:
     def admin_login():
         if request.method == "POST":
             ip, password = request.remote_addr or "?", request.form.get("password", "")
-            wait = login_by_ip.wait(ip)
+            device = device_id()
+            wait = max(login_by_ip.wait(ip), login_by_device.wait(device))
             is_director = secrets.compare_digest(password, admin_password)
             is_viewer = bool(viewer_password) and secrets.compare_digest(password, viewer_password)
             if wait:
                 flash(f"Too many wrong passwords. Try again in {minutes(wait)}.", "error")
             elif is_director or is_viewer:
-                login_by_ip.clear(ip)
+                login_by_device.clear(device)
                 session.pop("admin", None)
                 session.pop("viewer", None)
                 session["admin" if is_director else "viewer"] = True
@@ -551,6 +561,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("director"))
             else:
                 login_by_ip.fail(ip)
+                login_by_device.fail(device)
                 flash("Wrong password.", "error")
         return render_template("login.html", t=None, default_password=admin_password == "admin")
 
@@ -1000,8 +1011,18 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     # Links from before Control Table hosted several tournaments (old texts, bookmarks, the TV).
     def only_live_event():
-        live = [r["event"] for r in hub.summaries() if r["t"].status != FINISHED]
-        return live[0] if len(live) == 1 else None
+        """Where an old /board or /register link should go: the one tournament that's on now."""
+        rows = [r for r in hub.summaries() if r["t"].status != FINISHED]
+        today = datetime.now().strftime("%Y-%m-%d")
+        for pick in (
+            [r for r in rows if r["t"].status == RUNNING],                   # under way
+            [r for r in rows if r["t"].settings.date == today],              # on today
+            [r for r in rows if hub.is_migrated(r["event"].id)],             # the original tournament
+            rows,                                                            # the only one there is
+        ):
+            if len(pick) == 1:
+                return pick[0]["event"]
+        return None
 
     @app.get("/board")
     @app.get("/register")
@@ -1016,6 +1037,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.get("/team/<team_id>/roster")
     def legacy_team(team_id):
         ev = hub.find_team(team_id) or abort(404)
+        if ev.kind != CHIP:  # a bracket entry has its own page
+            return redirect(f"/t/{ev.id}/entry/{team_id}")
         return redirect(f"/t/{ev.id}{request.path}")
 
     # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket

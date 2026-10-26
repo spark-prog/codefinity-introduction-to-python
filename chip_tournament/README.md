@@ -220,7 +220,7 @@ To run another tournament, create it from **All tournaments** (`/admin`). To sta
 ## Security
 
 - **Phone numbers** appear only on director pages. A team editing its roster sees only the last 4 digits of the numbers on file.
-- **Wrong guesses are limited.** After 5 wrong director passwords from one device, that device waits 15 minutes. Team PINs allow 10 wrong tries per device and 20 per team in 15 minutes; once a team is locked, only devices that guessed wrong for it are blocked, so strangers can't lock the real players out.
+- **Wrong guesses are limited.** After 5 wrong director passwords from one device, that device waits 15 minutes. Team PINs allow 10 wrong tries per device and 20 per team in 15 minutes; once a team is locked, only devices that guessed wrong for it are blocked, so strangers can't lock the real players out. Because everyone on the venue Wi-Fi shares one internet address, the per-address limits are much higher (60 PIN tries and 30 director passwords in 15 minutes), so one person's typos don't lock out everyone else.
 - **View-only login (optional).** Set `VIEWER_PASSWORD` to give someone (e.g. the league office) a director login that can look but not change anything. It hides phone numbers, team PINs and text messages.
 - **On the internet** (`CHIPS_PRODUCTION=1`), the app refuses to start without a strong director password, and login cookies are only sent over HTTPS.
 

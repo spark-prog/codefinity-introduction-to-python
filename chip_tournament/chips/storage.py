@@ -51,7 +51,12 @@ class Store:
             yield t
             if before is not None:
                 history = self._history()
-                history.append({"label": label, "at": datetime.now().isoformat(timespec="seconds"), "state": before})
+                # Every step gets a number that only goes up (even when old steps are dropped), so a
+                # stale Undo button can always be told apart from the latest action.
+                seq = max([h.get("seq", 0) for h in history] + [self._last_seq()]) + 1
+                self._write(self.dir / "undo_seq.json", seq)
+                history.append({"label": label, "at": datetime.now().isoformat(timespec="seconds"), "state": before,
+                                "seq": seq})
                 self._write(self.history_path, history[-HISTORY_LIMIT:])
             self._write(self.path, t.to_dict())
 
@@ -60,9 +65,19 @@ class Store:
         with self.lock:
             self._write(self.path, t.to_dict())
 
+    def _last_seq(self) -> int:
+        path = self.dir / "undo_seq.json"
+        try:
+            return int(json.loads(path.read_text())) if path.exists() else 0
+        except (ValueError, TypeError):
+            return 0
+
     def undo_depth(self) -> int:
-        """How many steps can be undone; changes with every action, so a stale Undo button can be spotted."""
-        return len(self._history())
+        """The number of the latest undoable step; changes with every action, so a stale Undo button can be spotted."""
+        history = self._history()
+        if not history:
+            return 0
+        return history[-1].get("seq") or len(history)
 
     def last_undo_label(self) -> str | None:
         history = self._history()

@@ -377,6 +377,23 @@ class BracketTournament:
                 self._text(entry, body)
         return len(self.outbox) - before
 
+    def text_pins(self) -> tuple[int, int]:
+        """Resend each entry its own PIN and page link (opted-in players only).
+
+        Returns (texts queued, entries with nobody signed up for texts)."""
+        before, unreachable = len(self.outbox), 0
+        for entry in self.entries.values():
+            if entry.status not in (REGISTERED, WAITLISTED, ACTIVE):
+                continue
+            if not entry.phones:
+                unreachable += 1
+                continue
+            link = self.entry_link(entry)
+            self._text(entry, f"{entry.name}, your PIN for {self.settings.name} is {entry.pin}."
+                       + (f" Your page: {link}" if link else "") + " Reply STOP to opt out.")
+        self._say(f"Resent PINs: {len(self.outbox) - before} text(s).")
+        return len(self.outbox) - before, unreachable
+
     # ------------------------------------------------------------ registration
 
     def _check_players(self, players: list[Player]) -> None:

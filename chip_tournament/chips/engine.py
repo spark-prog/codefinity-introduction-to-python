@@ -1625,6 +1625,23 @@ class Tournament:
             self._text_team(team, body)
         return len(self.outbox) - before
 
+    def text_pins(self) -> tuple[int, int]:
+        """Resend each team its own PIN and team-page link (opted-in players only).
+
+        Returns (texts queued, teams with nobody signed up for texts)."""
+        before, unreachable = len(self.outbox), 0
+        for team in self.teams.values():
+            if team.status not in (REGISTERED, WAITLISTED, ACTIVE):
+                continue
+            if not team.phones:
+                unreachable += 1
+                continue
+            link = self.team_link(team)
+            self._text_team(team, f"{team.name}, your team PIN for {self.settings.name} is {team.pin}."
+                            + (f" Team page: {link}" if link else "") + " Reply STOP to opt out.")
+        self._say(f"Resent team PINs: {len(self.outbox) - before} text(s).")
+        return len(self.outbox) - before, unreachable
+
     # ----------------------------------------------------------- serialization
 
     def to_dict(self) -> dict:

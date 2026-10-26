@@ -904,6 +904,16 @@ def create_app(data_dir: str | None = None) -> Flask:
             act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
         return redirect(url_for("admin") + "#texts")
 
+    @app.post("/t/<event>/admin/text-pins")
+    @admin_required
+    def admin_text_pins():
+        result = act("Resend PINs", lambda t: t.text_pins())
+        if result is not None:
+            sent, unreachable = result
+            flash(f"Queued {sent} PIN text(s)."
+                  + (f" {unreachable} team(s) have nobody signed up for texts." if unreachable else ""), "ok")
+        return redirect(url_for("admin") + "#texts")
+
     @app.post("/t/<event>/admin/undo")
     @admin_required
     def admin_undo():
@@ -1044,7 +1054,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket
     # tournament gets its own version (or a 404) from bracket_web.
     shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
-              "admin_broadcast"}
+              "admin_broadcast", "admin_text_pins"}
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,

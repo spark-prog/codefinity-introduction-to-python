@@ -719,3 +719,15 @@ body.default-bg {
 .save-contact { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 16px; margin: 12px 0;
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: rgba(var(--bg-rgb), .6); }
 .save-contact p { margin: 0; flex: 1 1 240px; font-size: var(--fs-small); text-shadow: none; }
+
+/* ---------- Phone menu: everything fits on one row, Register always visible ---------- */
+.show-sm { display: none; }
+@media (max-width: 560px) {
+  .show-sm { display: inline; }
+  .nav .nav-home { display: none; }  /* the house icon next to the event name goes home */
+  .nav a, .nav .link, .nav.signed-in a, .nav.signed-in .link { padding: 8px 5px; letter-spacing: .06em; }
+  .nav a.nav-cta { padding: 7px 9px; }
+  /* Signed in: Log out becomes an icon at the end of the top row, so the menu keeps one row */
+  .logout-icon { margin-left: auto; }
+  .logout-icon .link { display: inline-flex; padding: 8px; color: var(--ink-2); }
+}

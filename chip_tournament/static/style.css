@@ -464,11 +464,7 @@ mark { background: var(--accent); color: var(--on-accent); border-radius: 3px; p
 .league-logo:hover img { opacity: .85; }
 .brand { min-width: 0; }
 .brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-icon {
-  width: 40px; height: 40px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  color: var(--accent); border: 1.5px solid rgba(var(--accent-rgb), .55); transition: background .15s, color .15s;
-}
-.home-icon:hover { background: var(--accent); color: var(--on-accent); }
+.nav a.nav-title { max-width: 24em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-name { color: var(--ink); text-decoration: none; }
 .brand-name:hover { color: var(--accent-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -476,7 +472,7 @@ mark { background: var(--accent); color: var(--on-accent); border-radius: 3px; p
   .brand-row { gap: 12px; width: 100%; }
   .league-logo { padding-right: 12px; }
   .league-logo img { height: 40px; }
-  .home-icon { width: 36px; height: 36px; }
+  .nav a.nav-title { max-width: 11em; }
   .brand-name { font-size: 1.05rem; }
 }
 

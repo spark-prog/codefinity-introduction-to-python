@@ -29,7 +29,7 @@
 
 {% if t.status != SETUP %}
 <section>
-  <div class="section-head"><h2>Live</h2></div>
+  <div class="section-head"><h2>Live</h2><a href="{{ url_for('board') }}">Open the board</a></div>
   {% include "_stats.html" %}
   {% include "_tables.html" %}
 </section>

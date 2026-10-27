@@ -1,3 +1,4 @@
+import re
 import time
 
 import pytest
@@ -423,11 +424,11 @@ def test_background_photo_upload_and_reset(client):
     assert client.get("/background").mimetype == "image/jpeg"
 
 
-def test_header_has_league_logo_and_home_icon(client):
+def test_header_has_league_logo_and_no_home_icon(client):
     html = client.get("/").get_data(as_text=True)
     assert 'href="https://firstcoast.poolplayers.com/"' in html
     assert "img/apa-first-coast-logo.png" in html
-    assert 'class="home-icon"' in html and "brand-mark" not in html
+    assert 'class="home-icon"' not in html and "brand-mark" not in html
     assert client.get("/static/img/apa-first-coast-logo.png").status_code == 200
 
 
@@ -768,8 +769,16 @@ def test_save_contact_note_and_card(tmp_path, monkeypatch, client):
     assert "FN:First Coast APA Tournaments" in body and "TEL;TYPE=CELL:+19049135680" in body
 
 
-def test_house_icon_goes_to_all_events(client):
-    page = client.get("/").get_data(as_text=True)  # an event's home page
-    assert '<a class="home-icon" href="/" title="All events"' in page
-    assert f'<a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page
-    assert ">Home</a>" in page and "All events</a>" not in page
+def test_event_menu_order(client):
+    page = client.get("/").get_data(as_text=True)  # an event's home page, still in setup
+    nav = page[page.index('<nav class="nav'):page.index("</nav>")]
+    labels = re.findall(r">([^<>]+)</a>", nav)
+    assert labels == ["All Events", "Chip Tournament", "Rules", "Register", "TD Login"]
+    assert '<a href="/">All Events</a>' in nav
+    assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title active"' in nav
+    assert f'href="/t/{ChipEventClient.event_id}/admin"' in nav
+    assert "Board</a>" not in nav and 'class="brand-name"' not in page
+    assert "Open the board" not in page  # only once play starts
+    client.post("/admin/login", data={"password": "secret"})
+    nav = client.get("/").get_data(as_text=True).split('<nav class="nav')[1].split("</nav>")[0]
+    assert re.findall(r">([^<>]+)</a>", nav)[-1] == "Director"

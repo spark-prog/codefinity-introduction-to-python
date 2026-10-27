@@ -38,13 +38,7 @@
         <a class="league-logo" href="https://firstcoast.poolplayers.com/" target="_blank" rel="noopener"
            title="APA Pool Leagues – First Coast (opens in a new tab)">
           <img src="{{ url_for('static', filename='img/apa-first-coast-logo.png') }}" alt="APA Pool Leagues – First Coast" width="83" height="50"></a>
-        <div class="brand">
-          <a class="home-icon" href="{{ url_for('index') }}" title="All events" aria-label="All events">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>
-          </a>
-          <a class="brand-name" href="{{ url_for('home') if event else url_for('index') }}">{{ t.settings.name if t and event else "Control Table" }}</a>
-        </div>
+        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('index') }}">Control Table</a></div>{% endif %}
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline show-sm logout-icon">
           <button class="link" title="Log out" aria-label="Log out">
@@ -55,11 +49,11 @@
       </div>
       <nav class="nav{% if is_admin or is_viewer %} signed-in{% endif %}">
         {% if event %}
-        <a href="{{ url_for('home') }}" class="nav-home {{ 'active' if ep in ('home', 'b_entry') }}">Home</a>
-        <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">Board</a>
+        <a href="{{ url_for('index') }}">All Events</a>
+        <a href="{{ url_for('home') }}" class="nav-home nav-title {{ 'active' if ep in ('home', 'b_entry', 'board') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
-        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">Director</a>
         {% if t and t.status == SETUP %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
+        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{{ "Director" if is_admin or is_viewer else "TD Login" }}</a>
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>

@@ -68,7 +68,7 @@ def test_each_tournament_has_its_own_data(app, admin):
     assert b"Cy" in client.get(f"/t/{b.id}/").data
     assert (b.dir / "texts.log").exists() and not (a.dir / "texts.log").exists()
     # each page links stay inside its tournament
-    assert f'href="/t/{b.id}/board"'.encode() in client.get(f"/t/{b.id}/").data
+    assert f'href="/t/{b.id}/rules"'.encode() in client.get(f"/t/{b.id}/").data
 
 
 def test_pages_belong_to_their_tournament_type(app, admin):

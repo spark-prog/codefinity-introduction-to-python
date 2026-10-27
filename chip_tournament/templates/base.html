@@ -113,6 +113,22 @@
   }
   tick(); setInterval(tick, 1000);
 })();
+(function () {
+  // Live pages reload on a timer, but wait while a form field is in use or has something typed in it.
+  var meta = document.querySelector('meta[name="auto-refresh"]');
+  if (!meta) return;
+  var secs = +meta.content || 15, idle = 0;
+  function busy() {
+    var a = document.activeElement;
+    if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return true;
+    return Array.prototype.some.call(document.querySelectorAll("input:not([type=hidden]), textarea"),
+                                     function (el) { return el.value && el.type !== "checkbox" && el.type !== "radio"; });
+  }
+  setInterval(function () {
+    idle = busy() ? 0 : idle + 1;
+    if (idle >= secs) location.reload();
+  }, 1000);
+})();
 </script>
 </body>
 </html>

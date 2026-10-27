@@ -1,0 +1,2 @@
+{# Keep a live page fresh, but never while someone is picking a team or typing a PIN. #}
+{% set secs = secs or 15 %}<meta name="auto-refresh" content="{{ secs }}"><noscript><meta http-equiv="refresh" content="{{ secs }}"></noscript>

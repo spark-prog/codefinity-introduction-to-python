@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block head %}{% if match and match.status == CALLED %}<meta http-equiv="refresh" content="20">{% endif %}{% endblock %}
+{% block head %}{% if match and match.status == CALLED %}{% set secs = 20 %}{% include "_refresh.html" %}{% endif %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <p class="eyebrow">{{ team.status.replace("_", " ") }} · combined skill {{ team.combined_skill }}</p>

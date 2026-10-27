@@ -793,7 +793,11 @@ def test_players_reach_their_scoring_page_from_home_and_board(client):
         page = player.get(f"/t/{ChipEventClient.event_id}{path}").get_data(as_text=True)
         assert "Keep score:" in page and f'href="/t/{ChipEventClient.event_id}/team/{sharks.id}"' in page
     home = player.get(f"/t/{ChipEventClient.event_id}/").get_data(as_text=True)
-    assert "Find your team to keep score" in home and f'<option value="{sharks.id}">Sharks</option>' in home
+    assert "Find your team to keep score" not in home  # the picker lives on the board
+    board = player.get(f"/t/{ChipEventClient.event_id}/board").get_data(as_text=True)
+    assert "Find your team to keep score" in board and f'<option value="{sharks.id}">Sharks</option>' in board
+    assert '<meta name="auto-refresh" content="15">' in board and 'http-equiv="refresh" content="15"' in board  # noscript fallback
+    assert '<meta name="auto-refresh" content="20">' in player.get(f"/t/{ChipEventClient.event_id}/team/{sharks.id}").get_data(as_text=True)
     r = player.get(f"/t/{ChipEventClient.event_id}/find?team={sharks.id}")
     assert r.headers["Location"] == f"/t/{ChipEventClient.event_id}/team/{sharks.id}"
     assert player.get(f"/t/{ChipEventClient.event_id}/find?team=nope").headers["Location"] == f"/t/{ChipEventClient.event_id}/"

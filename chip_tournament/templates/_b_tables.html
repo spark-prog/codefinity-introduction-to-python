@@ -11,6 +11,8 @@
         <div class="vs"><span>{{ t.name_of(m.a) }}</span><b>{{ m.score_a }}</b></div>
         <div class="vs"><span>{{ t.name_of(m.b) }}</span><b>{{ m.score_b }}</b></div>
         <div class="muted">Race to {{ m.race_to }} · {{ t.match_label(m) }}</div>
+        <div class="keep-score"><span class="muted">Keep score:</span>
+          {% for x in (m.a, m.b) %}<a class="button small secondary" href="{{ url_for('b_entry', entry_id=x) }}">{{ t.name_of(x) }}</a>{% endfor %}</div>
       </div>
       {% endfor %}
     </div>

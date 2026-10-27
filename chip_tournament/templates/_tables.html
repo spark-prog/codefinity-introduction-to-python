@@ -10,6 +10,8 @@
         <div class="vs"><span>{{ t.name_of(m.team_a) }}</span><b>{{ m.score_a }}</b></div>
         <div class="vs"><span>{{ t.name_of(m.team_b) }}</span><b>{{ m.score_b }}</b></div>
         <div class="muted">Race to {{ t.settings.race_to }} · {{ m.bracket }} · match #{{ m.round }}</div>
+        <div class="keep-score"><span class="muted">Keep score:</span>
+          {% for x in (m.team_a, m.team_b) %}<a class="button small secondary" href="{{ url_for('team_page', team_id=x) }}">{{ t.name_of(x) }}</a>{% endfor %}</div>
         {% include "_match_clock.html" %}
       </div>
       {% endfor %}

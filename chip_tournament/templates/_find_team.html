@@ -1,0 +1,13 @@
+{# Players pick their team to reach its page; the team PIN unlocks scoring there. #}
+{% if teams %}
+<form method="get" action="{{ url_for('find_team') }}" class="find-team">
+  <label for="find-team" class="eyebrow">Playing? Find your team to keep score</label>
+  <div class="find-row">
+    <select id="find-team" name="team" required onchange="if (this.value) this.form.submit()">
+      <option value="">Pick your team…</option>
+      {% for x in teams|sort(attribute="name") %}<option value="{{ x.id }}">{{ x.name }}</option>{% endfor %}
+    </select>
+    <button class="button secondary">Go</button>
+  </div>
+</form>
+{% endif %}

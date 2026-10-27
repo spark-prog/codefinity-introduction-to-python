@@ -46,6 +46,12 @@
       <button class="button big">Submit: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}</button></form>
     <p class="muted">Check the score with your opponent first. Only the director can change a submitted result.</p>
     {% endif %}
+    {% if not is_entry %}
+    <form method="post" action="{{ url_for('b_entry_login', entry_id=entry.id) }}" class="form narrow pin-inline">
+      <label>Enter your PIN to keep score <input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required></label>
+      <button class="button">Keep score</button>
+    </form>
+    {% endif %}
   {% elif match %}
     <p class="lede">Next: <b>{{ t.slot_label(match, "a") }}</b> vs <b>{{ t.slot_label(match, "b") }}</b> ({{ t.match_label(match) }}). Waiting for a free table. Stay close!</p>
   {% else %}
@@ -53,7 +59,7 @@
   {% endif %}
 </section>
 
-{% if not is_entry %}
+{% if not is_entry and not (match and match.status == "called") %}
 <section class="card">
   <h3>Enter scores for your match</h3>
   <form method="post" action="{{ url_for('b_entry_login', entry_id=entry.id) }}" class="form narrow">

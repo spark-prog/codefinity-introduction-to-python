@@ -680,6 +680,14 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     # ------------------------------------------------------------------ rules
 
+    @app.get("/t/<event>/find")
+    def find_team():
+        """"Find your team": open the picked team's page, where its PIN unlocks scoring."""
+        team_id, t = request.args.get("team", ""), current_t()
+        if g.event.kind == CHIP:
+            return redirect(url_for("team_page", team_id=team_id) if team_id in t.teams else url_for("home"))
+        return redirect(url_for("b_entry", entry_id=team_id) if team_id in t.entries else url_for("home"))
+
     @app.get("/t/<event>/rules")
     @app.get("/rules")
     def rules_page():
@@ -1064,7 +1072,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket
     # tournament gets its own version (or a 404) from bracket_web.
     shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
-              "admin_broadcast", "admin_text_pins"}
+              "admin_broadcast", "admin_text_pins", "find_team"}
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,

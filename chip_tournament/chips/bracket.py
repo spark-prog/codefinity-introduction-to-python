@@ -37,6 +37,16 @@ Running it
 * Places are final as soon as no one still playing can finish at or below
   them; payouts (percent of the pot by place, ties split evenly) are texted to
   the entries as soon as they are final.
+
+Skill groups and rack races (singles)
+-------------------------------------
+* With skill groups set (e.g. SL 1-3, 4, 5, 6, 7-9), each player goes in the
+  group for their skill level (the higher of their 8-Ball and 9-Ball levels)
+  and each group plays its own bracket with its own champion; the groups share
+  the tables. At the draw, a group too small for the format joins whichever
+  neighboring group has fewer players.
+* With the rack race chart, each side of a match gets its own race from the
+  two players' skill levels (see races.py).
 """
 
 from __future__ import annotations
@@ -48,6 +58,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from .engine import MAX_PLAYER_SKILL, Message, Player, TournamentError, money, now
+from .races import group_for, group_label, rack_race
 
 BYE = "bye"
 
@@ -60,6 +71,7 @@ FORMATS = [
 ]
 FORMAT_NAMES = dict(FORMATS)
 FINAL_CUTS = (4, 8, 16, 32)
+STRAIGHT, RACK_CHART = "straight", "rack_chart"  # race methods
 
 # Entry statuses
 REGISTERED = "registered"
@@ -136,6 +148,12 @@ class Entry:
     payout_cents: int = 0
     payout_texted: bool = False
     payout_texted_cents: int = 0  # the amount in that text, so a later correction can be texted
+    division: str = ""  # skill group label ("SL 4"); "" when the event has one bracket
+
+    @property
+    def skill(self) -> int:
+        """The entry's skill level for groups and races: its highest player's (0 if none given)."""
+        return max((p.skill for p in self.players), default=0)
 
     @property
     def phones(self) -> list[str]:
@@ -165,12 +183,15 @@ class BMatch:
     knockout: bool = False  # the loser can be knocked out here
     reset: bool = False  # the second grand final, played only if the losers-side champion wins the first
     group: str = ""
+    division: str = ""  # the skill group this match belongs to
     src_a: dict | None = None
     src_b: dict | None = None
     a: str | None = None
     b: str | None = None
     status: str = PENDING
     race_to: int = 0
+    race_a: int = 0  # with a rack race chart: each side's own race (0 = both race to race_to)
+    race_b: int = 0
     table: str | None = None
     score_a: int = 0
     score_b: int = 0
@@ -220,6 +241,8 @@ class BracketSettings:
     rule_set: str = ""  # id of the league rule set this event plays by
     event_rules: str = ""  # APA-approved rules for this tournament only
     registration_closed: bool = False  # director closed online registration (the director can still add entries)
+    skill_groups: list[list[int]] = field(default_factory=list)  # [[1, 3], [4, 4], ...]; [] = one bracket
+    race_method: str = STRAIGHT  # STRAIGHT: the race_* numbers; RACK_CHART: each side from the rack race chart
     match_minutes: int = 30  # amber after this
     long_match_minutes: int = 45  # red after this
 
@@ -404,8 +427,27 @@ class BracketTournament:
         if len(players) != size or any(not p.name.strip() for p in players):
             raise TournamentError("Enter a name for the player." if size == 1 else f"Enter all {size} player names.")
         for p in players:
+            if p.skill_8 and not 2 <= p.skill_8 <= 7:
+                raise TournamentError("8-Ball skill levels go from 2 to 7.")
+            if p.skill_9 and not 1 <= p.skill_9 <= 9:
+                raise TournamentError("9-Ball skill levels go from 1 to 9.")
             if p.skill and not 1 <= p.skill <= MAX_PLAYER_SKILL:
                 raise TournamentError(f"Skill levels go from 1 to {MAX_PLAYER_SKILL}.")
+        groups = self.settings.skill_groups
+        if groups and size == 1 and players[0].skill and not group_for(groups, players[0].skill):
+            raise TournamentError(f"There's no skill group for SL {players[0].skill} in this event.")
+
+    @staticmethod
+    def _clean(p: Player) -> Player:
+        """A copy of a player from a form, with its skill set from the 8-Ball and 9-Ball levels if given."""
+        skill = max(p.skill_8, p.skill_9) or p.skill
+        return Player(name=p.name.strip(), phone=p.phone.strip(), skill=skill, skill_8=p.skill_8, skill_9=p.skill_9,
+                      sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at)
+
+    def preview_division(self, entry: Entry) -> str:
+        """The skill group an entry would play in, before any small groups merge at the draw."""
+        g = group_for(self.settings.skill_groups, entry.skill) if self.settings.skill_groups else None
+        return group_label(*g) if g else ""
 
     def _unique_name(self, name: str, skip: str | None = None) -> None:
         key = " ".join(name.lower().split())
@@ -423,12 +465,12 @@ class BracketTournament:
     def register_entry(self, name: str, players: list[Player], by_director: bool = False) -> Entry:
         if self.status != SETUP:
             raise TournamentError("Registration is closed: the bracket is already drawn.")
-        players = [Player(name=p.name.strip(), phone=p.phone.strip(), skill=p.skill,
-                          sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at) for p in players]
+        players = [self._clean(p) for p in players]
         self._check_players(players)
         name = (name or "").strip() or " & ".join(p.name for p in players)
         self._unique_name(name)
         entry = Entry(id=uuid.uuid4().hex[:8], name=name, players=players, pin=self._new_pin())
+        entry.division = self.preview_division(entry)
         self.entries[entry.id] = entry
         self.order.append(entry.id)
         if self.field_full and not by_director:
@@ -441,6 +483,8 @@ class BracketTournament:
             spot = f"The field is full, so you're #{len(self.waitlist)} on the waiting list."
         else:
             spot = "You're in."
+        if entry.division:
+            spot += f" Skill group: {entry.division}."
         self._say(f"Registered {name} ({entry.partners}){' on the waiting list' if entry.status == WAITLISTED else ''}.")
         for p in players:
             if p.sms_consent and p.phone:
@@ -452,7 +496,9 @@ class BracketTournament:
 
     def update_entry(self, entry_id: str, name: str | None, players: list[Player]) -> Entry:
         entry = self.entry(entry_id)
-        players = [Player(name=p.name.strip(), phone=p.phone.strip(), skill=p.skill) for p in players]
+        players = [self._clean(p) for p in players]
+        for p in players:
+            p.sms_consent, p.sms_consent_at = False, None
         self._check_players(players)
         if self.status != SETUP and [p.name.lower() for p in players] != [p.name.lower() for p in entry.players]:
             raise TournamentError("Players can't change once the bracket is drawn (only cell numbers and the entry name).")
@@ -461,7 +507,11 @@ class BracketTournament:
         for old, new in zip(entry.players, players):
             if old.phone == new.phone:  # keep text consent for the same number
                 new.sms_consent, new.sms_consent_at = old.sms_consent, old.sms_consent_at
+        if self.status != SETUP and [p.skill for p in players] != [p.skill for p in entry.players]:
+            raise TournamentError("Skill levels are set once the bracket is drawn.")
         entry.name, entry.players = name, players
+        if self.status == SETUP:
+            entry.division = self.preview_division(entry)
         self._say(f"Updated entry {name}.")
         return entry
 
@@ -556,6 +606,10 @@ class BracketTournament:
             if n <= s.final_cut:
                 raise TournamentError(f"Modified single elimination to a final {s.final_cut} needs more than "
                                       f"{s.final_cut} entries. Pick a smaller final, or double elimination.")
+        if s.format == ROUND_ROBIN and s.skill_groups:
+            raise TournamentError("Skill groups work with single, double and modified single elimination.")
+        if (s.skill_groups or s.race_method == RACK_CHART) and s.team_size != 1:
+            raise TournamentError("Skill groups and the rack race chart are for singles events.")
         if s.format == ROUND_ROBIN:
             if s.groups < 1:
                 raise TournamentError("Round robin needs at least 1 group.")
@@ -577,6 +631,11 @@ class BracketTournament:
         ids = [e.id for e in field_entries]
         if self.settings.seeding == "random":
             (rng or random).shuffle(ids)
+        needs_skill = self.settings.skill_groups or self.settings.race_method == RACK_CHART
+        missing = [self.entries[i].name for i in ids if needs_skill and not self.entries[i].skill]
+        if missing:
+            raise TournamentError(f"Add a skill level first (Edit under Entries): {', '.join(missing[:5])}.")
+        divisions = self._divisions(ids)  # checks every group can make a bracket before anything changes
         self.order = ids + [i for i in self.order if i not in ids]
         for n, entry_id in enumerate(ids, 1):
             entry = self.entries[entry_id]
@@ -587,11 +646,78 @@ class BracketTournament:
         self.matches, self.groups = [], {}
         builder = {SINGLE: self._build_single_event, DOUBLE: self._build_double,
                    MODIFIED: self._build_double, ROUND_ROBIN: self._build_round_robin}[self.settings.format]
-        builder(ids)
+        for label, members in divisions:
+            first = len(self.matches)
+            for entry_id in members:
+                self.entries[entry_id].division = label
+            builder(members)
+            for m in self.matches[first:]:
+                m.division = label
         self.pot_cents = self.settings.entry_fee_cents * len(ids) + self.settings.added_money_cents
         self.status, self.started_at = RUNNING, now()
         self._say(f"Bracket drawn: {len(ids)} entries, {self.format_name}. Pot {money(self.pot_cents)}.")
         self._advance()
+
+    def _fits(self, count: int) -> bool:
+        try:
+            self.check_format(count)
+            return True
+        except TournamentError:
+            return False
+
+    def _divisions(self, ids: list[str]) -> list[tuple[str, list[str]]]:
+        """Split the field (in draw order) into skill groups, merging any group too small to play.
+
+        A group too small for the format joins whichever neighboring group has fewer players
+        (the lower one on a tie). Returns [(label, entry ids)] from the lowest group up.
+        """
+        groups = self.settings.skill_groups
+        if not groups:
+            return [("", ids)]
+        buckets = [[lo, hi, []] for lo, hi in groups]
+        for entry_id in ids:
+            skill = self.entries[entry_id].skill
+            bucket = next((b for b in buckets if b[0] <= skill <= b[1]), None)
+            if bucket is None:
+                raise TournamentError(f"{self.entries[entry_id].name} (SL {skill}) isn't in any skill group.")
+            bucket[2].append(entry_id)
+        buckets = [b for b in buckets if b[2]]
+        while True:
+            small = [b for b in buckets if not self._fits(len(b[2]))]
+            if not small:
+                break
+            if len(buckets) == 1:
+                self.check_format(len(buckets[0][2]))  # raises with the reason
+            b = min(small, key=lambda x: (len(x[2]), x[0]))
+            i = buckets.index(b)
+            neighbors = [buckets[j] for j in (i - 1, i + 1) if 0 <= j < len(buckets)]
+            into = min(neighbors, key=lambda x: (len(x[2]), x[0]))
+            into[0], into[1] = min(into[0], b[0]), max(into[1], b[1])
+            into[2] = [x for x in ids if x in set(into[2]) | set(b[2])]  # keep the draw order
+            buckets.remove(b)
+            self._say(f"Skill group {group_label(b[0], b[1])} ({len(b[2])}) was too small, so it joined the next group "
+                      f"to make {group_label(into[0], into[1])}.")
+        return [(group_label(lo, hi), members) for lo, hi, members in buckets]
+
+    @property
+    def division_names(self) -> list[str]:
+        """The skill groups in play (lowest first); [""] for an event with one bracket."""
+        if self.status == SETUP:
+            if not self.settings.skill_groups:
+                return [""]
+            return [group_label(lo, hi) for lo, hi in self.settings.skill_groups]
+        names = []
+        for m in self.matches:
+            if m.division not in names:
+                names.append(m.division)
+        return names or [""]
+
+    def division_entries(self, division: str) -> list[Entry]:
+        return [e for e in self.entries.values() if e.division == division and e.seed is not None]
+
+    def division_done(self, division: str) -> bool:
+        ms = [m for m in self.matches if m.division == division]
+        return bool(ms) and all(m.status in (DONE, VOID) for m in ms)
 
     def _new(self, stage: str, rnd: int, index: int, src_a: dict, src_b: dict, *, level: int = 0,
              knockout: bool = False, group: str = "", reset: bool = False) -> BMatch:
@@ -745,6 +871,23 @@ class BracketTournament:
             return s.race_finals if is_final else s.race_winners
         return s.race_winners
 
+    def _set_race(self, m: BMatch) -> None:
+        m.race_to = self._race_for(m)
+        m.race_a = m.race_b = 0
+        if self.settings.race_method == RACK_CHART and m.a not in (None, BYE) and m.b not in (None, BYE):
+            m.race_a, m.race_b = rack_race(self.entries[m.a].skill, self.entries[m.b].skill)
+            m.race_to = max(m.race_a, m.race_b)
+
+    def race_of(self, m: BMatch, side: str) -> int:
+        """Racks side 'a' or 'b' needs to win the match."""
+        return getattr(m, f"race_{side}") or m.race_to
+
+    def race_text(self, m: BMatch) -> str:
+        """'race to 3', or with a rack race chart 'Ann 3 · Bob 2'."""
+        if not (m.race_a or m.race_b):
+            return f"race to {m.race_to}"
+        return f"{self.name_of(m.a)} races to {m.race_a} · {self.name_of(m.b)} to {m.race_b}"
+
     def _resolve(self) -> None:
         changed = True
         while changed:
@@ -770,7 +913,8 @@ class BracketTournament:
                     m.winner, m.loser = (m.b if m.a == BYE else m.a), BYE
                     m.status, m.finished_at = DONE, now()
                     continue
-                m.status, m.ready_at, m.race_to = READY, now(), self._race_for(m)
+                m.status, m.ready_at = READY, now()
+                self._set_race(m)
                 withdrawn = [x for x in (m.a, m.b) if self.entries[x].withdrawn]
                 if withdrawn:  # a withdrawn entry forfeits whatever it has left
                     winner = m.b if withdrawn[0] == m.a and len(withdrawn) == 1 else m.a
@@ -779,11 +923,11 @@ class BracketTournament:
     def _finish(self, m: BMatch, winner: str, forfeit: bool = False, quiet: bool = False) -> None:
         m.winner, m.loser = winner, (m.b if winner == m.a else m.a)
         m.forfeit, m.status, m.finished_at = forfeit, DONE, now()
-        if forfeit and max(m.score_a, m.score_b) < m.race_to:
+        if forfeit and m.score_a < self.race_of(m, "a") and m.score_b < self.race_of(m, "b"):
             if winner == m.a:
-                m.score_a = m.race_to
+                m.score_a = self.race_of(m, "a")
             else:
-                m.score_b = m.race_to
+                m.score_b = self.race_of(m, "b")
         if not quiet:
             self._say(f"#{m.num}: {self.name_of(m.winner)} beat {self.name_of(m.loser)} "
                       f"{m.score_a}-{m.score_b}{' (forfeit)' if forfeit else ''}.")
@@ -816,37 +960,52 @@ class BracketTournament:
         elif self.status == FINISHED and not all(m.status in (DONE, VOID) for m in self.matches):
             self.status, self.finished_at = RUNNING, None
         places = self.places()
-        if self.status == FINISHED:
-            for entry_id, (lo, _hi) in places.items():
-                if lo == 1:
-                    self.entries[entry_id].status = CHAMPION
-            # Everyone else is done too (a round robin without a playoff knocks nobody out).
-            for e in self.entries.values():
-                if e.status == ACTIVE and e.seed is not None:
-                    e.status = ELIMINATED
+        if self.status in (RUNNING, FINISHED):
+            for division in self.division_names:
+                if not self.division_done(division):
+                    continue
+                for e in self.division_entries(division):
+                    if places.get(e.id, (0, 0))[0] == 1:
+                        e.status = CHAMPION
+                    # Everyone else is done too (a round robin without a playoff knocks nobody out).
+                    elif e.status == ACTIVE:
+                        e.status = ELIMINATED
         self._pay(places)
+
+    def division_pot_cents(self, division: str) -> int:
+        """A skill group's share of the pot, by its number of entries (the whole pot with one bracket)."""
+        seeded = [e for e in self.entries.values() if e.seed is not None]
+        if not seeded or len(self.division_names) == 1:
+            return self.pot_cents
+        return self.pot_cents * len(self.division_entries(division)) // len(seeded)
 
     def _pay(self, places: dict[str, tuple[int, int]]) -> None:
         pcts = self.settings.payouts
         for e in self.entries.values():
             e.payout_cents = 0
-        paid = []
-        for entry_id, (lo, hi) in places.items():
-            share = sum(pcts[lo - 1:hi]) / (hi - lo + 1)
-            if share:
-                self.entries[entry_id].payout_cents = int(self.pot_cents * share / 100)
-                paid.append(entry_id)
-        champ = next((i for i, (lo, _) in places.items() if lo == 1), None)
-        if self.status == FINISHED and paid and champ:  # rounding pennies go to the winner
-            used = sum(pcts[:max(hi for _, hi in places.values())])
-            target = round(self.pot_cents * used / 100)
-            self.entries[champ].payout_cents += target - sum(self.entries[i].payout_cents for i in paid)
-        for entry_id, (lo, hi) in places.items():
-            e = self.entries[entry_id]
-            if e.payout_cents and not e.payout_texted and (self.status == FINISHED or lo > 1):
-                e.payout_texted, e.payout_texted_cents = True, e.payout_cents
-                self._text(e, f"{e.name} finished {place_text((lo, hi))} and won {money(e.payout_cents)}. "
-                              "Collect it at the tournament desk. Congratulations!")
+        for division in self.division_names:
+            pot = self.division_pot_cents(division)
+            ids = {e.id for e in self.division_entries(division)}
+            here = {i: p for i, p in places.items() if i in ids}
+            done = self.division_done(division)
+            paid = []
+            for entry_id, (lo, hi) in here.items():
+                share = sum(pcts[lo - 1:hi]) / (hi - lo + 1)
+                if share:
+                    self.entries[entry_id].payout_cents = int(pot * share / 100)
+                    paid.append(entry_id)
+            champ = next((i for i, (lo, _) in here.items() if lo == 1), None)
+            if done and paid and champ:  # rounding pennies go to the winner
+                used = sum(pcts[:max(hi for _, hi in here.values())])
+                target = round(pot * used / 100)
+                self.entries[champ].payout_cents += target - sum(self.entries[i].payout_cents for i in paid)
+            for entry_id, (lo, hi) in here.items():
+                e = self.entries[entry_id]
+                if e.payout_cents and not e.payout_texted and (done or lo > 1):
+                    e.payout_texted, e.payout_texted_cents = True, e.payout_cents
+                    where = f" in {division}" if division else ""
+                    self._text(e, f"{e.name} finished {place_text((lo, hi))}{where} and won {money(e.payout_cents)}. "
+                                  "Collect it at the tournament desk. Congratulations!")
         # A result fixed after payout texts went out: tell each player their corrected amount.
         for e in self.entries.values():
             if e.payout_texted and not e.payout_texted_cents:  # saved before amounts were remembered
@@ -859,19 +1018,26 @@ class BracketTournament:
                               + " See the tournament desk with any questions.")
 
     def places(self) -> dict[str, tuple[int, int]]:
-        """Final places so far: entry id -> (first, last) place it shares."""
+        """Final places so far: entry id -> (first, last) place it shares (within its skill group)."""
         field_ids = [e.id for e in self.entries.values() if e.seed is not None]
         if self.status == SETUP or not field_ids:
             return {}
         out: dict[str, tuple[int, int]] = {}
         if self.settings.format == ROUND_ROBIN:
             out.update(self._group_places(field_ids))
-            if not self.settings.advance:
+            if not self.settings.advance or not all(self.group_complete(g) for g in self.groups):
                 return out
-        knocked = [m for m in self.matches if m.knockout and m.status != VOID]
-        pool = [i for i in field_ids if self.entries[i].out_level != 0] if self.settings.format == ROUND_ROBIN else field_ids
-        if self.settings.format == ROUND_ROBIN and not all(self.group_complete(g) for g in self.groups):
+            pool = [i for i in field_ids if self.entries[i].out_level != 0]
+            out.update(self._knockout_places(pool, self.matches))
             return out
+        for division in self.division_names:
+            pool = [i for i in field_ids if self.entries[i].division == division]
+            out.update(self._knockout_places(pool, [m for m in self.matches if m.division == division]))
+        return out
+
+    def _knockout_places(self, pool: list[str], matches: list[BMatch]) -> dict[str, tuple[int, int]]:
+        out: dict[str, tuple[int, int]] = {}
+        knocked = [m for m in matches if m.knockout and m.status != VOID]
         levels = sorted({self.entries[i].out_level for i in pool if self.entries[i].out_level})
         for level in levels:
             if not all(m.status == DONE for m in knocked if m.level <= level):
@@ -880,7 +1046,7 @@ class BracketTournament:
             lo = 1 + sum(1 for i in pool if not (self.entries[i].out_level and self.entries[i].out_level <= level))
             for i in out_here:
                 out[i] = (lo, lo + len(out_here) - 1)
-        if all(m.status in (DONE, VOID) for m in self.matches):
+        if matches and all(m.status in (DONE, VOID) for m in matches):
             alive = [i for i in pool if not self.entries[i].out_level]
             if len(alive) == 1:
                 out[alive[0]] = (1, 1)
@@ -941,9 +1107,11 @@ class BracketTournament:
         m.status, m.table, m.called_at, m.priority = CALLED, table, now(), False
         label = self.match_label(m)
         self._say(f"#{m.num} called to table {table}: {self.name_of(m.a)} vs {self.name_of(m.b)}.")
-        for me, them in ((m.a, m.b), (m.b, m.a)):
-            self._text(self.entries[me], f"Table {table}: {self.name_of(me)} vs {self.name_of(them)}, race to "
-                                         f"{m.race_to} ({label}). Good luck!")
+        for me, them, mine, theirs in ((m.a, m.b, "a", "b"), (m.b, m.a, "b", "a")):
+            race = (f"race to {m.race_to}" if not m.race_a else
+                    f"you race to {self.race_of(m, mine)}, they race to {self.race_of(m, theirs)}")
+            self._text(self.entries[me], f"Table {table}: {self.name_of(me)} vs {self.name_of(them)}, {race} "
+                                         f"({label}). Good luck!")
 
     def _advance(self) -> None:
         self._resolve()
@@ -956,13 +1124,14 @@ class BracketTournament:
     def match_label(self, m: BMatch) -> str:
         if m.stage == "G":
             return f"Group {m.group}, round {m.round}"
-        return f"{self.round_title(m.stage, m.round)}, match #{m.num}"
+        label = f"{self.round_title(m.stage, m.round, m.division)}, match #{m.num}"
+        return f"{m.division} · {label}" if m.division else label
 
-    def stage_rounds(self, stage: str) -> int:
-        return max((m.round for m in self.matches if m.stage == stage), default=0)
+    def stage_rounds(self, stage: str, division: str = "") -> int:
+        return max((m.round for m in self.matches if m.stage == stage and m.division == division), default=0)
 
-    def round_title(self, stage: str, rnd: int) -> str:
-        last = self.stage_rounds(stage)
+    def round_title(self, stage: str, rnd: int, division: str = "") -> str:
+        last = self.stage_rounds(stage, division)
         if stage == "W" and self.settings.format == SINGLE:
             return round_name(last - rnd)
         if stage == "P":
@@ -994,16 +1163,16 @@ class BracketTournament:
             return f"Group {src['group']} {ordinal(src['rank'])}"
         return "TBD"
 
-    def bracket(self) -> list[dict]:
-        """The elimination stages, as columns of rounds, for drawing the bracket."""
+    def bracket(self, division: str = "") -> list[dict]:
+        """The elimination stages (of one skill group), as columns of rounds, for drawing the bracket."""
         out = []
         for stage in ("W", "L", "P", "F"):
-            ms = [m for m in self.matches if m.stage == stage]
+            ms = [m for m in self.matches if m.stage == stage and m.division == division]
             if not ms:
                 continue
             rounds = []
-            for r in range(1, self.stage_rounds(stage) + 1):
-                rounds.append({"title": self.round_title(stage, r),
+            for r in range(1, self.stage_rounds(stage, division) + 1):
+                rounds.append({"title": self.round_title(stage, r, division),
                                "matches": sorted((m for m in ms if m.round == r), key=lambda m: m.index)})
             out.append({"stage": stage, "title": self.stage_title(stage), "rounds": rounds})
         return out
@@ -1019,11 +1188,12 @@ class BracketTournament:
             nxt = [c for c in consumers.get((m.id, take), []) if c.status != VOID]
             if nxt:
                 c = nxt[0]
-                out[key] = f"{self.round_title(c.stage, c.round)} (#{c.num})" if c.stage != "G" else ""
+                out[key] = f"{self.round_title(c.stage, c.round, c.division)} (#{c.num})" if c.stage != "G" else ""
             elif m.stage == "G":
                 out[key] = ""
             else:
-                out[key] = "Champion" if take == "winner" else "Out"
+                champ = f"{m.division} champion" if m.division else "Champion"
+                out[key] = champ if take == "winner" else "Out"
         return out
 
     # ---------------------------------------------------------------- tables
@@ -1032,12 +1202,14 @@ class BracketTournament:
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("That match isn't on a table.")
-        attr = f"score_{side}"
+        if side not in ("a", "b"):
+            raise TournamentError("Pick a side.")
+        attr, other_side = f"score_{side}", "b" if side == "a" else "a"
         value = getattr(m, attr) + delta
-        if value < 0 or value > m.race_to:
-            raise TournamentError(f"Scores go from 0 to {m.race_to}.")
-        other = m.score_b if side == "a" else m.score_a
-        if delta > 0 and other >= m.race_to:
+        if value < 0 or value > self.race_of(m, side):
+            raise TournamentError(f"Scores go from 0 to {self.race_of(m, side)}.")
+        other = getattr(m, f"score_{other_side}")
+        if delta > 0 and other >= self.race_of(m, other_side):
             raise TournamentError("The other side already reached the race. Submit the result or press −.")
         setattr(m, attr, value)
         if by:
@@ -1045,9 +1217,9 @@ class BracketTournament:
         return m
 
     def race_winner(self, m: BMatch) -> str | None:
-        if m.score_a >= m.race_to:
+        if m.score_a >= self.race_of(m, "a"):
             return m.a
-        if m.score_b >= m.race_to:
+        if m.score_b >= self.race_of(m, "b"):
             return m.b
         return None
 
@@ -1055,7 +1227,7 @@ class BracketTournament:
         m = self.match(match_id)
         winner = self.race_winner(m)
         if winner is None:
-            raise TournamentError(f"Neither side has reached the race to {m.race_to} yet.")
+            raise TournamentError("Neither side has reached its race yet.")
         return self.record_result(match_id, winner)
 
     def record_result(self, match_id: str, winner_id: str, forfeit: bool = False) -> BMatch:
@@ -1074,7 +1246,8 @@ class BracketTournament:
         champion = not consumers.get((m.id, "winner")) and not any(
             c.status != VOID for c in consumers.get((m.id, "loser"), [])) and m.stage != "G"
         self._text(winner, f"{winner.name} beat {loser.name} {score}{' (forfeit)' if forfeit else ''}. "
-                           + ("" if champion else "Stay close: we'll text you when your next table is ready."))
+                           + ((f"{winner.name} is the {m.division} champion!" if m.division else "") if champion
+                              else "Stay close: we'll text you when your next table is ready."))
         if m.stage == "G":
             self._text(loser, f"{loser.name} lost to {winner.name} {score}. Watch for your next table call.")
         elif self._loser_out(m, consumers):
@@ -1101,6 +1274,10 @@ class BracketTournament:
             raise TournamentError(f"Match #{started[0].num} has already used this result. Use Undo, or fix that match first.")
         m.winner, m.loser = m.loser, m.winner
         m.score_a, m.score_b = m.score_b, m.score_a
+        if m.race_a or m.race_b:  # uneven races: the new winner reached its own race, the loser fell short of its
+            won, lost = ("a", "b") if m.winner == m.a else ("b", "a")
+            setattr(m, f"score_{won}", self.race_of(m, won))
+            setattr(m, f"score_{lost}", min(getattr(m, f"score_{lost}"), self.race_of(m, lost) - 1))
         self._reset_dependents(m)
         self._say(f"Fixed #{m.num}: {self.name_of(m.winner)} won.")
         for x in (m.winner, m.loser):
@@ -1239,7 +1416,7 @@ class BracketTournament:
         """New race settings apply to matches that haven't been called yet."""
         for m in self.matches:
             if m.status == READY:
-                m.race_to = self._race_for(m)
+                self._set_race(m)
 
     @property
     def projected_pot_cents(self) -> int:
@@ -1258,8 +1435,11 @@ class BracketTournament:
         for e in self.entries.values():
             if e.seed is None:
                 continue
-            rows.append({"entry": e, "place": places.get(e.id), "place_text": place_text(places.get(e.id))})
-        rows.sort(key=lambda r: (r["place"] or (999, 999), r["entry"].status != ACTIVE, r["entry"].seed))
+            rows.append({"entry": e, "place": places.get(e.id), "place_text": place_text(places.get(e.id)),
+                         "division": e.division})
+        order = {d: n for n, d in enumerate(self.division_names)}
+        rows.sort(key=lambda r: (order.get(r["division"], 99), r["place"] or (999, 999), r["entry"].status != ACTIVE,
+                                 r["entry"].seed))
         return rows
 
     # ----------------------------------------------------------- serialization

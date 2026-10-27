@@ -15,9 +15,10 @@ from flask import abort, flash, g, redirect, render_template, request, session, 
 
 from chips import themes
 from chips.bracket import (
-    CALLED, FINAL_CUTS, FORMATS, MODIFIED, READY, ROUND_ROBIN, SETUP, place_text,
+    CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
 )
 from chips.engine import Player, TournamentError, money
+from chips.races import parse_skill_groups, skill_groups_text
 
 
 def parse_payouts(text: str) -> list[int]:
@@ -55,12 +56,19 @@ def register(app, h) -> dict:
     def players_from_form(f, size: int) -> list[Player]:
         players = []
         for i in range(size):
-            skill = f.get(f"player_skill_{i}", "").strip()
-            if skill and not skill.isdigit():
-                raise TournamentError(f"Skill level '{skill}' must be a whole number.")
+            levels = {}
+            for key in ("skill", "skill8", "skill9"):
+                value = f.get(f"player_{key}_{i}", "").strip()
+                if value and not value.isdigit():
+                    raise TournamentError(f"Skill level '{value}' must be a whole number.")
+                levels[key] = int(value or 0)
             players.append(Player(name=f.get(f"player_name_{i}", "").strip(), phone=f.get(f"player_phone_{i}", "").strip(),
-                                  skill=int(skill or 0)))
+                                  skill=levels["skill"], skill_8=levels["skill8"], skill_9=levels["skill9"]))
         return players
+
+    def asks_two_levels(s) -> bool:
+        """Singles events that place or race players by skill ask for 8-Ball and 9-Ball levels."""
+        return s.team_size == 1 and bool(s.skill_groups or s.race_method == RACK_CHART)
 
     def back(anchor: str = "") -> str:
         return url_for("admin") + (f"#{anchor}" if anchor else "")
@@ -86,6 +94,8 @@ def register(app, h) -> dict:
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
                 players = players_from_form(f, size)
+                if asks_two_levels(t.settings) and not (players[0].skill_8 or players[0].skill_9):
+                    raise TournamentError("Enter your 8-Ball or 9-Ball skill level (or both).")
                 if f.get("sms_consent") == "1" and players[0].phone:
                     players[0].sms_consent, players[0].sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
                 return t.register_entry(f.get("name", ""), players)
@@ -93,7 +103,8 @@ def register(app, h) -> dict:
             entry = act(f"Registration: {f.get('name', '').strip() or f.get('player_name_0', '').strip()}", go)
             if entry:
                 session[f"entry_{entry.id}"] = True
-                flash(f"{entry.name} is registered! Your PIN is {entry.pin}. Keep it to enter scores.", "ok")
+                group = f" You're in the {entry.division} group." if entry.division else ""
+                flash(f"{entry.name} is registered!{group} Your PIN is {entry.pin}. Keep it to enter scores.", "ok")
                 return redirect(url_for("b_entry", entry_id=entry.id))
         return render_template("b_register.html", t=t, form=request.form, size=size)
 
@@ -166,6 +177,13 @@ def register(app, h) -> dict:
                         raise TournamentError("Groups and advancing entries must be whole numbers.")
                     setattr(s, key, int(value))
                 s.groups = max(1, s.groups)
+                s.skill_groups = parse_skill_groups(f.get("skill_groups", skill_groups_text(s.skill_groups)))
+                method = f.get("race_method", s.race_method)
+                if method not in (STRAIGHT, RACK_CHART):
+                    raise TournamentError("Pick how races are set.")
+                s.race_method = method
+                for e in t.entries.values():
+                    e.division = t.preview_division(e)
                 s.require_checkin = f.get("require_checkin") == "1"
                 t.set_money(parse_money(f.get("entry_fee", "0")), parse_money(f.get("added_money", "0")))
                 t.set_field_cap(numbers["field_cap"])
@@ -395,6 +413,9 @@ def register(app, h) -> dict:
         return redirect(back("tables"))
 
     app.jinja_env.globals.setdefault("place_text", place_text)
+    app.jinja_env.globals.setdefault("asks_two_levels", asks_two_levels)
+    app.jinja_env.globals.setdefault("skill_groups_text", skill_groups_text)
+    app.jinja_env.globals.setdefault("RACK_CHART", RACK_CHART)
     app.jinja_env.globals.setdefault("READY", READY)
     app.jinja_env.globals.setdefault("MODIFIED", MODIFIED)
     app.jinja_env.globals.setdefault("ROUND_ROBIN", ROUND_ROBIN)

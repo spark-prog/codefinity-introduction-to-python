@@ -773,11 +773,12 @@ def test_event_menu_order(client):
     page = client.get("/").get_data(as_text=True)  # an event's home page, still in setup
     nav = page[page.index('<nav class="nav'):page.index("</nav>")]
     labels = re.findall(r">([^<>]+)</a>", nav)
-    assert labels == ["All Events", "Chip Tournament", "Rules", "Register", "TD Login"]
+    assert labels == ["All Events", "Chip Tournament", "Board", "Rules", "Register", "TD Login"]
     assert '<a href="/">All Events</a>' in nav
-    assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title active"' in nav
+    assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title hide-sm active"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/admin"' in nav
-    assert "Board</a>" not in nav and 'class="brand-name"' not in page
+    assert f'href="/t/{ChipEventClient.event_id}/board"' in nav
+    assert f'<div class="brand show-sm"><a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page  # title by the logo on phones
     assert "Open the board" not in page  # only once play starts
     client.post("/admin/login", data={"password": "secret"})
     nav = client.get("/").get_data(as_text=True).split('<nav class="nav')[1].split("</nav>")[0]

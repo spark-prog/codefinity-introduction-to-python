@@ -38,7 +38,8 @@
         <a class="league-logo" href="https://firstcoast.poolplayers.com/" target="_blank" rel="noopener"
            title="APA Pool Leagues – First Coast (opens in a new tab)">
           <img src="{{ url_for('static', filename='img/apa-first-coast-logo.png') }}" alt="APA Pool Leagues – First Coast" width="83" height="50"></a>
-        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('index') }}">Control Table</a></div>{% endif %}
+        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('index') }}">Control Table</a></div>
+        {% elif t %}<div class="brand show-sm"><a class="brand-name" href="{{ url_for('home') }}">{{ t.settings.name }}</a></div>{% endif %}
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline show-sm logout-icon">
           <button class="link" title="Log out" aria-label="Log out">
@@ -50,7 +51,8 @@
       <nav class="nav{% if is_admin or is_viewer %} signed-in{% endif %}">
         {% if event %}
         <a href="{{ url_for('index') }}">All Events</a>
-        <a href="{{ url_for('home') }}" class="nav-home nav-title {{ 'active' if ep in ('home', 'b_entry', 'board') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
+        <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
+        <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         {% if t and t.status == SETUP %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{{ "Director" if is_admin or is_viewer else "TD Login" }}</a>

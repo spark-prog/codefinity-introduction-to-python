@@ -7,6 +7,8 @@
     <h1>Register a team</h1>
     {% if t.status == FINISHED %}
       <p class="lede">This tournament is over.</p>
+    {% elif s.registration_closed %}
+      <p class="lede">Registration is closed for now. Check back soon.</p>
     {% elif t.entries_locked or t.last_call %}
       <p class="lede">Registration is closed: the tournament is under way and the field is set.</p>
     {% else %}
@@ -25,7 +27,7 @@
       </div>
     {% endif %}
   </header>
-  {% if t.status != FINISHED and not t.entries_locked and not t.last_call %}
+  {% if t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_closed %}
   <form method="post" class="card form">
     {% set v = {"name": form.get("name", ""), "players": players} %}
     {% set cap = s.registration_cap %}

@@ -10,7 +10,9 @@
       Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.</p>
     {% if t.field_full %}<p class="banner">The field is full. Register to join the waiting list; we'll text you if a spot opens.</p>{% endif %}
   </header>
-  {% if t.status != SETUP %}
+  {% if s.registration_closed and t.status == SETUP %}
+  <div class="card"><p>Registration is closed for now. Check back soon.</p></div>
+  {% elif t.status != SETUP %}
   <div class="card"><p>Registration is closed: the bracket is drawn. <a href="{{ url_for('home') }}">Follow it here.</a></p></div>
   {% else %}
   <form method="post" class="card form">

@@ -298,6 +298,8 @@
     <label>Venue <input name="venue" value="{{ s.venue }}"></label>
     <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+    <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
+      Close online registration (the Register button disappears; you can still add teams here)</label>
     <label>Rules this event plays by
       <select name="rule_set">
         <option value="">Not chosen yet</option>

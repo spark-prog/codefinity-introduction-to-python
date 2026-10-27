@@ -54,7 +54,7 @@
         <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
-        {% if t and t.status == SETUP %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
+        {% if t and t.status == SETUP and not t.settings.registration_closed %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{{ "Director" if is_admin or is_viewer else "TD Login" }}</a>
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>

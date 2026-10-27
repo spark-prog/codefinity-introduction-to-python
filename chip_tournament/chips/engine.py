@@ -217,6 +217,7 @@ class Settings:
     contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
     rule_set: str = ""  # id of the league rule set this event plays by (its Rules tab shows only that one)
     event_rules: str = ""  # APA-approved rules for this tournament only, shown at the top of its Rules tab
+    registration_closed: bool = False  # director closed online registration (the director can still add teams)
 
 
 @dataclass

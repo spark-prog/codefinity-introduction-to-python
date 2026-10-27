@@ -7,7 +7,7 @@
     <h1>{{ s.name }}</h1>
     {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
     <div class="button-row actions-row">
-      {% if t.status == SETUP %}<a class="button big" href="{{ url_for('register') }}">Register</a>{% endif %}
+      {% if t.status == SETUP and not s.registration_closed %}<a class="button big" href="{{ url_for('register') }}">Register</a>{% endif %}
       {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
     </div>
   </div>

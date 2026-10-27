@@ -81,6 +81,8 @@ def register(app, h) -> dict:
             f = request.form
 
             def go(t):
+                if t.settings.registration_closed:
+                    raise TournamentError("Registration is closed for now.")
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
                 players = players_from_form(f, size)
@@ -123,6 +125,7 @@ def register(app, h) -> dict:
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
+            s.registration_closed = f.get("registration_closed") == "1"
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

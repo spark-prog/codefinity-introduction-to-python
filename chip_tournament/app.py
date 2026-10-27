@@ -398,6 +398,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             solo = f.get("solo") == "1"
 
             def register_team(t):
+                if t.settings.registration_closed:
+                    raise TournamentError("Registration is closed for now.")
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
                 players = players_from_form(f)[:1 if solo else TEAM_SIZE]
@@ -610,6 +612,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
+            s.registration_closed = f.get("registration_closed") == "1"
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

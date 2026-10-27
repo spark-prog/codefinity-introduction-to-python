@@ -9,6 +9,7 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
+    <a class="button secondary" href="{{ url_for('board') }}">Board</a>
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
     {% if t.status == SETUP and not is_viewer %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}

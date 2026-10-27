@@ -802,3 +802,19 @@ def test_players_reach_their_scoring_page_from_home_and_board(client):
     assert r.headers["Location"] == f"/t/{ChipEventClient.event_id}/team/{sharks.id}"
     assert player.get(f"/t/{ChipEventClient.event_id}/find?team=nope").headers["Location"] == f"/t/{ChipEventClient.event_id}/"
     assert b"Enter your team PIN" in player.get(r.headers["Location"]).data  # the PIN still guards scoring
+
+
+def test_team_page_shows_names_not_phone_digits(client):
+    client.post("/register", data={"name": "Sharks", "agree_terms": "1", "sms_consent": "1",
+                                   "player_name_0": "Ann", "player_phone_0": "5551234567", "player_skill_0": "5",
+                                   "player_name_1": "Bob", "player_phone_1": "5559876543", "player_skill_1": "5"})
+    team = client.application.config["store"].load().field_teams[0]
+    public = client.application.test_client()
+    page = public.get(f"/team/{team.id}").get_data(as_text=True)
+    assert "Text alerts on</span> for Ann" in page
+    for digits in ("4567", "6543", "555"):
+        assert digits not in page
+    public.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    page = public.get(f"/team/{team.id}").get_data(as_text=True)  # signed in: Bob's opt-in box
+    assert "I'm Bob. Yes, text me tournament alerts at the cell number on my registration." in page
+    assert "6543" not in page and "4567" not in page

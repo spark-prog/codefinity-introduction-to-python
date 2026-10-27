@@ -75,7 +75,7 @@
   <form method="post" action="{{ url_for('b_entry_texts', entry_id=entry.id) }}" class="form">
     <input type="hidden" name="player" value="{{ loop.index0 }}">
     <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
-      Text {{ p.name }} (cell ending {{ p.phone|last4 }}) table calls and results. Msg &amp; data rates may apply. Reply STOP to opt out.</label>
+      Text {{ p.name }} table calls and results. Msg &amp; data rates may apply. Reply STOP to opt out.</label>
     <button class="button small">Turn on alerts</button>
   </form>
   {% endif %}{% endfor %}

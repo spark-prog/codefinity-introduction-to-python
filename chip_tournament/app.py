@@ -609,6 +609,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
+            s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")
@@ -696,7 +697,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         if t is not None:
             sets = [r for r in sets if r["id"] == t.settings.rule_set]
         sets = [{**r, "html": rulebook.render(r["body"])} for r in sets]
-        return render_template("rules.html", t=t, rule_sets=sets)
+        event_rules = rulebook.render(t.settings.event_rules) if t is not None and t.settings.event_rules else ""
+        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules)
 
     def event_rule_set(rule_id: str) -> str:
         """A rule set id an event can use: one that exists, or "" for none chosen yet."""

@@ -385,6 +385,8 @@
         <option value="">Not chosen yet</option>
         {% for r in rule_choices() %}<option value="{{ r.id }}" {% if s.rule_set == r.id %}selected{% endif %}>{{ r.title }}</option>{% endfor %}
       </select></label>
+    <label class="wide">Tournament rules approved by APA for this event only (shown at the top of its Rules page)
+      <textarea name="event_rules" rows="3" placeholder="e.g. One timeout per team per rack. No sudden death.">{{ s.event_rules }}</textarea></label>
     <div class="settings-group">Money &amp; field</div>
     <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>

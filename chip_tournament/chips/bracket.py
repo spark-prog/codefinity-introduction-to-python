@@ -218,6 +218,7 @@ class BracketSettings:
     theme: str = "electric"
     contact_phone: str = ""
     rule_set: str = ""  # id of the league rule set this event plays by
+    event_rules: str = ""  # APA-approved rules for this tournament only
     match_minutes: int = 30  # amber after this
     long_match_minutes: int = 45  # red after this
 

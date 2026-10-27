@@ -62,3 +62,31 @@ def test_settings_menu_lists_rule_sets_and_bracket_saves_choice(tmp_path, monkey
     admin.post(f"/t/{ev.id}/admin/settings", data={"name": s.name, "tables": ", ".join(s.tables), "rule_set": "9-ball-rules"})
     assert ev.load().settings.rule_set == "9-ball-rules"
     assert b"plays by 9-Ball Rules" in app.test_client().get(f"/t/{ev.id}/rules").data
+
+
+def test_tournament_only_rules_and_apa_link(tmp_path, monkeypatch):
+    app, admin = setup(tmp_path, monkeypatch)
+    ev = app.config["hub"].create("Halloween Doubles", "chip")
+    public = app.test_client()
+    page = public.get(f"/t/{ev.id}/rules").get_data(as_text=True)
+    assert 'href="https://rules.poolplayers.com"' in page and "approved by APA" not in page
+    assert 'href="https://rules.poolplayers.com"' in public.get("/rules").get_data(as_text=True)
+
+    admin.post(f"/t/{ev.id}/admin/settings", data=chip_settings(
+        ev.load(), event_rules="- One timeout per team per rack\r\n- No sudden death <b>ever</b>"))
+    assert ev.load().settings.event_rules == "- One timeout per team per rack\n- No sudden death <b>ever</b>"
+    page = public.get(f"/t/{ev.id}/rules").get_data(as_text=True)
+    assert "The rules below have been approved by APA for the purposes of this Tournament only." in page
+    assert "One timeout per team per rack" in page and "&lt;b&gt;ever" in page  # shown as text, not HTML
+    assert "haven't been posted yet" not in page
+    assert "approved by APA" not in public.get("/rules").get_data(as_text=True)  # league page stays general
+
+
+def test_bracket_saves_tournament_rules(tmp_path, monkeypatch):
+    app, admin = setup(tmp_path, monkeypatch)
+    ev = app.config["hub"].create("Bracket", "bracket")
+    s = ev.load().settings
+    admin.post(f"/t/{ev.id}/admin/settings", data={"name": s.name, "tables": ", ".join(s.tables), "event_rules": "Race to 2"})
+    assert ev.load().settings.event_rules == "Race to 2"
+    assert b'name="event_rules"' in admin.get(f"/t/{ev.id}/admin").data
+    assert b"approved by APA" in app.test_client().get(f"/t/{ev.id}/rules").data

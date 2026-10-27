@@ -6,11 +6,12 @@
     <p class="eyebrow">{{ (t.settings.sms_name if t else "") or "League" }} rules</p>
     <h1>Rules</h1>
     {% if t %}
-    <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% else %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
+    <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% elif not event_rules %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
       <a href="/rules">All league rules</a></p>
     {% else %}
     <p class="lede">Pick a game, or search every rule set at once.</p>
     {% endif %}
+    <p><a class="button secondary" href="https://rules.poolplayers.com" target="_blank" rel="noopener">Official APA rules: rules.poolplayers.com</a></p>
   </div>
   {% if rule_sets %}<div class="card rules-search">
     <label for="rule-search" class="eyebrow">Search the rules</label>
@@ -18,6 +19,15 @@
     <p id="rule-count" class="muted" aria-live="polite"></p>
   </div>{% endif %}
 </header>
+
+{% if event_rules %}
+<article class="card event-rules">
+  <p class="eyebrow">{{ t.settings.name }}</p>
+  <h2>Tournament rules</h2>
+  <p class="approved-note"><b>The rules below have been approved by APA for the purposes of this Tournament only.</b></p>
+  <div class="rule-body">{{ event_rules|safe }}</div>
+</article>
+{% endif %}
 
 {% if rule_sets %}
 <nav class="rule-tabs" role="tablist"{% if rule_sets|length == 1 %} hidden{% endif %}>

@@ -735,3 +735,7 @@ body.default-bg {
 .find-row select { flex: 1; min-width: 0; }
 .keep-score { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .keep-score .button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Tournament-only rules at the top of an event's Rules page ---------- */
+.event-rules { margin-bottom: 24px; border-color: rgba(var(--accent-rgb), .55); }
+.event-rules .approved-note { margin: 0 0 14px; color: var(--accent); }

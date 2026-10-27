@@ -7,7 +7,7 @@
     <p class="eyebrow">{{ t.format_name }}</p>
     <h1>Register</h1>
     <p class="lede">{{ s.name }}{% if s.date %} · {{ event_when(s.date, s.start_time) }}{% endif %}.
-      Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.</p>
+      {% if s.entry_fee_cents %}Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.{% else %}Free entry.{% endif %}</p>
     {% if t.field_full %}<p class="banner">The field is full. Register to join the waiting list; we'll text you if a spot opens.</p>{% endif %}
   </header>
   {% if s.registration_closed and t.status == SETUP %}
@@ -21,7 +21,14 @@
     <fieldset class="partner">
       <legend>{{ "Player" if s.team_size == 1 else "Player " ~ (i + 1) }}</legend>
       <label>Name <input name="player_name_{{ i }}" value="{{ form.get('player_name_' ~ i, '') }}" required></label>
+      {% if asks_two_levels(s) %}
+      <label>8-Ball skill level <input name="player_skill8_{{ i }}" type="number" min="2" max="7" inputmode="numeric" value="{{ form.get('player_skill8_' ~ i, '') }}"></label>
+      <label>9-Ball skill level <input name="player_skill9_{{ i }}" type="number" min="1" max="9" inputmode="numeric" value="{{ form.get('player_skill9_' ~ i, '') }}"></label>
+      <p class="muted small-note">Enter at least one (both if you play both).{% if s.skill_groups %} You play in the skill group for the higher one:
+        {% for lo, hi in s.skill_groups %}SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}.{% endif %}</p>
+      {% else %}
       <label>Skill level (optional) <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ form.get('player_skill_' ~ i, '') }}"></label>
+      {% endif %}
       <label>Cell number {% if i %}(optional){% endif %} <input name="player_phone_{{ i }}" type="tel" value="{{ form.get('player_phone_' ~ i, '') }}" placeholder="904-555-0123"></label>
     </fieldset>
     {% endfor %}

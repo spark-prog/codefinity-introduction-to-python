@@ -71,7 +71,7 @@
     <div class="match-head">
       <span class="table-label">Table {{ m.table }}</span>
       <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.match_minutes }}" data-long="{{ s.long_match_minutes }}"></span>
-      <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · race to {{ m.race_to }}</span>
+      <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</span>
     </div>
     {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}
     <div class="score-row">
@@ -168,6 +168,7 @@
       <td>{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
       <td><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
         {% if s.team_size > 1 and e.partners != e.name %}<div class="muted">{{ e.partners }}</div>{% endif %}
+        {% if asks_two_levels(s) %}{% set p = e.players[0] %}<div class="muted small-note">8-Ball {{ p.skill_8 or "—" }} · 9-Ball {{ p.skill_9 or "—" }}{% if not p.skill_8 and not p.skill_9 and p.skill %} · SL {{ p.skill }}{% endif %}{% if e.division %} · <b>{{ e.division }}</b>{% elif not e.skill %} · <b>needs a skill level</b>{% endif %}</div>{% endif %}
         {% if not is_viewer %}<div class="muted small-note">{% for p in e.players if p.phone %}{{ p.name }} ···{{ p.phone|last4 }}{% if p.sms_consent %} ✓texts{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
       {% if not is_viewer %}<td>{{ e.pin }}</td>{% endif %}
       <td>{% if e.status == "waitlisted" %}Waiting list #{{ t.waitlist_position(e) }}
@@ -204,6 +205,10 @@
             <label>Player {{ i + 1 }} <input name="player_name_{{ i }}" value="{{ p.name }}" {% if not setup %}readonly{% endif %}></label>
             <label>Cell <input name="player_phone_{{ i }}" value="{{ p.phone }}"></label>
             <input type="hidden" name="player_skill_{{ i }}" value="{{ p.skill or '' }}">
+            {% if asks_two_levels(s) %}
+            <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7" value="{{ p.skill_8 or '' }}" {% if not setup %}readonly{% endif %}></label>
+            <label>9-Ball SL <input name="player_skill9_{{ i }}" type="number" min="1" max="9" value="{{ p.skill_9 or '' }}" {% if not setup %}readonly{% endif %}></label>
+            {% endif %}
             {% endfor %}
             <button class="button small">Save</button>
           </form>
@@ -224,6 +229,10 @@
       {% for i in range(s.team_size) %}
       <label>Player {{ i + 1 if s.team_size > 1 else "" }} name <input name="player_name_{{ i }}" required></label>
       <label>Cell (optional) <input name="player_phone_{{ i }}" type="tel"></label>
+      {% if asks_two_levels(s) %}
+      <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7"></label>
+      <label>9-Ball SL <input name="player_skill9_{{ i }}" type="number" min="1" max="9"></label>
+      {% endif %}
       {% endfor %}
       <p class="muted small-note">Players added here don't get texts until they turn alerts on from their own page.</p>
       <button class="button">Add</button>
@@ -329,8 +338,17 @@
       Double elimination: play a second final if the losers-side champion wins the first</label>
     <label>Round robin groups <input name="groups" type="number" min="1" value="{{ s.groups }}" {% if not setup %}disabled{% endif %}></label>
     <label>Round robin: advance to a playoff from each group (0 = no playoff) <input name="advance" type="number" min="0" value="{{ s.advance }}" {% if not setup %}disabled{% endif %}></label>
+    <label class="wide">Skill groups, singles (blank = one bracket)
+      <input name="skill_groups" value="{{ skill_groups_text(s.skill_groups) }}" placeholder="1-3, 4, 5, 6, 7-9" {% if not setup %}disabled{% endif %}>
+      <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. At the draw, a group too small for the format joins whichever neighboring group has fewer players.</span></label>
 
     <div class="settings-group">Races</div>
+    <label class="wide">How races are set
+      <select name="race_method" {% if not setup %}disabled{% endif %}>
+        <option value="straight" {% if s.race_method != RACK_CHART %}selected{% endif %}>Straight race: the numbers below</option>
+        <option value="rack_chart" {% if s.race_method == RACK_CHART %}selected{% endif %}>Rack race chart: each player's race from both skill levels (singles)</option>
+      </select></label>
+    {% if s.race_method == RACK_CHART %}<p class="muted wide">The rack race chart sets every race, so the numbers below aren't used.</p>{% endif %}
     <label>Winners side / main race to <input name="race_winners" type="number" min="1" value="{{ s.race_winners }}"></label>
     <label>Losers side race to <input name="race_losers" type="number" min="1" value="{{ s.race_losers }}"></label>
     <label>Final(s) race to <input name="race_finals" type="number" min="1" value="{{ s.race_finals }}"></label>

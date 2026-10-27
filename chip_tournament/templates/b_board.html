@@ -13,8 +13,12 @@
   {% else %}
   {% if t.status == RUNNING %}{% include "_b_tables.html" %}{% endif %}
   {% if t.status == FINISHED %}
+  {% if t.division_names|length > 1 %}
+  <div class="stats">{% for r in t.results() if r.place and r.place[0] <= 2 %}<div class="stat{% if r.place[0] == 1 %} highlight{% endif %}"><span class="label">{{ r.division }} · {{ "Champion" if r.place[0] == 1 else "Runner-up" }}</span><span class="value">{{ r.entry.name }}</span></div>{% endfor %}</div>
+  {% else %}
   {% set top = t.results()[:4] %}
   <div class="stats">{% for r in top if r.place %}<div class="stat{% if loop.first %} highlight{% endif %}"><span class="label">{{ r.place_text }}</span><span class="value">{{ r.entry.name }}</span></div>{% endfor %}</div>
+  {% endif %}
   {% endif %}
   <section>{% include "_bracket.html" %}</section>
   {% endif %}

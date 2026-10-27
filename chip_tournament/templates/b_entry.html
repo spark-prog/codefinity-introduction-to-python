@@ -3,7 +3,7 @@
 {% block head %}{% if match and match.status == "called" and not is_entry %}{% set secs = 30 %}{% include "_refresh.html" %}{% endif %}{% endblock %}
 {% block content %}
 <header class="page-head">
-  <p class="eyebrow">{{ t.settings.name }}{% if entry.seed %} · seed {{ entry.seed }}{% endif %}</p>
+  <p class="eyebrow">{{ t.settings.name }}{% if entry.division %} · {{ entry.division }} group{% endif %}{% if entry.seed %} · seed {{ entry.seed }}{% endif %}</p>
   <h1>{{ entry.name }}</h1>
   {% if t.settings.team_size > 1 and entry.partners != entry.name %}<p class="lede">{{ entry.partners }}</p>{% endif %}
 </header>
@@ -14,7 +14,7 @@
   {% elif entry.status == "no_show" %}
     <p class="lede">Marked as a no-show. See the tournament desk.</p>
   {% elif entry.status == "champion" %}
-    <p class="lede"><b>Champion!</b>{% if entry.payout_cents %} You won {{ entry.payout_cents|money }}. Collect it at the desk.{% endif %}</p>
+    <p class="lede"><b>{{ entry.division ~ " champion!" if entry.division else "Champion!" }}</b>{% if entry.payout_cents %} You won {{ entry.payout_cents|money }}. Collect it at the desk.{% endif %}</p>
   {% elif entry.status == "eliminated" %}
     <p class="lede">You're out{% if place %}, finishing {{ place }}{% endif %}.{% if entry.payout_cents %} You won {{ entry.payout_cents|money }}: collect it at the desk.{% endif %} Thanks for playing!</p>
   {% elif t.status == SETUP %}
@@ -23,7 +23,7 @@
     {% set me = "a" if match.a == entry.id else "b" %}
     <p class="eyebrow">Now playing · {{ t.match_label(match) }}</p>
     <h2>Table {{ match.table }}</h2>
-    <p class="muted">Race to {{ match.race_to }}{% if path.win %} · win: {{ path.win }}{% endif %}{% if path.lose %} · lose: {{ path.lose }}{% endif %}</p>
+    <p class="muted">{% if match.race_a %}{{ t.race_text(match) }}{% else %}Race to {{ match.race_to }}{% endif %}{% if path.win %} · win: {{ path.win }}{% endif %}{% if path.lose %} · lose: {{ path.lose }}{% endif %}</p>
     {% for side, id, sc in (("a", match.a, match.score_a), ("b", match.b, match.score_b)) %}
     <div class="score-row">
       <div class="team-name">{{ t.name_of(id) }}{% if id == entry.id %} <span class="muted">(you)</span>{% endif %}</div>

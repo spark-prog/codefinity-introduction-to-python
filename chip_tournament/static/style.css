@@ -739,3 +739,9 @@ body.default-bg {
 /* ---------- Tournament-only rules at the top of an event's Rules page ---------- */
 .event-rules { margin-bottom: 24px; border-color: rgba(var(--accent-rgb), .55); }
 .event-rules .approved-note { margin: 0 0 14px; color: var(--accent); }
+
+/* ---------- Skill groups: one bracket per group ---------- */
+.division-title { margin: 28px 0 8px; font-size: 1.25rem; color: var(--accent); }
+
+/* The headline glow reaches past the screen edge; clip it there so phones never scroll sideways. */
+html, body { overflow-x: clip; }

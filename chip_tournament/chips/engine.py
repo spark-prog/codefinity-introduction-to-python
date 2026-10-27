@@ -103,11 +103,13 @@ def money(cents: float) -> str:
 class Player:
     name: str
     phone: str = ""
-    skill: int = 0
+    skill: int = 0  # the skill level used for caps, groups and races (the higher of skill_8 and skill_9, if given)
     # Texts go only to players who ticked the consent box themselves (on the
     # registration form, or on the team page for a partner).
     sms_consent: bool = False
     sms_consent_at: str | None = None
+    skill_8: int = 0  # 8-Ball skill level, when asked separately
+    skill_9: int = 0  # 9-Ball skill level, when asked separately
 
 
 @dataclass

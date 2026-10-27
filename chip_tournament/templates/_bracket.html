@@ -29,7 +29,9 @@
 </div>
 {% endif %}
 
-{% for stage in t.bracket() %}
+{% for division in t.division_names %}
+{% if division %}<h3 class="division-title">{{ division }}</h3>{% endif %}
+{% for stage in t.bracket(division) %}
 <div class="bracket-stage">
   <h3>{{ stage.title }}</h3>
   <div class="bracket" role="region" aria-label="{{ stage.title }}" tabindex="0">
@@ -52,4 +54,5 @@
     {% endfor %}
   </div>
 </div>
+{% endfor %}
 {% endfor %}

@@ -119,12 +119,12 @@
   {% include "_save_contact.html" %}
   {% for p in team.players if p.phone %}
     {% if p.sms_consent %}
-      <p><span class="arrived">✓ Text alerts on</span> for {{ p.name }} (cell ending in {{ p.phone|last4 }})</p>
+      <p><span class="arrived">✓ Text alerts on</span> for {{ p.name }}</p>
     {% elif session.get("team_" ~ team.id) %}
       <form method="post" action="{{ url_for('team_texts', team_id=team.id) }}" class="consent-box" style="margin-bottom: 16px">
         <input type="hidden" name="player" value="{{ loop.index0 }}">
         <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
-          <span>I'm {{ p.name }}. Yes, text me tournament alerts at my cell ending in {{ p.phone|last4 }}. I agree to receive text messages from
+          <span>I'm {{ p.name }}. Yes, text me tournament alerts at the cell number on my registration. I agree to receive text messages from
             {{ legal.brand }} ({{ legal.company }}) about this tournament: table calls, results, cash-in and last call.
             Message frequency varies. Msg &amp; data rates may apply. Reply HELP for help, STOP to opt out.</span></label>
         <div><button class="button">Turn on text alerts for {{ p.name }}</button></div>

@@ -5,17 +5,22 @@
   <div>
     <p class="eyebrow">{{ (t.settings.sms_name if t else "") or "League" }} rules</p>
     <h1>Rules</h1>
+    {% if t %}
+    <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% else %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
+      <a href="/rules">All league rules</a></p>
+    {% else %}
     <p class="lede">Pick a game, or search every rule set at once.</p>
+    {% endif %}
   </div>
-  <div class="card rules-search">
+  {% if rule_sets %}<div class="card rules-search">
     <label for="rule-search" class="eyebrow">Search the rules</label>
     <input id="rule-search" type="search" placeholder="e.g. scratch, foul, ball in hand" autocomplete="off">
     <p id="rule-count" class="muted" aria-live="polite"></p>
-  </div>
+  </div>{% endif %}
 </header>
 
 {% if rule_sets %}
-<nav class="rule-tabs" role="tablist">
+<nav class="rule-tabs" role="tablist"{% if rule_sets|length == 1 %} hidden{% endif %}>
   {% for r in rule_sets %}
   <button type="button" class="rule-tab" data-target="r-{{ r.id }}" role="tab">{{ r.title }}<span class="rule-hits"></span></button>
   {% endfor %}
@@ -30,7 +35,7 @@
 </article>
 {% endfor %}
 <p id="rule-none" class="banner" hidden></p>
-{% else %}
+{% elif not t %}
 <p class="muted">No rules have been posted yet.</p>
 {% endif %}
 

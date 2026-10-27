@@ -217,6 +217,7 @@ class BracketSettings:
     sms_name: str = ""
     theme: str = "electric"
     contact_phone: str = ""
+    rule_set: str = ""  # id of the league rule set this event plays by
     match_minutes: int = 30  # amber after this
     long_match_minutes: int = 45  # red after this
 

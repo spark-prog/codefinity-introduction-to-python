@@ -721,6 +721,7 @@ body.default-bg {
 .show-sm { display: none; }
 @media (max-width: 560px) {
   .show-sm { display: inline; }
+  .brand.show-sm { display: flex; }  /* an event's title sits by the logo on phones */
   .nav a, .nav .link, .nav.signed-in a, .nav.signed-in .link { padding: 8px 5px; letter-spacing: .06em; }
   .nav a.nav-cta { padding: 7px 9px; }
   /* Signed in: Log out becomes an icon at the end of the top row, so the menu keeps one row */

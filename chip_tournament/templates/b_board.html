@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block head %}<meta http-equiv="refresh" content="15">{% endblock %}
+{% block head %}{% include "_refresh.html" %}{% endblock %}
 {% block content %}
 <div class="board">
   <header class="page-head">
     <p class="eyebrow">Live board · refreshes every 15 seconds</p>
     <h1>{{ t.settings.name }}</h1>
     <p class="muted">{{ t.format_name }}</p>
+    {% with teams = t.entries.values()|rejectattr("status", "equalto", "no_show")|list %}{% include "_find_team.html" %}{% endwith %}
   </header>
   {% if t.status == SETUP %}
   <p class="lede">The bracket hasn't been drawn yet. {{ t.field_entries|length }} entries so far.</p>

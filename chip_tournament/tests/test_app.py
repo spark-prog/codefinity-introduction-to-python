@@ -783,3 +783,22 @@ def test_event_menu_order(client):
     client.post("/admin/login", data={"password": "secret"})
     nav = client.get("/").get_data(as_text=True).split('<nav class="nav')[1].split("</nav>")[0]
     assert re.findall(r">([^<>]+)</a>", nav)[-1] == "Director"
+
+
+def test_players_reach_their_scoring_page_from_home_and_board(client):
+    store, admin, m, teams = start_two_teams(client)
+    sharks = teams["Sharks"]
+    player = client.application.test_client()
+    for path in ("/", "/board"):
+        page = player.get(f"/t/{ChipEventClient.event_id}{path}").get_data(as_text=True)
+        assert "Keep score:" in page and f'href="/t/{ChipEventClient.event_id}/team/{sharks.id}"' in page
+    home = player.get(f"/t/{ChipEventClient.event_id}/").get_data(as_text=True)
+    assert "Find your team to keep score" not in home  # the picker lives on the board
+    board = player.get(f"/t/{ChipEventClient.event_id}/board").get_data(as_text=True)
+    assert "Find your team to keep score" in board and f'<option value="{sharks.id}">Sharks</option>' in board
+    assert '<meta name="auto-refresh" content="15">' in board and 'http-equiv="refresh" content="15"' in board  # noscript fallback
+    assert '<meta name="auto-refresh" content="20">' in player.get(f"/t/{ChipEventClient.event_id}/team/{sharks.id}").get_data(as_text=True)
+    r = player.get(f"/t/{ChipEventClient.event_id}/find?team={sharks.id}")
+    assert r.headers["Location"] == f"/t/{ChipEventClient.event_id}/team/{sharks.id}"
+    assert player.get(f"/t/{ChipEventClient.event_id}/find?team=nope").headers["Location"] == f"/t/{ChipEventClient.event_id}/"
+    assert b"Enter your team PIN" in player.get(r.headers["Location"]).data  # the PIN still guards scoring

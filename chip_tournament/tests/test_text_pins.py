@@ -68,3 +68,26 @@ def test_director_button_sends_the_texts(tmp_path, monkeypatch):
         time.sleep(0.02)
     assert sent == [("5551110000", f"Sharks, your team PIN for Chips is {team.pin}."
                     f" Team page: http://localhost/t/{ev.id}/team/{team.id} Reply STOP to opt out.")]
+
+
+def test_site_url_setting_sets_the_link_in_texts(tmp_path, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    monkeypatch.setenv("SITE_URL", "https://controltable.app/")
+    for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "VIEWER_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
+    sent = []
+    monkeypatch.setattr(SmsSender, "send", lambda self, to, body: sent.append(body) or "logged")
+    app = create_app(str(tmp_path))
+    app.testing = True
+    ev = app.config["hub"].create("Chips", "chip")
+    with ev.store.change("teams") as t:
+        team = t.register_team("Sharks", [Player("A", "5551110000", 4, True), Player("B", "", 4)])
+        t.outbox = []
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    admin.post(f"/t/{ev.id}/admin/text-pins")
+    for _ in range(100):
+        if sent:
+            break
+        time.sleep(0.02)
+    assert f"https://controltable.app/t/{ev.id}/team/{team.id}" in sent[0]

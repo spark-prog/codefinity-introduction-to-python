@@ -245,7 +245,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         """Apply one change to the tournament; show rule errors instead of crashing."""
         try:
             with store.change(label) as t:
-                t.site_url = f"{request.url_root.rstrip('/')}/t/{g.event.id}"  # for team-page links in texts
+                # For team-page links in texts: the SITE_URL setting (e.g. https://controltable.app) when set,
+                # else whatever address the director is using.
+                root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+                t.site_url = f"{root}/t/{g.event.id}"
                 result = fn(t)
                 send_texts(t)
             if success:

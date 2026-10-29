@@ -361,9 +361,9 @@ class Tournament:
     def _welcome(self, team: Team, opening: str) -> str:
         """The first text a player gets: who we are, what they'll get, and the required disclosures."""
         link = self.team_link(team)
-        return (f"{opening} Your team PIN is {team.pin}."
-                + (f" Team page: {link}" if link else "")
-                + " You'll get tournament alerts: registration, table calls, results, cash-in and last call."
+        return (f"{opening}\nTeam PIN: {team.pin}"  # the PIN and link each get their own line
+                + (f"\nTeam page: {link}" if link else "")
+                + "\nYou'll get tournament alerts: registration, table calls, results, cash-in and last call."
                   " Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out."
                 + self._questions())
 
@@ -573,7 +573,7 @@ class Tournament:
         self._text_team(
             keep,
             f"You're partnered up! {keep.partners} are {keep.name} for {self.settings.name}, combined skill "
-            f"{combined} ({self.chips_for_skill(combined)} chips). Your team PIN is {keep.pin}.",
+            f"{combined} ({self.chips_for_skill(combined)} chips).\nTeam PIN: {keep.pin}",
         )
         self._fill_from_waitlist()
         return keep
@@ -762,7 +762,7 @@ class Tournament:
             self._text_team(
                 team,
                 f"{team.name} is all set for {self.settings.name}: {team.partners}, combined skill {new_skill} "
-                f"({self.chips_for_skill(new_skill)} chips). Your team PIN is {team.pin}.",
+                f"({self.chips_for_skill(new_skill)} chips).\nTeam PIN: {team.pin}",
             )
         elif solo and not was_solo:
             change = f" Partner removed; {team.name} needs a partner by {self.partner_deadline_text()}."
@@ -1642,8 +1642,8 @@ class Tournament:
                 unreachable += 1
                 continue
             link = self.team_link(team)
-            self._text_team(team, f"{team.name}, your team PIN for {self.settings.name} is {team.pin}."
-                            + (f" Team page: {link}" if link else "") + " Reply STOP to opt out.")
+            self._text_team(team, f"{team.name}, here's your team info for {self.settings.name}.\nTeam PIN: {team.pin}"
+                            + (f"\nTeam page: {link}" if link else "") + "\nReply STOP to opt out.")
         self._say(f"Resent team PINs: {len(self.outbox) - before} text(s).")
         return len(self.outbox) - before, unreachable
 

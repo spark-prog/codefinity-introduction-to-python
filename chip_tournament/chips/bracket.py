@@ -374,9 +374,9 @@ class BracketTournament:
 
     def _welcome(self, entry: Entry, opening: str) -> str:
         link = self.entry_link(entry)
-        return (f"{opening} Your PIN is {entry.pin}."
-                + (f" Your page: {link}" if link else "")
-                + " You'll get tournament alerts: registration, table calls and results."
+        return (f"{opening}\nPIN: {entry.pin}"  # the PIN and link each get their own line
+                + (f"\nYour page: {link}" if link else "")
+                + "\nYou'll get tournament alerts: registration, table calls and results."
                   " Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out."
                 + self._questions())
 
@@ -415,8 +415,8 @@ class BracketTournament:
                 unreachable += 1
                 continue
             link = self.entry_link(entry)
-            self._text(entry, f"{entry.name}, your PIN for {self.settings.name} is {entry.pin}."
-                       + (f" Your page: {link}" if link else "") + " Reply STOP to opt out.")
+            self._text(entry, f"{entry.name}, here's your info for {self.settings.name}.\nPIN: {entry.pin}"
+                       + (f"\nYour page: {link}" if link else "") + "\nReply STOP to opt out.")
         self._say(f"Resent PINs: {len(self.outbox) - before} text(s).")
         return len(self.outbox) - before, unreachable
 

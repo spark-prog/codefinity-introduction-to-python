@@ -1162,7 +1162,8 @@ class BracketTournament:
                           "waiting for the director to call it.")
         if self.settings.call_mode == CONTINUOUS:
             for m in self.assigned_matches():
-                self._call(m, m.table)
+                if not self._playing_elsewhere(m):
+                    self._call(m, m.table)
 
     def call_match(self, match_id: str) -> BMatch:
         """Director: call a ready match to the table it was given (texts both sides, starts the clock)."""
@@ -1171,17 +1172,25 @@ class BracketTournament:
             raise TournamentError(f"Table {m.table} has already been called.")
         if m.status != READY or not m.table:
             raise TournamentError("That match doesn't have a table yet.")
+        if self._playing_elsewhere(m):
+            raise TournamentError("One of those entries is playing on another table right now.")
         self._call(m, m.table)
         return m
+
+    def _playing_elsewhere(self, m: BMatch) -> bool:
+        return any(o is not m and o.status == CALLED and {o.a, o.b} & {m.a, m.b} for o in self.matches)
 
     def call_all(self) -> int:
         """Director: call every ready match that has a table. Returns how many were called."""
         assigned = self.assigned_matches()
         if not assigned:
             raise TournamentError("No matches are waiting to be called.")
+        called = 0
         for m in assigned:
-            self._call(m, m.table)
-        return len(assigned)
+            if not self._playing_elsewhere(m):  # never send one player to two tables
+                self._call(m, m.table)
+                called += 1
+        return called
 
     def _call(self, m: BMatch, table: str) -> None:
         m.status, m.table, m.called_at, m.priority = CALLED, table, now(), False
@@ -1497,6 +1506,11 @@ class BracketTournament:
             busy = {x for o in self.matches if o.status == CALLED for x in (o.a, o.b)}
             if busy & {m.a, m.b}:
                 raise TournamentError("One of those entries is playing on another table right now.")
+            for o in self.assigned_matches():  # a match set (not called) for either player gives its table back
+                if o is not m and {o.a, o.b} & {m.a, m.b}:
+                    self._say(f"#{o.num} gives up table {o.table}: {self.name_of(o.a if o.a in (m.a, m.b) else o.b)} "
+                              f"was called to table {table}.")
+                    o.table = None
             self._call(m, table)
         elif m.status == CALLED:
             old, m.table = m.table, table
@@ -1577,7 +1591,8 @@ class BracketTournament:
         """Set tables for whatever fits now and call every match that has one."""
         self._call_ready()
         for m in self.assigned_matches():
-            self._call(m, m.table)
+            if not self._playing_elsewhere(m):
+                self._call(m, m.table)
 
     def withdraw(self, entry_id: str) -> None:
         entry = self.entry(entry_id)

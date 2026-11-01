@@ -37,16 +37,38 @@
             <button class="button big block">Continue</button>
           </form>
         {% endif %}
+        {% set keeper = is_team and match.scorekeeper_device == my_device %}
+        {% if is_team and not match.sent_at %}
+          {% if not match.scorekeeper %}
+          <form method="post" action="{{ url_for('team_keep_score', team_id=team.id) }}" class="form keep-score-form">
+            <p><b>One player keeps score for this match.</b> Pick your name to be the scorekeeper.</p>
+            <label>Your name <select name="player" required>{% for p in team.players %}<option>{{ p.name }}</option>{% endfor %}</select></label>
+            <button class="button big block">I'll keep score</button>
+          </form>
+          {% elif not keeper %}
+          <p class="scorekeeper-line">Scorekeeper: <b>{{ match.scorekeeper }}</b></p>
+          {% if match.scorekeeper_locked %}<p class="muted">The director has locked scoring to {{ match.scorekeeper }}.</p>
+          {% else %}
+          <details class="take-over"><summary class="button secondary">Take over scoring</summary>
+            <form method="post" action="{{ url_for('team_keep_score', team_id=team.id) }}" class="form"
+                  data-dialog-title="Take over scoring?" data-dialog-text="{{ match.scorekeeper }} is keeping score. Only take over if their phone died or they asked you to. The score stays as it is." data-dialog-ok="Take over">
+              <label>Your name <select name="player" required>{% for p in team.players %}<option>{{ p.name }}</option>{% endfor %}</select></label>
+              <button class="button">Take over scoring</button>
+            </form>
+          </details>
+          {% endif %}
+          {% else %}<p class="scorekeeper-line">You're keeping score.</p>{% endif %}
+        {% endif %}
         {% for side, tid, sc in (("a", match.team_a, match.score_a), ("b", match.team_b, match.score_b)) %}
         <div class="play-row">
           <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% endif %}</span>
-          {% if is_team %}
+          {% if keeper and not match.sent_at %}
           <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
             <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
             <button class="button secondary score-btn" {% if not sc %}disabled{% endif %}>−</button></form>
           {% endif %}
           <b class="big-score">{{ sc }}</b>
-          {% if is_team %}
+          {% if keeper and not match.sent_at %}
           <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
             <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
             <button class="button score-btn" {% if t.race_winner(match) %}disabled{% endif %}>+</button></form>
@@ -54,25 +76,29 @@
         </div>
         {% endfor %}
         {% set won = t.race_winner(match) %}
-        {% if won %}
+        {% if match.sent_at %}
+          <div class="banner await-banner" style="margin-top: 16px">
+            <b>Result sent to the director</b>{% if won %}: {{ t.name_of(won) }} won {{ [match.score_a, match.score_b]|max }}–{{ [match.score_a, match.score_b]|min }}{% endif %}.
+            It counts once the director approves it. Stay near the table in case the director sends it back.</div>
+        {% elif won %}
           {% set won_side = "a" if won == match.team_a else "b" %}
           <div class="banner await-banner" style="margin-top: 16px">
             <p style="margin: 0 0 12px"><b>{{ t.name_of(won) }} won the match</b> ({{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}).
-              {% if is_team %}Submit the result, or go back if a game was entered by mistake.{% else %}Waiting for the result to be submitted.{% endif %}</p>
-            {% if is_team %}{% include "_submit_forms.html" %}{% endif %}
+              {% if keeper %}Send it to the director, or go back if a rack was entered by mistake.{% else %}Waiting for the scorekeeper to send the result.{% endif %}</p>
+            {% if keeper %}{% include "_submit_forms.html" %}{% endif %}
           </div>
-          {% if is_team %}
+          {% if keeper %}
           <dialog class="result-dialog" id="result-dialog">
             <h2>{{ t.name_of(won) }} won the match</h2>
             <p>Final score {{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}, race to {{ t.settings.race_to }}.
-              Once you submit, only the tournament director can change the result.</p>
+              Check it with the other team. Once you send it, only the director can change it.</p>
             {% include "_submit_forms.html" %}
           </dialog>
           <script>
           (function () { var d = document.getElementById("result-dialog"); if (d && d.showModal) d.showModal(); })();
           </script>
           {% endif %}
-        {% elif is_team %}<p class="muted" style="margin-top: 16px">Either team can keep score. Tap + each time a team wins a game. When a team reaches {{ t.settings.race_to }}, you'll be asked to submit the result.</p>{% endif %}
+        {% elif keeper %}<p class="muted" style="margin-top: 16px">Tap + each time a team wins a rack. When a team reaches {{ t.settings.race_to }}, you'll send the result to the director.</p>{% endif %}
       </section>
       {% else %}
       <div class="card"><p class="eyebrow">Next match</p><h2>vs {{ t.name_of(opp) }}</h2>

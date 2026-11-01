@@ -188,6 +188,14 @@ class Match:
     priority: bool = False  # director pressed "Call next" for this pair
     rematch: bool = False  # these teams had already played each other
     clock_paused: bool = False  # no automatic forfeit (set after an Undo restores an overdue match)
+    # One player keeps score: only their phone (scorekeeper_device) can change it.
+    scorekeeper: str | None = None  # "Ann (Sharks)"
+    scorekeeper_team: str | None = None
+    scorekeeper_device: str | None = None
+    scorekeeper_locked: bool = False  # the director blocked takeovers
+    scorekeeper_note: str = ""  # the last change, for the director's card ("Ann → Cy at 8:42 PM")
+    sent_at: str | None = None  # the scorekeeper sent the result; it counts once the director approves
+    sent_by: str | None = None
 
 
 @dataclass
@@ -1142,10 +1150,17 @@ class Tournament:
         self._say(f"Director moved {team.name} to the front of the line.")
         self._advance()
 
-    def score(self, match_id: str, side: str, delta: int, by: str | None = None) -> Match:
+    def score(self, match_id: str, side: str, delta: int, by: str | None = None, device: str | None = None) -> Match:
+        """Change a score: from the director (no device) or the match's scorekeeper (their device)."""
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("Only a match at a table can be scored.")
+        if device is not None:
+            if m.scorekeeper_device != device:
+                raise TournamentError(f"{m.scorekeeper} is keeping score." if m.scorekeeper
+                                      else "Tap I'll keep score first.")
+            if m.sent_at:
+                raise TournamentError("The result has been sent to the director. Ask the director to change it.")
         if by:  # entered by a player from their team page
             name = self.name_of(m.team_a if side == "a" else m.team_b)
             self._say(f"{by} entered {'+1' if delta > 0 else '-1'} for {name} on table {m.table}.")
@@ -1171,12 +1186,170 @@ class Tournament:
         return None
 
     def submit_result(self, match_id: str) -> Match:
-        """Confirm the score: the team that reached the race wins."""
+        """Director: confirm the score. The team that reached the race wins."""
         m = self.match(match_id)
         winner = self.race_winner(m)
         if winner is None:
             raise TournamentError(f"Neither team has reached {self.settings.race_to} yet.")
         return self.record_result(match_id, winner)
+
+    # ------------------------------------------------------------ the scorekeeper
+
+    def claim_scorekeeper(self, match_id: str, team_id: str, player: str, device: str) -> Match:
+        """A player keeps score for a called match (or takes over from a dead phone)."""
+        m = self.match(match_id)
+        if m.status != CALLED:
+            raise TournamentError("This match hasn't been called to a table.")
+        if team_id not in (m.team_a, m.team_b):
+            raise TournamentError("Only the two teams in this match can keep its score.")
+        team = self.teams[team_id]
+        if player not in [p.name for p in team.players]:
+            raise TournamentError("Pick your name.")
+        if m.sent_at:
+            raise TournamentError("The result has been sent to the director.")
+        if m.scorekeeper_device == device:
+            return m
+        label = f"{player} ({team.name})"
+        if m.scorekeeper_device:
+            if m.scorekeeper_locked:
+                raise TournamentError(f"The director has locked scoring to {m.scorekeeper}.")
+            when = datetime.now().strftime("%I:%M %p").lstrip("0")
+            m.scorekeeper_note = f"Scorekeeper changed: {m.scorekeeper} → {label} at {when}"
+            self._say(f"Table {m.table}: {m.scorekeeper_note}.")
+        else:
+            self._say(f"Table {m.table}: {label} is keeping score.")
+        m.scorekeeper, m.scorekeeper_team, m.scorekeeper_device = label, team_id, device
+        return m
+
+    def clear_scorekeeper(self, match_id: str) -> Match:
+        """Director: free the scorekeeper spot so the next player can claim it."""
+        m = self.match(match_id)
+        if m.scorekeeper:
+            self._say(f"Table {m.table}: director cleared the scorekeeper ({m.scorekeeper}).")
+        m.scorekeeper = m.scorekeeper_team = m.scorekeeper_device = None
+        m.scorekeeper_locked = False
+        return m
+
+    def lock_scorekeeper(self, match_id: str, locked: bool) -> Match:
+        """Director: stop (or allow again) other players taking over scoring."""
+        m = self.match(match_id)
+        if locked and not m.scorekeeper:
+            raise TournamentError("Nobody is keeping score on this table yet.")
+        m.scorekeeper_locked = locked
+        self._say(f"Table {m.table}: scoring {'locked to ' + m.scorekeeper if locked else 'unlocked'}.")
+        return m
+
+    def send_result(self, match_id: str, device: str) -> Match:
+        """The scorekeeper sends the result to the director. The table is held until it's approved."""
+        m = self.match(match_id)
+        if m.status != CALLED:
+            raise TournamentError("This match isn't on a table.")
+        if m.scorekeeper_device != device:
+            raise TournamentError("Only the scorekeeper can send the result.")
+        winner = self.race_winner(m)
+        if winner is None:
+            raise TournamentError(f"Neither team has reached {self.settings.race_to} yet.")
+        m.sent_at, m.sent_by = now(), m.scorekeeper
+        self._say(f"Table {m.table}: {m.scorekeeper} sent the result ({self.name_of(winner)} won "
+                  f"{max(m.score_a, m.score_b)}-{min(m.score_a, m.score_b)}) for the director to approve.")
+        return m
+
+    def results_to_approve(self) -> list[Match]:
+        """Results sent by scorekeepers, oldest first."""
+        return sorted((m for m in self.matches if m.status == CALLED and m.sent_at), key=lambda m: m.sent_at)
+
+    def approve_result(self, match_id: str) -> Match:
+        """Director: the sent result counts. Chips, lists and texts update and the table opens."""
+        m = self.match(match_id)
+        if m.status != CALLED or not m.sent_at:
+            raise TournamentError("There's no result waiting for approval on this match.")
+        winner = self.race_winner(m)
+        if winner is None:
+            raise TournamentError("Neither team has reached the race now. Fix the score, or send it back.")
+        return self.record_result(match_id, winner)
+
+    def send_back(self, match_id: str) -> Match:
+        """Director: the result isn't right. The same teams return to the table to finish."""
+        m = self.match(match_id)
+        if m.status != CALLED or not m.sent_at:
+            raise TournamentError("There's no result waiting for approval on this match.")
+        m.sent_at = m.sent_by = None
+        self._say(f"Table {m.table}: the director sent the result back; the match isn't finished.")
+        for tid in (m.team_a, m.team_b):
+            self._text_team(self.teams[tid], f"The director sent your match back: return to table {m.table} "
+                                             "to finish it.")
+        return m
+
+    def _check_correctable(self, m: Match, verb: str) -> None:
+        """Raise unless this match's result can still be corrected (nothing has built on it since)."""
+        if self.status != RUNNING:
+            raise TournamentError(f"Results can only be {verb} while the tournament is running. Use Undo instead.")
+        if m.status != DONE or not m.team_b:
+            raise TournamentError("Only a finished match can be corrected.")
+        teams = [self.teams[m.team_a], self.teams[m.team_b]]
+        for team in teams:
+            if team.status not in (ACTIVE, ELIMINATED):
+                raise TournamentError(f"{team.name} has already cashed in, so this result can't be {verb}. "
+                                      "Use Undo, or Adjust the teams' chips.")
+        # Both teams' chips must still come from this match: no Adjust (or anything else) since.
+        for team in teams:
+            mine = [e for e in self.ledger if e.team_id == team.id]
+            touched = [e for e in mine if e.reason.startswith((f"Lost match #{m.round} ", f"Lost match #{m.round}:",
+                                                                f"Forfeited match #{m.round} "))]
+            if touched and mine[-1] is not touched[-1] or (team.id == m.winner and team.status != ACTIVE):
+                raise TournamentError(f"{team.name}'s chips have changed since this match (for example with Adjust), "
+                                      f"so this result can't be {verb}. Use Undo, or Adjust the teams' chips.")
+        later = self.matches[self.matches.index(m) + 1:]
+        for x in later:
+            if {x.team_a, x.team_b} & {m.team_a, m.team_b} and (
+                    x.status == DONE or (x.status == CALLED and (x.score_a or x.score_b or x.sent_at))):
+                busy = teams[0] if teams[0].id in (x.team_a, x.team_b) else teams[1]
+                raise TournamentError(f"{busy.name} has already started another match, so this result can't be "
+                                      f"{verb}. Use Adjust to fix the teams' chips.")
+
+    def _clear_since(self, m: Match) -> None:
+        """Cancel anything set up for this match's teams since; their new opponents go back to the front."""
+        mine = (m.team_a, m.team_b)
+        for team_id in mine:
+            x = self.current_match_for(team_id)
+            if x is not None:
+                x.status, x.finished_at = CANCELLED, now()
+                other = x.team_b if x.team_a == team_id else x.team_a
+                if other and other not in mine:
+                    last = [y for y in self.matches if y.status == DONE and other in (y.team_a, y.team_b)]
+                    lost_last = bool(last) and (last[-1].loser == other or last[-1].forfeit == "both")
+                    self._enqueue(other, self.losers_list if lost_last else self.winners_list, front=True)
+            for lst in (self.winners_list, self.losers_list):
+                if team_id in lst:
+                    lst.remove(team_id)
+
+    def undo_forfeit(self, match_id: str) -> Match:
+        """Director: a forfeit was recorded by mistake. Chips go back and the two teams replay the match next."""
+        m = self.match(match_id)
+        if not m.forfeit:
+            raise TournamentError("That match wasn't a forfeit. Use Fix result to swap the winner.")
+        if self.last_call:
+            raise TournamentError("After last call, use Undo, or Adjust the teams' chips.")
+        self._check_correctable(m, "undone")
+        self._clear_since(m)
+        a, b = self.teams[m.team_a], self.teams[m.team_b]
+        forfeited = [a, b] if m.forfeit == "both" else [self.teams[m.loser]]
+        for team in forfeited:
+            self._chip_change(team, +1, f"Lost match #{m.round}: forfeit undone, chip given back")
+            team.losses -= 1
+            if team.status == ELIMINATED:
+                team.status = ACTIVE
+        if m.forfeit != "both":
+            self.teams[m.winner].wins -= 1
+        m.status, m.finished_at = CANCELLED, now()
+        self._say(f"Forfeit on match #{m.round} undone: {a.name} and {b.name} get their chips back and replay it next.")
+        replay = self._queue_pair(a.id, b.id, m.bracket)
+        replay.priority = True
+        for team in (a, b):
+            self._text_team(team, f"The forfeit on table {m.table} was undone. {team.name} has {team.chips} chip(s) "
+                                  "and replays that match next: watch for your table call.")
+        self._advance()
+        return replay
 
     def fix_result(self, match_id: str) -> Match:
         """Director: the wrong team was recorded as the winner. Swap the result of that match only.
@@ -1184,46 +1357,15 @@ class Tournament:
         Safe only while neither team has started a later match; a pairing or table call made
         since is cancelled and redone."""
         m = self.match(match_id)
-        if self.status != RUNNING:
-            raise TournamentError("Results can only be fixed while the tournament is running. Use Undo instead.")
-        if m.status != DONE or not m.winner or not m.loser:
-            raise TournamentError("Only a finished match can be fixed.")
-        if m.forfeit:
-            raise TournamentError("A forfeit can't be swapped. Use Undo, or Adjust the teams' chips.")
+        if m.forfeit == "both":
+            raise TournamentError("Both teams forfeited this match: use Undo forfeit.")
+        self._check_correctable(m, "swapped")
         old_w, old_l = self.teams[m.winner], self.teams[m.loser]
-        for team in (old_w, old_l):
-            if team.status not in (ACTIVE, ELIMINATED):
-                raise TournamentError(f"{team.name} has already cashed in, so this result can't be swapped. "
-                                      "Use Undo, or Adjust the teams' chips.")
-        # Both teams' chips must still come from this match: no Adjust (or anything else) since.
-        for team in (old_w, old_l):
-            mine = [e for e in self.ledger if e.team_id == team.id]
-            touched = [e for e in mine if e.reason.startswith((f"Lost match #{m.round} ", f"Lost match #{m.round}:"))]
-            if touched and mine[-1] is not touched[-1] or (team is old_w and team.status != ACTIVE):
-                raise TournamentError(f"{team.name}'s chips have changed since this match (for example with Adjust), "
-                                      "so this result can't be swapped. Use Undo, or Adjust the teams' chips.")
-        later = self.matches[self.matches.index(m) + 1:]
-        for x in later:
-            if {x.team_a, x.team_b} & {old_w.id, old_l.id} and (
-                    x.status == DONE or (x.status == CALLED and (x.score_a or x.score_b))):
-                busy = old_w if old_w.id in (x.team_a, x.team_b) else old_l
-                raise TournamentError(f"{busy.name} has already started another match, so this result can't be "
-                                      "swapped. Use Adjust to fix the teams' chips.")
-        # Cancel anything set up for these two teams since; their opponents go back to the front of the line.
-        for team in (old_w, old_l):
-            x = self.current_match_for(team.id)
-            if x is not None:
-                x.status, x.finished_at = CANCELLED, now()
-                other = x.team_b if x.team_a == team.id else x.team_a
-                if other and other not in (old_w.id, old_l.id):
-                    last = [y for y in self.matches if y.status == DONE and other in (y.team_a, y.team_b)]
-                    lost_last = bool(last) and (last[-1].loser == other or last[-1].forfeit == "both")
-                    self._enqueue(other, self.losers_list if lost_last else self.winners_list, front=True)
-            for lst in (self.winners_list, self.losers_list):
-                if team.id in lst:
-                    lst.remove(team.id)
+        self._clear_since(m)
 
         m.winner, m.loser = old_l.id, old_w.id
+        if m.forfeit:  # the forfeit now belongs to the other team
+            m.forfeit = "a" if m.loser == m.team_a else "b"
         # Swap the scores only if they favored the old winner (a wrong tap on Winner leaves them right).
         if (m.score_a if old_w.id == m.team_a else m.score_b) > (m.score_b if old_w.id == m.team_a else m.score_a):
             m.score_a, m.score_b = m.score_b, m.score_a
@@ -1595,6 +1737,11 @@ class Tournament:
             raise TournamentError("Enter a non-zero change.")
         if team.chips + change < 0:
             raise TournamentError("A team can't have fewer than zero chips.")
+        current = self.current_match_for(team.id)
+        if team.chips + change == 0 and current is not None and (current.score_a or current.score_b or current.sent_at):
+            # Checked before anything changes (cancelling a match that hasn't started is fine).
+            raise TournamentError(f"{team.name} has a match in progress on table {current.table}. "
+                                  "Record that match (or a forfeit) before taking its last chip.")
         self._chip_change(team, change, f"Adjustment: {reason or 'no reason given'}")
         self._say(f"Adjusted {team.name} by {change:+d} chip(s): {reason}.")
         if team.chips == 0:

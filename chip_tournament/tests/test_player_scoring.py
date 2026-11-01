@@ -35,5 +35,7 @@ def test_entry_finds_its_page_and_scores_with_pin(tmp_path, monkeypatch, fmt):
     player.post(f"/t/{ev.id}/entry/{entry.id}/score", data={"side": "a", "delta": "1"})
     assert ev.load().match(m.id).score_a == 0  # no PIN, no scoring
     player.post(f"/t/{ev.id}/entry/{entry.id}/login", data={"pin": entry.pin})
+    assert "I'll keep score" in player.get(f"/t/{ev.id}/entry/{entry.id}").get_data(as_text=True)
+    player.post(f"/t/{ev.id}/entry/{entry.id}/keep-score", data={"player": entry.players[0].name})
     player.post(f"/t/{ev.id}/entry/{entry.id}/score", data={"side": "a", "delta": "1"})
     assert ev.load().match(m.id).score_a == 1

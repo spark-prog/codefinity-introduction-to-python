@@ -199,6 +199,13 @@ class BMatch:
     loser: str | None = None
     forfeit: bool = False
     priority: bool = False
+    scorekeeper: str | None = None  # one player keeps score; only their phone can change it
+    scorekeeper_entry: str | None = None
+    scorekeeper_device: str | None = None
+    scorekeeper_locked: bool = False
+    scorekeeper_note: str = ""
+    sent_at: str | None = None  # the scorekeeper sent the result; it counts once the director approves
+    sent_by: str | None = None
     ready_at: str | None = None
     called_at: str | None = None
     finished_at: str | None = None
@@ -1237,10 +1244,17 @@ class BracketTournament:
 
     # ---------------------------------------------------------------- tables
 
-    def score(self, match_id: str, side: str, delta: int, by: str | None = None) -> BMatch:
+    def score(self, match_id: str, side: str, delta: int, by: str | None = None, device: str | None = None) -> BMatch:
+        """Change a score: from the director (no device) or the match's scorekeeper (their device)."""
         m = self.match(match_id)
         if m.status != CALLED:
             raise TournamentError("That match isn't on a table.")
+        if device is not None:
+            if m.scorekeeper_device != device:
+                raise TournamentError(f"{m.scorekeeper} is keeping score." if m.scorekeeper
+                                      else "Tap I'll keep score first.")
+            if m.sent_at:
+                raise TournamentError("The result has been sent to the director. Ask the director to change it.")
         if side not in ("a", "b"):
             raise TournamentError("Pick a side.")
         attr, other_side = f"score_{side}", "b" if side == "a" else "a"
@@ -1261,6 +1275,87 @@ class BracketTournament:
         if m.score_b >= self.race_of(m, "b"):
             return m.b
         return None
+
+    # ------------------------------------------------------------ the scorekeeper
+
+    def claim_scorekeeper(self, match_id: str, entry_id: str, player: str, device: str) -> BMatch:
+        """A player keeps score for a called match (or takes over from a dead phone)."""
+        m = self.match(match_id)
+        if m.status != CALLED:
+            raise TournamentError("This match hasn't been called to a table.")
+        if entry_id not in (m.a, m.b):
+            raise TournamentError("Only the two sides in this match can keep its score.")
+        entry = self.entries[entry_id]
+        if player not in [p.name for p in entry.players]:
+            raise TournamentError("Pick your name.")
+        if m.sent_at:
+            raise TournamentError("The result has been sent to the director.")
+        if m.scorekeeper_device == device:
+            return m
+        label = player if player == entry.name else f"{player} ({entry.name})"
+        if m.scorekeeper_device:
+            if m.scorekeeper_locked:
+                raise TournamentError(f"The director has locked scoring to {m.scorekeeper}.")
+            when = datetime.now().strftime("%I:%M %p").lstrip("0")
+            m.scorekeeper_note = f"Scorekeeper changed: {m.scorekeeper} → {label} at {when}"
+            self._say(f"Table {m.table}: {m.scorekeeper_note}.")
+        else:
+            self._say(f"Table {m.table}: {label} is keeping score.")
+        m.scorekeeper, m.scorekeeper_entry, m.scorekeeper_device = label, entry_id, device
+        return m
+
+    def clear_scorekeeper(self, match_id: str) -> BMatch:
+        m = self.match(match_id)
+        if m.scorekeeper:
+            self._say(f"Table {m.table}: director cleared the scorekeeper ({m.scorekeeper}).")
+        m.scorekeeper = m.scorekeeper_entry = m.scorekeeper_device = None
+        m.scorekeeper_locked = False
+        return m
+
+    def lock_scorekeeper(self, match_id: str, locked: bool) -> BMatch:
+        m = self.match(match_id)
+        if locked and not m.scorekeeper:
+            raise TournamentError("Nobody is keeping score on this table yet.")
+        m.scorekeeper_locked = locked
+        self._say(f"Table {m.table}: scoring {'locked to ' + m.scorekeeper if locked else 'unlocked'}.")
+        return m
+
+    def send_result(self, match_id: str, device: str) -> BMatch:
+        """The scorekeeper sends the result to the director. The table is held until it's approved."""
+        m = self.match(match_id)
+        if m.status != CALLED:
+            raise TournamentError("This match isn't on a table.")
+        if m.scorekeeper_device != device:
+            raise TournamentError("Only the scorekeeper can send the result.")
+        winner = self.race_winner(m)
+        if winner is None:
+            raise TournamentError("Neither side has reached its race yet.")
+        m.sent_at, m.sent_by = now(), m.scorekeeper
+        self._say(f"Table {m.table}: {m.scorekeeper} sent the result ({self.name_of(winner)} won "
+                  f"{max(m.score_a, m.score_b)}-{min(m.score_a, m.score_b)}) for the director to approve.")
+        return m
+
+    def results_to_approve(self) -> list[BMatch]:
+        return sorted((m for m in self.matches if m.status == CALLED and m.sent_at), key=lambda m: m.sent_at)
+
+    def approve_result(self, match_id: str) -> BMatch:
+        m = self.match(match_id)
+        if m.status != CALLED or not m.sent_at:
+            raise TournamentError("There's no result waiting for approval on this match.")
+        winner = self.race_winner(m)
+        if winner is None:
+            raise TournamentError("Neither side has reached its race now. Fix the score, or send it back.")
+        return self.record_result(match_id, winner)
+
+    def send_back(self, match_id: str) -> BMatch:
+        m = self.match(match_id)
+        if m.status != CALLED or not m.sent_at:
+            raise TournamentError("There's no result waiting for approval on this match.")
+        m.sent_at = m.sent_by = None
+        self._say(f"Table {m.table}: the director sent the result back; the match isn't finished.")
+        for x in (m.a, m.b):
+            self._text(self.entries[x], f"The director sent your match back: return to table {m.table} to finish it.")
+        return m
 
     def submit_result(self, match_id: str) -> BMatch:
         m = self.match(match_id)

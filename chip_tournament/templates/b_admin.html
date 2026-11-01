@@ -66,6 +66,27 @@
       <button class="button small">Call all ({{ ready|length }})</button></form>{% endif %}
     <span class="muted">{{ "Director Calls: press Call match to text the players" if s.call_mode != CONTINUOUS else "Continuous Play: matches are called automatically" }}.
       Orange: no rack scored {{ s.no_rack_minutes }} min after the call · red at {{ s.long_match_minutes }} min.</span></div>
+  {% set to_approve = t.results_to_approve() %}
+  {% if to_approve %}
+  <div class="card approve-list">
+    <h3>Results to approve ({{ to_approve|length }})</h3>
+    {% for m in to_approve %}{% set w = t.race_winner(m) %}
+    <div class="approve-row">
+      <div><b>Table {{ m.table }}:</b> {{ t.name_of(w) if w else "No winner" }} won {{ [m.score_a, m.score_b]|max }}-{{ [m.score_a, m.score_b]|min }}
+        <span class="muted">vs {{ t.name_of(m.b if w == m.a else m.a) }} · {{ t.match_label(m) }} · sent by {{ m.sent_by }} {{ m.sent_at|clock }}</span></div>
+      {% if not is_viewer %}
+      <div class="button-row">
+        <form method="post" action="{{ url_for('b_approve', match_id=m.id) }}" class="inline"><button class="button small">Approve</button></form>
+        <a class="button small secondary" href="#table-{{ m.table }}">Edit score</a>
+        <form method="post" action="{{ url_for('b_send_back', match_id=m.id) }}" class="inline"
+              data-dialog-title="Send table {{ m.table }} back?" data-dialog-text="The result doesn't count. Both sides are texted to return and finish the match." data-dialog-ok="Send back">
+          <button class="button small secondary">Send back</button></form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min):
     {% for m in long %}<b>Table {{ m.table }}</b> (#{{ m.num }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
@@ -81,13 +102,25 @@
   </div>
   {% else %}
   {% set mins = t.match_minutes_played(m) %}
-  <div class="card match{% if mins >= s.long_match_minutes %} long{% elif t.needs_a_look(m) %} over{% endif %}">
+  <div class="card match{% if m.sent_at %} sent{% elif mins >= s.long_match_minutes %} long{% elif t.needs_a_look(m) %} over{% endif %}" id="table-{{ m.table }}">
     <div class="match-head">
       <span class="table-label">Table {{ m.table }}</span>
       <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.no_rack_minutes if not (m.score_a or m.score_b) else 100000 }}" data-long="{{ s.long_match_minutes }}"></span>
       <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</span>
     </div>
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
+    <div class="scorekeeper-line">
+      {% if m.scorekeeper %}Scorekeeper: <b>{{ m.scorekeeper }}</b>{% if m.scorekeeper_locked %} <span class="tag">locked</span>{% endif %}
+      {% else %}<span class="muted">No scorekeeper yet</span>{% endif %}
+      {% if not is_viewer and m.scorekeeper %}
+      <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
+        <input type="hidden" name="action" value="clear"><button class="button small secondary">Change</button></form>
+      <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
+        <input type="hidden" name="action" value="{{ 'unlock' if m.scorekeeper_locked else 'lock' }}"><button class="button small secondary">{{ "Unlock" if m.scorekeeper_locked else "Lock" }}</button></form>
+      {% endif %}
+      {% if m.scorekeeper_note %}<div class="muted small-note">{{ m.scorekeeper_note }}</div>{% endif %}
+    </div>
+    {% if m.sent_at %}<div class="banner await-banner">Result sent by {{ m.sent_by }}: approve it under <b>Results to approve</b>, or fix the score here first.</div>{% endif %}
     {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}
     <div class="score-row">
       <div class="team-name">{{ t.name_of(id) }}</div>

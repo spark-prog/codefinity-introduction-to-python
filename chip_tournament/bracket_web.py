@@ -236,7 +236,8 @@ def register(app, h) -> dict:
         t, entry = entry_or_404(entry_id)
         return render_template("b_entry.html", t=t, entry=entry, match=t.current_match_for(entry_id),
                                history=t.matches_for(entry_id), path=t.next_for(entry_id),
-                               place=place_text(t.places().get(entry_id)), is_entry=signed_in(entry_id))
+                               place=place_text(t.places().get(entry_id)), is_entry=signed_in(entry_id),
+                               my_device=h["scorer_device"]())
 
     @app.post("/t/<event>/entry/<entry_id>/login")
     def b_entry_login(entry_id):
@@ -278,7 +279,20 @@ def register(app, h) -> dict:
             flash(str(exc), "error")
         else:
             name = store.load().name_of(entry_id)
-            act("Score (player)", lambda t: t.score(m.id, side, int(delta), by=name))
+            act("Score (scorekeeper)", lambda t: t.score(m.id, side, int(delta), by=name, device=h["scorer_device"]()))
+        return redirect(url_for("b_entry", entry_id=entry_id))
+
+    @app.post("/t/<event>/entry/<entry_id>/keep-score")
+    def b_entry_keep_score(entry_id):
+        try:
+            m = own_match(entry_id)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        else:
+            player = request.form.get("player", "")
+            label = "Take over scoring" if m.scorekeeper_device else "Keep score"
+            if act(f"{label} (player)", lambda t: t.claim_scorekeeper(m.id, entry_id, player, h["scorer_device"]())):
+                flash("You're keeping score for this match. Tap + each time a rack is won.", "ok")
         return redirect(url_for("b_entry", entry_id=entry_id))
 
     @app.post("/t/<event>/entry/<entry_id>/submit")
@@ -288,8 +302,8 @@ def register(app, h) -> dict:
         except TournamentError as exc:
             flash(str(exc), "error")
         else:
-            if act("Submit result (player)", lambda t: t.submit_result(m.id)):
-                flash("Result submitted. Only the director can change it now.", "ok")
+            if act("Send result (scorekeeper)", lambda t: t.send_result(m.id, h["scorer_device"]())):
+                flash("Result sent to the director. It counts once the director approves it.", "ok")
         return redirect(url_for("b_entry", entry_id=entry_id))
 
     # ------------------------------------------------------------ director: entries
@@ -396,6 +410,32 @@ def register(app, h) -> dict:
         m = act("Call match", lambda t: t.call_match(match_id))
         if m:
             flash(f"Table {m.table} called. Both sides were texted.", "ok")
+        return redirect(back("tables"))
+
+    @app.post("/t/<event>/admin/m/<match_id>/approve")
+    @admin_required
+    def b_approve(match_id):
+        act("Approve result", lambda t: t.approve_result(match_id), "Result approved.")
+        return redirect(back("tables"))
+
+    @app.post("/t/<event>/admin/m/<match_id>/send-back")
+    @admin_required
+    def b_send_back(match_id):
+        act("Send result back", lambda t: t.send_back(match_id), "Sent back: both sides were texted to finish the match.")
+        return redirect(back("tables"))
+
+    @app.post("/t/<event>/admin/m/<match_id>/scorekeeper")
+    @admin_required
+    def b_scorekeeper(match_id):
+        action = request.form.get("action")
+        if action == "clear":
+            act("Change scorekeeper", lambda t: t.clear_scorekeeper(match_id),
+                "Scorekeeper cleared: the next player to tap I'll keep score takes over.")
+        elif action in ("lock", "unlock"):
+            act("Lock scorekeeper" if action == "lock" else "Unlock scorekeeper",
+                lambda t: t.lock_scorekeeper(match_id, action == "lock"))
+        else:
+            abort(400)
         return redirect(back("tables"))
 
     @app.post("/t/<event>/admin/m/<match_id>/front")

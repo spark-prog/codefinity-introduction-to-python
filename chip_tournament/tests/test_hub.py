@@ -147,11 +147,14 @@ def test_double_elimination_night_through_the_pages(app, admin):
         t = ev.load()
         m = t.current_match_for(flo.id)
     side = "a" if m.a == flo.id else "b"
+    player.post(f"{base}/entry/{flo.id}/keep-score", data={"player": "Flo"})
     for _ in range(m.race_to):
         player.post(f"{base}/entry/{flo.id}/score", data={"side": side, "delta": "1"})
     page = player.get(f"{base}/entry/{flo.id}").data
-    assert b"Submit: Flo won" in page
+    assert b"Send to director: Flo won" in page
     player.post(f"{base}/entry/{flo.id}/submit")
+    assert ev.load().match(m.id).sent_at and ev.load().match(m.id).winner is None  # waits for the director
+    admin.post(f"{base}/admin/m/{m.id}/approve")
     assert ev.load().match(m.id).winner == flo.id
     # a stranger can't score
     stranger = app.test_client()

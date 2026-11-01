@@ -171,6 +171,16 @@ class Entry:
     def partners(self) -> str:
         return " & ".join(p.name for p in self.players)
 
+    @property
+    def first_names(self) -> str:
+        return " & ".join(p.name.split()[0] for p in self.players if p.name.strip())
+
+    @property
+    def shows_names(self) -> bool:
+        """Show the players under the entry name? Doubles with a team name; singles show full names already."""
+        return len(self.players) > 1 and bool(self.first_names) and self.first_names.lower() != self.name.lower() \
+            and self.partners.lower() != self.name.lower()
+
 
 @dataclass
 class BMatch:
@@ -372,6 +382,28 @@ class BracketTournament:
                 if m.status == status and entry_id in (m.a, m.b):
                     return m
         return None
+
+    def where(self, entry: Entry) -> str:
+        """Where an entry is right now, for the board's Players list."""
+        if entry.status == NO_SHOW:
+            return "No-show"
+        if entry.status == WAITLISTED:
+            return f"Waiting list #{self.waitlist_position(entry)}"
+        if entry.status == REGISTERED:
+            return "Checked in" if entry.checked_in_at else "Registered"
+        if entry.status == CHAMPION:
+            return f"{entry.division} champion" if entry.division else "Champion"
+        if entry.status == ELIMINATED:
+            place = place_text(self.places().get(entry.id))
+            return f"Out, {place}" if place else "Out"
+        m = self.current_match_for(entry.id)
+        if m is not None and m.status == CALLED:
+            return f"Table {m.table}: result sent" if m.sent_at else f"On table {m.table}"
+        if m is not None and m.table:
+            return f"Table {m.table}, waiting for the call"
+        if m is not None:
+            return "Waiting for a table"
+        return "Next match pending"
 
     def matches_for(self, entry_id: str) -> list[BMatch]:
         return [m for m in sorted(self.matches, key=lambda m: m.finished_at or "")
@@ -1156,7 +1188,9 @@ class BracketTournament:
         for me, them, mine, theirs in ((m.a, m.b, "a", "b"), (m.b, m.a, "b", "a")):
             race = (f"race to {m.race_to}" if not m.race_a else
                     f"you race to {self.race_of(m, mine)}, they race to {self.race_of(m, theirs)}")
-            self._text(self.entries[me], f"Table {table}: {self.name_of(me)} vs {self.name_of(them)}, {race} "
+            opp = self.entries[them]
+            who = f"{opp.name} ({opp.first_names})" if opp.shows_names else opp.name
+            self._text(self.entries[me], f"Table {table}: {self.name_of(me)} vs {who}, {race} "
                                          f"({label}). Good luck!")
 
     def _advance(self) -> None:

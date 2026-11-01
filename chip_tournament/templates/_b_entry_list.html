@@ -1,0 +1,16 @@
+{# Every entry, A to Z, with where it is right now. Rows carry data-search for the board's search bar. #}
+{% set listed = t.entries.values()|rejectattr("status", "equalto", "no_show")|sort(attribute="name")|list %}
+{% set grouped = t.division_names|length > 1 %}
+<div class="table-wrap"><table class="grid team-list">
+  <thead><tr><th>{{ "Player" if t.settings.team_size == 1 else "Team" }}</th>{% if grouped %}<th>Group</th>{% endif %}<th title="Wins–losses">W–L</th><th>Where</th></tr></thead>
+  {% for e in listed %}
+  {% set done = t.matches_for(e.id)|selectattr("status", "equalto", "done")|rejectattr("is_bye")|list %}
+  {% set wins = done|selectattr("winner", "equalto", e.id)|list|length %}
+  <tr id="team-{{ e.id }}" data-team="{{ e.id }}" data-search="{{ (e.name ~ ' ' ~ e.partners)|lower }}">
+    <td><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>{% if e.shows_names %}<div class="muted small-note">{{ e.first_names }}</div>{% endif %}</td>
+    {% if grouped %}<td data-label="Group">{{ e.division }}</td>{% endif %}
+    <td data-label="W–L">{{ wins }}–{{ done|length - wins }}</td>
+    <td class="where">{{ t.where(e) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">No entries yet.</td></tr>{% endfor %}
+</table></div>

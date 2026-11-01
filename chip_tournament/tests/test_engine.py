@@ -438,8 +438,8 @@ def test_table_call_text():
     t.start(random.Random(16))
     m = called(t)[0]
     a, b = t.teams[m.team_a], t.teams[m.team_b]
-    expected = (f"New match: Table 1: {a.name} with combined skill 10 currently holding 3 chips VS "
-                f"{b.name} with combined skill 10 currently holding 3 chips. Good Luck!")
+    expected = (f"New match: Table 1: {a.name} (A & B) with combined skill 10 currently holding 3 chips VS "
+                f"{b.name} (A & B) with combined skill 10 currently holding 3 chips. Good Luck!")
     assert [msg.body for msg in t.outbox] == [expected, expected]  # one text to each team, no questions line
 
 
@@ -1049,3 +1049,25 @@ def test_name_correction_keeps_cell_and_consent_and_isnt_a_swap():
     # Without the box it's a new person: no inherited consent.
     t.update_roster(team.id, [Player("Ann", "5551110000", 5), Player("Jim Jones", "5552220000", 5)])
     assert not team.players[1].sms_consent
+
+
+def test_blank_team_name_uses_the_players_first_names():
+    t = Tournament()
+    a = t.register_team("", [Player("Ann Lee", "5550000001", 4, sms_consent=True), Player("Bob Ray", "", 4)])
+    b = t.register_team(" ", [Player("Ann Cole", "5550000002", 4, sms_consent=True), Player("Bob", "", 4)])
+    assert a.name == "Ann & Bob" and b.name == "Ann & Bob (2)"
+    assert not a.shows_names and b.shows_names and b.first_names == "Ann & Bob"
+    c = t.register_team("Sharks", [Player("Cy Diaz", "5550000003", 4, sms_consent=True), Player("Dee", "", 4)])
+    assert c.shows_names and c.first_names == "Cy & Dee"
+
+
+def test_where_each_team_is():
+    t = make(n_teams=6, tables=["1"])
+    t.start(random.Random(9))
+    m = called(t)[0]
+    on_table = t.teams[m.team_a]
+    assert t.where(on_table) == "On table 1"
+    paired = t.table_queue()[0]
+    assert t.where(t.teams[paired.team_a]).startswith("Paired, #1")
+    play(t, m)
+    assert any(t.where(x).startswith("#1 in line") or t.where(x).startswith("Paired") for x in t.teams.values())

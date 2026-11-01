@@ -27,7 +27,8 @@ def test_entry_finds_its_page_and_scores_with_pin(tmp_path, monkeypatch, fmt):
     player = app.test_client()
     for path in ("/", "/board"):
         assert f'href="/t/{ev.id}/entry/{entry.id}"' in player.get(f"/t/{ev.id}{path}").get_data(as_text=True)
-    assert "Find your team to keep score" in player.get(f"/t/{ev.id}/board").get_data(as_text=True)
+    board = player.get(f"/t/{ev.id}/board").get_data(as_text=True)
+    assert 'id="team-search"' in board and f'id="team-{entry.id}"' in board and f'data-teams="{m.a} {m.b}"' in board
     assert player.get(f"/t/{ev.id}/find?team={entry.id}").headers["Location"] == f"/t/{ev.id}/entry/{entry.id}"
 
     page = player.get(f"/t/{ev.id}/entry/{entry.id}").get_data(as_text=True)

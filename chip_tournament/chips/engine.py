@@ -246,6 +246,14 @@ class Settings:
     rule_set: str = ""  # id of the league rule set this event plays by (its Rules tab shows only that one)
     event_rules: str = ""  # APA-approved rules for this tournament only, shown at the top of its Rules tab
     registration_closed: bool = False  # director closed online registration (the director can still add teams)
+    registration_opens: str = ""  # online registration opens at this time ('2026-11-07T18:00', venue time); blank = now
+    registration_closes: str = ""  # and closes at this time; blank = when the director closes it
+
+    @property
+    def registration_shut(self) -> bool:
+        """Online registration is closed: by the director, or outside the opens/closes times."""
+        from .schedule import OPEN, reg_window
+        return reg_window(self)[0] != OPEN
 
 
 @dataclass

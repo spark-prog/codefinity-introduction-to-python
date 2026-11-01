@@ -871,3 +871,7 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 .backup-status.bad { color: #ff6b76; font-weight: 700; }
 .backup-status.warn { color: #ffb020; font-weight: 700; }
 .backup-status.good { color: #5fd38d; font-weight: 700; }
+
+/* Registration opens / closes, with its countdown */
+.reg-window { margin: 12px 0 0; font-size: 1.05rem; }
+.reg-window .countdown { color: var(--accent, #4fb3ff); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }

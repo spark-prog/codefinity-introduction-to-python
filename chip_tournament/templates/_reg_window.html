@@ -1,0 +1,13 @@
+{# When online registration opens or closes, with a live countdown. Needs t. #}
+{% if t.status != FINISHED %}
+{% set st, when = reg_window(t.settings) %}
+{% if st == "before" %}
+  <p class="reg-window">Registration opens <b>{{ reg_when(when) }}</b>
+    <span class="countdown" data-seconds="{{ ((when - now()).total_seconds())|int }}" data-label="Opens in"></span></p>
+{% elif st == "open" and when %}
+  <p class="reg-window">Registration closes <b>{{ reg_when(when) }}</b>
+    <span class="countdown" data-seconds="{{ ((when - now()).total_seconds())|int }}" data-label="Closes in"></span></p>
+{% elif st == "after" %}
+  <p class="reg-window">Registration closed {{ reg_when(when) }}.</p>
+{% endif %}
+{% endif %}

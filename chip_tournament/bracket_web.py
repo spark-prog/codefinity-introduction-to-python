@@ -13,7 +13,7 @@ from datetime import datetime
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from chips import themes
+from chips import schedule, themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
 )
@@ -89,8 +89,8 @@ def register(app, h) -> dict:
             f = request.form
 
             def go(t):
-                if t.settings.registration_closed:
-                    raise TournamentError("Registration is closed for now.")
+                if t.settings.registration_shut:
+                    raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
                 players = players_from_form(f, size)
@@ -137,6 +137,9 @@ def register(app, h) -> dict:
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if "registration_opens" in f:
+                s.registration_opens, s.registration_closes = schedule.check_times(
+                    f.get("registration_opens", ""), f.get("registration_closes", ""))
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

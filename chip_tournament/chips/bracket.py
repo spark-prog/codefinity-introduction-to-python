@@ -262,6 +262,14 @@ class BracketSettings:
     rule_set: str = ""  # id of the league rule set this event plays by
     event_rules: str = ""  # APA-approved rules for this tournament only
     registration_closed: bool = False  # director closed online registration (the director can still add entries)
+    registration_opens: str = ""  # online registration opens at this time ('2026-11-07T18:00', venue time); blank = now
+    registration_closes: str = ""  # and closes at this time; blank = when the director closes it
+
+    @property
+    def registration_shut(self) -> bool:
+        """Online registration is closed: by the director, or outside the opens/closes times."""
+        from .schedule import OPEN, reg_window
+        return reg_window(self)[0] != OPEN
     skill_groups: list[list[int]] = field(default_factory=list)  # [[1, 3], [4, 4], ...]; [] = one bracket
     race_method: str = STRAIGHT  # STRAIGHT: the race_* numbers; RACK_CHART: each side from the rack race chart
     match_minutes: int = 30  # amber after this

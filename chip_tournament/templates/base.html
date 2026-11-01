@@ -55,7 +55,7 @@
         <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
-        {% if t and t.status == SETUP and not t.settings.registration_closed %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
+        {% if t and t.status == SETUP and not t.settings.registration_shut %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{{ "Director" if is_admin or is_viewer else "TD Login" }}</a>
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
@@ -133,6 +133,31 @@
     if (idle >= secs) location.reload();
   }, 1000);
 })();
+</script>
+<script>
+// Registration countdowns: counted from the server's own clock (seconds left when the page was made),
+// so a phone set to the wrong time or zone still shows the right countdown.
+document.addEventListener("DOMContentLoaded", () => {
+  const els = [...document.querySelectorAll(".countdown[data-seconds]")];
+  if (!els.length) return;
+  const start = Date.now();
+  const fmt = (s) => {
+    const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (d ? d + "d " : "") + (d || h ? h + "h " : "") + m + "m " + String(x).padStart(2, "0") + "s";
+  };
+  const tick = () => {
+    let opened = false, pending = false;
+    els.forEach((el) => {
+      const left = Math.max(0, Number(el.dataset.seconds) - Math.floor((Date.now() - start) / 1000));
+      if (left > 0) { el.textContent = "· " + el.dataset.label + " " + fmt(left); pending = true; }
+      else if (el.dataset.label === "Opens in") { el.textContent = "· Opening now…"; opened = true; }
+      else { el.textContent = "· Registration has closed."; }
+    });
+    if (opened) setTimeout(() => location.reload(), 2000);  // show the Register button
+    else if (pending) setTimeout(tick, 1000);
+  };
+  tick();
+});
 </script>
 </body>
 </html>

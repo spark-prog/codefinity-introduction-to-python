@@ -8,10 +8,11 @@
     <h1>Register</h1>
     <p class="lede">{{ s.name }}{% if s.date %} · {{ event_when(s.date, s.start_time) }}{% endif %}.
       {% if s.entry_fee_cents %}Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.{% else %}Free entry.{% endif %}</p>
+    {% if t.status == SETUP and not s.registration_shut %}{% include "_reg_window.html" %}{% endif %}
     {% if t.field_full %}<p class="banner">The field is full. Register to join the waiting list; we'll text you if a spot opens.</p>{% endif %}
   </header>
-  {% if s.registration_closed and t.status == SETUP %}
-  <div class="card"><p>Registration is closed for now. Check back soon.</p></div>
+  {% if s.registration_shut and t.status == SETUP %}
+  <div class="card"><p>{{ reg_shut_message(s) }}{% if reg_window(s)[0] == "closed" %} Check back soon.{% endif %}</p>{% include "_reg_window.html" %}</div>
   {% elif t.status != SETUP %}
   <div class="card"><p>Registration is closed: the bracket is drawn. <a href="{{ url_for('home') }}">Follow it here.</a></p></div>
   {% else %}

@@ -38,6 +38,7 @@ def test_parse_skill_groups():
 def event(counts, fmt="modified", groups=MOVIN, chart=True):
     """counts: {skill level: how many players}; 8-Ball level when 2-7, else 9-Ball."""
     t = BracketTournament()
+    t.settings.call_mode = "continuous"
     t.settings.format, t.settings.final_cut, t.settings.skill_groups = fmt, 4, groups
     t.settings.race_method = "rack_chart" if chart else "straight"
     t.settings.payouts = []
@@ -52,6 +53,7 @@ def event(counts, fmt="modified", groups=MOVIN, chart=True):
 
 def test_player_goes_in_the_group_for_their_higher_level():
     t = BracketTournament()
+    t.settings.call_mode = "continuous"
     t.settings.skill_groups = MOVIN
     a = t.register_entry("", [Player("Ann", skill_8=4, skill_9=6)])
     b = t.register_entry("", [Player("Bob", skill_9=2)])

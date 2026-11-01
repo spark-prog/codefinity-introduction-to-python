@@ -80,8 +80,7 @@
     <a href="mailto:{{ legal.email }}">{{ legal.email }}</a>
   </footer>
 <script>
-// Live countdowns: <span class="countdown" data-at="ISO time">. On the director page a
-// passed deadline reloads the page so automatic grace/forfeit updates show up.
+// Live countdowns: <span class="countdown" data-at="ISO time">, and match timers on the director page.
 (function () {
   var els = document.querySelectorAll(".countdown[data-at]"), reloading = false;
   // Match timers on the director page: amber past the expected length, red at the long-match mark.

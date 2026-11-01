@@ -47,6 +47,7 @@ def play_out(t):
 
 def test_finished_round_robin_marks_everyone_done_with_places_and_winnings():
     t = BracketTournament()
+    t.settings.call_mode = "continuous"
     t.settings.format = "round_robin"
     for i, n in enumerate(["Ann", "Bob", "Cy", "Di"]):
         t.register_entry(n, [Player(n, f"904555000{i}", 0, True)])
@@ -59,6 +60,7 @@ def test_finished_round_robin_marks_everyone_done_with_places_and_winnings():
 
 def test_fixed_final_texts_the_corrected_payouts():
     t = BracketTournament()
+    t.settings.call_mode = "continuous"
     t.settings.format, t.settings.seeding = "single", "manual"
     for i, n in enumerate(["Ann", "Bob", "Cy", "Di"]):
         t.register_entry(n, [Player(n, f"904555000{i}", 0, True)])
@@ -149,7 +151,7 @@ def test_one_store_per_tournament_even_under_a_race(tmp_path):
 def test_finished_chip_tournament_leaves_nobody_in_line():
     from chips.engine import Tournament
     t = Tournament()
-    t.settings.require_checkin, t.settings.race_to = False, 1
+    t.settings.require_checkin, t.settings.race_to, t.settings.call_mode = False, 1, "continuous"
     for i in range(3):
         t.register_team(f"Team {i}", [Player("A", f"555000000{i}", 5), Player("B", "", 5)])
     t.start(random.Random(1))

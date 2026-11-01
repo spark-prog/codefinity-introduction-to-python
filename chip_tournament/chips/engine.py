@@ -69,7 +69,7 @@ ELIMINATED = "eliminated"
 CASHED_OUT = "cashed_out"
 
 # Match statuses
-WAITING = "waiting"  # paired, waiting for a free table
+WAITING = "waiting"  # paired, waiting for a table (or given one and waiting for the director to call it)
 CALLED = "called"  # called to a table / in play
 DONE = "done"
 CANCELLED = "cancelled"
@@ -77,6 +77,7 @@ CANCELLED = "cancelled"
 # Tournament statuses
 SETUP = "setup"
 RUNNING = "running"
+DIRECTOR_CALLS, CONTINUOUS = "director", "continuous"  # how matches are called to their tables
 FINISHED = "finished"
 
 # [highest combined skill level, starting chips], lowest bracket first.
@@ -217,6 +218,10 @@ class Settings:
     sms_name: str = ""  # starts every text, e.g. "First Coast APA"
     theme: str = "electric"  # color theme for this tournament's pages (see chips/themes.py)
     contact_phone: str = ""  # added to the registration text: "Questions? Call/text ..."
+    # DIRECTOR_CALLS: the app pairs teams and gives them a table; the director presses Call match to text
+    # them and start the clock. CONTINUOUS: matches are called the moment a table is free.
+    call_mode: str = DIRECTOR_CALLS
+    no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     rule_set: str = ""  # id of the league rule set this event plays by (its Rules tab shows only that one)
     event_rules: str = ""  # APA-approved rules for this tournament only, shown at the top of its Rules tab
     registration_closed: bool = False  # director closed online registration (the director can still add teams)
@@ -324,8 +329,21 @@ class Tournament:
         return None
 
     def free_tables(self) -> list[str]:
-        busy = {m.table for m in self.matches if m.status == CALLED}
+        busy = {m.table for m in self.matches if m.status in (CALLED, WAITING) and m.table}
         return [t for t in self.settings.tables if t not in busy]
+
+    def assigned_matches(self) -> list[Match]:
+        """Pairs given a table and waiting for the director to call them, in table order."""
+        order = {name: i for i, name in enumerate(self.settings.tables)}
+        return sorted((m for m in self.matches if m.status == WAITING and m.table),
+                      key=lambda m: order.get(m.table, 999))
+
+    def needs_a_look(self, m: Match, at: datetime | None = None) -> bool:
+        """A called match with no rack scored `no_rack_minutes` after the call: worth walking over."""
+        if m.status != CALLED or not m.called_at or m.score_a or m.score_b:
+            return False
+        waited = ((at or datetime.now()) - datetime.fromisoformat(m.called_at)).total_seconds() / 60
+        return waited >= self.settings.no_rack_minutes
 
     @property
     def field_teams(self) -> list[Team]:
@@ -942,8 +960,8 @@ class Tournament:
         return {x for pair in self.played_pairs() if team_id in pair for x in pair if x != team_id}
 
     def table_queue(self) -> list[Match]:
-        """Pairs waiting for a table, in the order they'll be called."""
-        waiting = [m for m in self.matches if m.status == WAITING]
+        """Pairs waiting for a table, in the order they'll get one."""
+        waiting = [m for m in self.matches if m.status == WAITING and not m.table]
         return sorted(waiting, key=lambda m: (
             0 if m.priority else 1,
             min(self.teams[m.team_a].matches_played, self.teams[m.team_b].matches_played),
@@ -1058,23 +1076,54 @@ class Tournament:
         return m
 
     def _call_waiting(self) -> None:
-        """Send queued pairs to free tables."""
+        """Give queued pairs the free tables. With continuous play they're called right away;
+        otherwise they wait on their table for the director to press Call match."""
         free = self.free_tables()
         for m in self.table_queue():
             if not free:
                 break
             m.table = free.pop(0)
-            m.status = CALLED
-            m.called_at = now()
-            a, b = self.teams[m.team_a], self.teams[m.team_b]
-            self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {m.table}.")
+            if self.settings.call_mode != CONTINUOUS:
+                self._say(f"Match #{m.round}: {self.name_of(m.team_a)} vs {self.name_of(m.team_b)} set for table "
+                          f"{m.table}, waiting for the director to call it.")
+        if self.settings.call_mode == CONTINUOUS:
+            for m in self.assigned_matches():
+                self._call(m)
 
-            def side(t: Team) -> str:
-                return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
+    def _call(self, m: Match) -> None:
+        """Text both teams their table and start the match clock."""
+        m.status, m.called_at = CALLED, now()
+        m.start_at = m.called_at
+        a, b = self.teams[m.team_a], self.teams[m.team_b]
+        self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {m.table}.")
 
-            body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
-            for team in (a, b):
-                self._text_team(team, body)
+        def side(t: Team) -> str:
+            return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
+
+        body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
+        for team in (a, b):
+            self._text_team(team, body)
+
+    def call_match(self, match_id: str) -> Match:
+        """Director: call a pair to the table it was given (texts both teams, starts the clock)."""
+        m = self.match(match_id)
+        if self.status != RUNNING:
+            raise TournamentError("The tournament isn't running.")
+        if m.status == CALLED:
+            raise TournamentError(f"Table {m.table} has already been called.")
+        if m.status != WAITING or not m.table:
+            raise TournamentError("That match doesn't have a table yet.")
+        self._call(m)
+        return m
+
+    def call_all(self) -> int:
+        """Director: call every pair that has a table. Returns how many were called."""
+        assigned = self.assigned_matches()
+        if not assigned:
+            raise TournamentError("No matches are waiting to be called.")
+        for m in assigned:
+            self._call(m)
+        return len(assigned)
 
     def call_next(self, team_id: str) -> None:
         """Director override: this team's pair (or the team, if not paired yet) goes first."""
@@ -1100,11 +1149,7 @@ class Tournament:
         if by:  # entered by a player from their team page
             name = self.name_of(m.team_a if side == "a" else m.team_b)
             self._say(f"{by} entered {'+1' if delta > 0 else '-1'} for {name} on table {m.table}.")
-        stamp = now()
-        for s_ in ("a", "b"):  # a scored game means both teams are at the table
-            if not getattr(m, "arrived_" + s_):
-                setattr(m, "arrived_" + s_, stamp)
-        m.start_at = m.start_at or stamp
+        m.start_at = m.start_at or now()
         attr = "score_a" if side == "a" else "score_b"
         if delta > 0 and self.race_winner(m):
             raise TournamentError(f"{self.name_of(self.race_winner(m))} has already reached {self.settings.race_to}. "
@@ -1239,7 +1284,7 @@ class Tournament:
             f"({loser.chips} left). Chip value now {money(self.chip_value_cents)}."
         )
         if forfeit:
-            self._text_team(loser, f"{loser.name}: you didn't check in at table {m.table} in time and forfeited your match.")
+            self._text_team(loser, f"{loser.name}: you forfeited your match on table {m.table}.")
         self._after_loss(loser, m)
         if not self._played_last_match(winner):
             self._enqueue(winner_id, self.winners_list)
@@ -1268,10 +1313,10 @@ class Tournament:
             # so the last two teams are cashed in at the current value instead.
             m.status = CANCELLED
             m.finished_at = now()
-            self._say(f"Neither {teams[0].name} nor {teams[1].name} checked in for the final match; both are cashed in.")
+            self._say(f"Neither {teams[0].name} nor {teams[1].name} played the final match; both are cashed in.")
             for team in sorted(teams, key=lambda x: x.chips):
                 payout = self._cash_out(team, "No-show in the final match")
-                self._text_team(team, f"{team.name}: you didn't check in for your match and have been cashed in for "
+                self._text_team(team, f"{team.name}: you forfeited your match and have been cashed in for "
                                       f"{money(payout)}. See the desk to collect.")
             self._check_finished()
             return
@@ -1281,94 +1326,29 @@ class Tournament:
         for team in teams:
             team.losses += 1
             self._chip_change(team, -1, f"Forfeited match #{m.round} (no-show)")
-        self._say(f"Neither {teams[0].name} nor {teams[1].name} checked in at table {m.table}; both forfeit a chip.")
+        self._say(f"Neither {teams[0].name} nor {teams[1].name} played at table {m.table}; both forfeit a chip.")
         for team in teams:
-            self._text_team(team, f"{team.name}: you didn't check in at table {m.table} in time and forfeited your match.")
+            self._text_team(team, f"{team.name}: you forfeited your match on table {m.table}.")
             self._after_loss(team, m)
         self._advance()
 
-    # ----------------------------------------------------------------- check-in
-
-    def checkin_deadline(self, m: Match) -> datetime:
-        return datetime.fromisoformat(m.called_at) + timedelta(minutes=self.settings.checkin_minutes)
-
-    def forfeit_deadline(self, m: Match) -> datetime:
-        return self.checkin_deadline(m) + timedelta(minutes=self.settings.grace_minutes)
-
-    def check_in(self, match_id: str, side: str, at: datetime | None = None) -> Match:
-        """A team has arrived at its table."""
+    def forfeit_both(self, match_id: str) -> Match:
+        """Director: neither team played the match. Both give a chip back."""
         m = self.match(match_id)
         if m.status != CALLED:
-            raise TournamentError("That match is not at a table.")
-        attr = "arrived_a" if side == "a" else "arrived_b"
-        team = self.teams[m.team_a if side == "a" else m.team_b]
-        if getattr(m, attr):
-            raise TournamentError(f"{team.name} is already checked in.")
-        at = at or datetime.now()
-        setattr(m, attr, at.isoformat(timespec="seconds"))
-        late = " (during grace)" if getattr(m, "grace_" + side) else ""
-        self._say(f"{team.name} checked in at table {m.table}{late}.")
-        if m.arrived_a and m.arrived_b and not m.start_at:
-            start = max(datetime.fromisoformat(m.arrived_a), datetime.fromisoformat(m.arrived_b))
-            start += timedelta(minutes=self.settings.warmup_minutes)
-            m.start_at = start.isoformat(timespec="seconds")
-            when = start.strftime("%I:%M %p").lstrip("0")
-            self._say(f"Table {m.table}: both teams are here; the match starts at {when}.")
-            for tid in (m.team_a, m.team_b):
-                self._text_team(self.teams[tid], f"Both teams are at table {m.table}. Your match starts at {when}.")
+            raise TournamentError("Call the match before recording a forfeit.")
+        self._double_forfeit(m)
         return m
 
-    def pause_overdue_forfeits(self, at: datetime | None = None) -> int:
-        """Stop the clock re-forfeiting matches whose deadline has already passed.
-
-        Used after Undo: otherwise an undone forfeit would be applied again
-        within seconds. The director then taps Arrived or picks a winner.
-        """
-        at = at or datetime.now()
-        paused = 0
-        for m in self.matches:
-            if (m.status == CALLED and m.called_at and not m.clock_paused
-                    and not (m.arrived_a and m.arrived_b) and at >= self.forfeit_deadline(m)):
-                m.clock_paused = True
-                paused += 1
-        return paused
+    # ----------------------------------------------------------------- the clock
 
     def check_clock(self, at: datetime | None = None) -> int:
-        """Start grace periods and record forfeits that are due. Returns how many things changed."""
+        """Apply the partner deadline when it's due (before the start). Returns how many things changed.
+
+        Nothing is automatic once play starts: the director calls matches and records any forfeit."""
         if self.status == SETUP:
             return self.enforce_partner_deadline(at)
-        if self.status != RUNNING:
-            return 0
-        at = at or datetime.now()
-        changes = 0
-        for m in [m for m in self.matches if m.status == CALLED]:
-            if m.status != CALLED or not m.called_at or m.score_a or m.score_b or m.clock_paused:
-                continue
-            missing = [side for side in ("a", "b") if not getattr(m, "arrived_" + side)]
-            if not missing:
-                continue
-            if at >= self.forfeit_deadline(m):
-                if len(missing) == 2:
-                    self._double_forfeit(m)
-                else:
-                    self.record_result(m.id, m.team_b if missing[0] == "a" else m.team_a, forfeit=True)
-                changes += 1
-                continue
-            if at >= self.checkin_deadline(m):
-                for side in missing:
-                    if getattr(m, "grace_" + side):
-                        continue
-                    setattr(m, "grace_" + side, self.checkin_deadline(m).isoformat(timespec="seconds"))
-                    team = self.teams[m.team_a if side == "a" else m.team_b]
-                    when = self.forfeit_deadline(m).strftime("%I:%M %p").lstrip("0")
-                    self._say(f"{team.name} hasn't checked in at table {m.table}; grace period until {when}.")
-                    self._text_team(
-                        team,
-                        f"{team.name}: you were called to TABLE {m.table} {self.settings.checkin_minutes} min ago "
-                        f"and haven't checked in. Get there by {when} or you forfeit and lose a chip.",
-                    )
-                    changes += 1
-        return changes
+        return 0
 
     def _advance(self) -> None:
         """Pair whoever can be paired, then send queued pairs to free tables."""

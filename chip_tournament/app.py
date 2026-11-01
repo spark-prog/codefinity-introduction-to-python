@@ -32,6 +32,8 @@ from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
     ACTIVE,
     CALLED,
+    CONTINUOUS,
+    DIRECTOR_CALLS,
     DONE,
     FINISHED,
     RUNNING,
@@ -222,6 +224,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             "ACTIVE": ACTIVE,
             "CALLED": CALLED,
             "WAITING": WAITING,
+            "CONTINUOUS": CONTINUOUS,
+            "DIRECTOR_CALLS": DIRECTOR_CALLS,
             "DONE": DONE,
             "SETUP": SETUP,
             "RUNNING": RUNNING,
@@ -259,7 +263,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             return None
 
     def tick(ev) -> None:
-        """Start grace periods, record no-show forfeits, and apply the partner deadline when due."""
+        """Apply the partner deadline when it's due (nothing runs on its own once play starts)."""
         if ev.kind != CHIP:
             return
         store, sms = ev.store, ev.sms  # noqa: F841 (runs outside a request, so not the proxies)
@@ -273,8 +277,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         solos = [x.name for x in probe.solo_teams_in_field]
         if probe.check_clock() == 0:  # cheap check first, so idle ticks don't fill the undo history
             return
-        label = (f"Partner deadline: moved {', '.join(solos)} to the waiting list" if probe.status == SETUP
-                 else "Check-in clock (grace / forfeit)")
+        label = f"Partner deadline: moved {', '.join(solos)} to the waiting list"
         with store.change(label) as t:
             t.check_clock()
             send_texts(t)
@@ -498,16 +501,6 @@ def create_app(data_dir: str | None = None) -> Flask:
                 flash("Result submitted. Only the tournament director can change it now.", "ok")
         return redirect(url_for("team_page", team_id=team_id))
 
-    @app.post("/t/<event>/team/<team_id>/arrived")
-    def team_arrived(team_id):
-        try:
-            m, side = team_match(team_id)
-        except TournamentError as exc:
-            flash(str(exc), "error")
-        else:
-            act("Check in (team)", lambda t: t.check_in(m.id, side), "Checked in. Good luck!")
-        return redirect(url_for("team_page", team_id=team_id))
-
     @app.post("/t/<event>/team/<team_id>/score")
     def team_score(team_id):
         side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
@@ -639,12 +632,15 @@ def create_app(data_dir: str | None = None) -> Flask:
                 t.set_money(parse_money(f.get("entry_fee", "0")), parse_money(f.get("added_money", "0")),
                             parse_chip_brackets(f.get("chip_brackets", "")), int(cap))
             s.race_to = int(race)
-            for key in ("warmup_minutes", "checkin_minutes", "grace_minutes", "match_minutes",
-                        "long_match_minutes", "catchup_matches"):
+            for key in ("no_rack_minutes", "match_minutes", "long_match_minutes", "catchup_matches"):
                 value = f.get(key, str(getattr(s, key))).strip()
                 if not value.isdigit():
                     raise TournamentError("Times and the catch-up gap must be whole numbers.")
                 setattr(s, key, int(value))
+            call_mode = f.get("call_mode", s.call_mode)
+            if call_mode not in (DIRECTOR_CALLS, CONTINUOUS):
+                raise TournamentError("Pick how matches are called.")
+            s.call_mode = call_mode
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
@@ -819,13 +815,28 @@ def create_app(data_dir: str | None = None) -> Flask:
         act("Score", lambda t: t.score(match_id, side, delta))
         return redirect(url_for("admin") + "#matches")
 
-    @app.post("/t/<event>/admin/match/<match_id>/arrived")
+    @app.post("/t/<event>/admin/match/<match_id>/call")
     @admin_required
-    def admin_arrived(match_id):
-        side = request.form.get("side")
-        if side not in ("a", "b"):
-            abort(400)
-        act("Check in", lambda t: t.check_in(match_id, side))
+    def admin_call_match(match_id):
+        m = act("Call match", lambda t: t.call_match(match_id))
+        if m:
+            flash(f"Table {m.table} called. Both teams were texted.", "ok")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/call-all")
+    @admin_required
+    def admin_call_all():
+        act("Call all matches", lambda t: t.call_all(), "Called {result} match(es). Everyone was texted their table.")
+        return redirect(url_for("admin") + ("#matches" if g.event.kind == CHIP else "#tables"))
+
+    @app.post("/t/<event>/admin/match/<match_id>/forfeit")
+    @admin_required
+    def admin_forfeit(match_id):
+        winner = request.form.get("winner", "")
+        if winner == "both":
+            act("Forfeit (both teams)", lambda t: t.forfeit_both(match_id), "Both teams forfeited a chip.")
+        else:
+            act("Forfeit", lambda t: t.record_result(match_id, winner, forfeit=True), "Forfeit recorded.")
         return redirect(url_for("admin") + "#matches")
 
     @app.post("/t/<event>/admin/team/<team_id>/call-next")
@@ -952,14 +963,10 @@ def create_app(data_dir: str | None = None) -> Flask:
                 return redirect(url_for("admin"))
             label = store.undo()
             t = store.load()
-            paused = t.pause_overdue_forfeits()
             deadline_paused = t.pause_partner_deadline()
-            if paused or deadline_paused:
+            if deadline_paused:
                 store.save(t)
         flash(f"Undid: {label}." if label else "Nothing to undo.", "ok" if label else "error")
-        if paused:
-            flash(f"Auto-forfeit is paused on {paused} match(es) that are past their deadline. "
-                  "Tap Arrived, or pick the Winner to record the forfeit yourself.", "ok")
         if deadline_paused:
             flash(f"The partner deadline is paused: {deadline_paused} team(s) without a partner stay in the field. "
                   "Use \"Move them to the waiting list now\" at the top when you're ready.", "ok")
@@ -1080,7 +1087,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket
     # tournament gets its own version (or a 404) from bracket_web.
     shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
-              "admin_broadcast", "admin_text_pins", "find_team"}
+              "admin_broadcast", "admin_text_pins", "find_team", "admin_call_all"}
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,

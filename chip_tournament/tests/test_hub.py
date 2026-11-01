@@ -32,7 +32,11 @@ def create(admin, name, kind, **extra):
     page = admin.post("/admin/new", data={"name": name, "kind": kind, **extra})
     assert page.status_code == 302
     hub = admin.application.config["hub"]
-    return [ev for ev in hub.events() if ev.load().settings.name == name][-1]  # the newest with that name
+    ev = [ev for ev in hub.events() if ev.load().settings.name == name][-1]  # the newest with that name
+    t = ev.load()
+    t.settings.call_mode = "continuous"  # these tests play nights through; Director Calls has its own tests
+    ev.store.save(t)
+    return ev
 
 
 def test_hub_lists_and_creates_tournaments(app, admin):

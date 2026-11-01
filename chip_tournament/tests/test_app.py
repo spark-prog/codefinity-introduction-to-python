@@ -32,6 +32,11 @@ def client(tmp_path, monkeypatch):
     app = create_app(str(tmp_path))
     app.testing = True
     event = app.config["hub"].create("Chip Tournament", "chip")
+    # These tests cover play, so matches are called as soon as a table is free (Continuous Play);
+    # Director Calls has its own tests in test_director_calls.py.
+    t = event.store.load()
+    t.settings.call_mode = "continuous"
+    event.store.save(t)
     app.config["store"], app.config["sms"] = event.store, event.sms
     ChipEventClient.event_id = event.id
     app.test_client_class = ChipEventClient
@@ -159,39 +164,6 @@ def test_registration_over_cap_is_rejected(client):
     assert not client.application.config["store"].load().teams
 
 
-def test_arrived_buttons_set_start_time(client):
-    for name in ("Sharks", "Rails"):
-        register(client, name)
-    client.post("/admin/login", data={"password": "secret"})
-    check_in_and_start(client)
-    store = client.application.config["store"]
-    m = store.load().open_matches()[0]
-    page = client.get("/admin").data
-    assert b"Arrived" in page and b"check in by" in page
-    client.post(f"/admin/match/{m.id}/arrived", data={"side": "a"})
-    page = client.post(f"/admin/match/{m.id}/arrived", data={"side": "b"}, follow_redirects=True).data
-    assert b"Match starts" in page
-    assert store.load().match(m.id).start_at
-
-
-def test_undo_of_automatic_forfeit_sticks(client):
-    from datetime import datetime, timedelta
-    for name in ("Sharks", "Rails"):
-        register(client, name)
-    client.post("/admin/login", data={"password": "secret"})
-    check_in_and_start(client)
-    store = client.application.config["store"]
-    with store.change("make it overdue") as t:
-        m = t.open_matches()[0]
-        m.called_at = (datetime.now() - timedelta(minutes=30)).isoformat(timespec="seconds")
-    client.application.config["tick"]()
-    assert store.load().match(m.id).forfeit == "both"
-    page = client.post("/admin/undo", follow_redirects=True).data  # the admin page runs the clock again
-    assert b"Auto-forfeit is paused" in page
-    restored = store.load().match(m.id)
-    assert restored.status == "called" and restored.clock_paused and restored.forfeit is None
-
-
 def test_guide_is_for_directors_only(client):
     page = client.get("/guide")
     assert page.status_code == 302 and "/admin/login" in page.headers["Location"]
@@ -314,7 +286,7 @@ def start_two_teams(client):
     return store, admin, t.open_matches()[0], {x.name: x for x in t.teams.values()}
 
 
-def test_team_checks_in_and_keeps_score(client):
+def test_team_keeps_score_with_its_pin(client):
     store, admin, m, teams = start_two_teams(client)
     sharks = teams["Sharks"]
     side = "a" if m.team_a == sharks.id else "b"
@@ -326,10 +298,7 @@ def test_team_checks_in_and_keeps_score(client):
     assert b"Enter your team PIN first" in page and store.load().match(m.id).score_a + store.load().match(m.id).score_b == 0
 
     player.post(f"/team/{sharks.id}/login", data={"pin": sharks.pin})
-    assert "We're at the table" in player.get(f"/team/{sharks.id}").data.decode()
-    player.post(f"/team/{sharks.id}/arrived")
-    mm = store.load().match(m.id)
-    assert getattr(mm, "arrived_" + side) and not getattr(mm, "arrived_" + other)  # only checks in itself
+    assert "We're at the table" not in player.get(f"/team/{sharks.id}").data.decode()  # no player check-in
 
     player.post(f"/team/{sharks.id}/score", data={"side": other, "delta": "1"})  # either side can be scored
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})

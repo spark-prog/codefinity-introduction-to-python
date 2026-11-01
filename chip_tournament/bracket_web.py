@@ -17,7 +17,7 @@ from chips import themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
 )
-from chips.engine import Player, TournamentError, money
+from chips.engine import CONTINUOUS, DIRECTOR_CALLS, Player, TournamentError, money
 from chips.races import parse_skill_groups, skill_groups_text
 
 
@@ -147,16 +147,21 @@ def register(app, h) -> dict:
             s.tables = tables
             s.tables_down = [x for x in s.tables_down if x in tables]
             numbers = {}
-            for key in ("race_winners", "race_losers", "race_finals", "match_minutes", "long_match_minutes", "field_cap"):
+            for key in ("race_winners", "race_losers", "race_finals", "match_minutes", "long_match_minutes", "field_cap",
+                        "no_rack_minutes"):
                 value = f.get(key, str(getattr(s, key))).strip() or "0"
                 if not value.isdigit():
                     raise TournamentError("Races, times and the field cap must be whole numbers.")
                 numbers[key] = int(value)
             if min(numbers["race_winners"], numbers["race_losers"], numbers["race_finals"]) < 1:
                 raise TournamentError("Races must be at least 1 game.")
-            for key in ("race_winners", "race_losers", "race_finals", "match_minutes", "long_match_minutes"):
+            for key in ("race_winners", "race_losers", "race_finals", "match_minutes", "long_match_minutes",
+                        "no_rack_minutes"):
                 setattr(s, key, numbers[key])
-            s.auto_call = f.get("auto_call") == "1"
+            call_mode = f.get("call_mode", s.call_mode)
+            if call_mode not in (DIRECTOR_CALLS, CONTINUOUS):
+                raise TournamentError("Pick how matches are called.")
+            s.call_mode = call_mode
             if t.status == SETUP:
                 fmt = f.get("format", s.format)
                 if fmt not in dict(FORMATS):
@@ -385,6 +390,14 @@ def register(app, h) -> dict:
         act(f"Table {table}", lambda t: t.call_to_table(match_id, table), f"Sent to table {table}.")
         return redirect(back("tables"))
 
+    @app.post("/t/<event>/admin/m/<match_id>/call")
+    @admin_required
+    def b_call_match(match_id):
+        m = act("Call match", lambda t: t.call_match(match_id))
+        if m:
+            flash(f"Table {m.table} called. Both sides were texted.", "ok")
+        return redirect(back("tables"))
+
     @app.post("/t/<event>/admin/m/<match_id>/front")
     @admin_required
     def b_front(match_id):
@@ -416,6 +429,7 @@ def register(app, h) -> dict:
     app.jinja_env.globals.setdefault("asks_two_levels", asks_two_levels)
     app.jinja_env.globals.setdefault("skill_groups_text", skill_groups_text)
     app.jinja_env.globals.setdefault("RACK_CHART", RACK_CHART)
+    app.jinja_env.globals.setdefault("CONTINUOUS", CONTINUOUS)
     app.jinja_env.globals.setdefault("READY", READY)
     app.jinja_env.globals.setdefault("MODIFIED", MODIFIED)
     app.jinja_env.globals.setdefault("ROUND_ROBIN", ROUND_ROBIN)

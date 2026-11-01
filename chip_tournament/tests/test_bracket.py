@@ -5,9 +5,18 @@ import pytest
 
 from chips.bracket import (
     ACTIVE, BYE, CALLED, CHAMPION, DONE, DOUBLE, ELIMINATED, FINISHED, MODIFIED, READY, ROUND_ROBIN, RUNNING, SINGLE,
-    VOID, WAITLISTED, BracketTournament, bracket_order,
+    VOID, WAITLISTED, bracket_order,
 )
-from chips.engine import Player, TournamentError
+from chips.bracket import BracketTournament as _BracketTournament
+from chips.engine import CONTINUOUS, Player, TournamentError
+
+
+class BracketTournament(_BracketTournament):
+    """These tests cover play, so matches are called the moment a table is free (Continuous Play)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.settings.call_mode = CONTINUOUS
 
 
 def make(fmt, n, **settings):
@@ -309,15 +318,28 @@ def test_table_out_of_service_moves_or_requeues():
     assert requeued[0].status == CALLED and requeued[0].table == "2"
 
 
-def test_manual_calling_when_auto_call_is_off():
-    t = make(DOUBLE, 4, auto_call=False)
+def test_director_calls_sets_tables_and_waits_for_the_call():
+    t = make(DOUBLE, 8, call_mode="director")
+    t.settings.tables = ["1", "2", "3"]
     t.start(random.Random(1))
-    assert not t.in_play() and len(t.ready_queue()) == 2
-    m = t.ready_queue()[0]
-    t.call_to_table(m.id, "3")
-    assert m.status == CALLED and m.table == "3"
+    assigned = t.assigned_matches()
+    assert not t.in_play() and [m.table for m in assigned] == ["1", "2", "3"] and len(t.ready_queue()) == 1
+    assert all(m.status == READY for m in assigned) and t.free_tables() == []
+    t.call_match(assigned[0].id)
+    assert assigned[0].status == CALLED and assigned[0].called_at
+    with pytest.raises(TournamentError, match="already been called"):
+        t.call_match(assigned[0].id)
+    assert t.call_all() == 2
+    # moving a waiting match onto a busy table is refused
     with pytest.raises(TournamentError):
         t.call_to_table(t.ready_queue()[0].id, "3")
+    # a table taken out of service gives up a match that was set for it but not called
+    t2 = make(DOUBLE, 4, call_mode="director")
+    t2.start(random.Random(1))
+    m = t2.assigned_matches()[0]
+    assert m.table == "1"
+    t2.set_table_down("1", True)
+    assert m.status == READY and m.table == "3"  # set again on a free table, still waiting for the call
 
 
 def test_withdraw_forfeits_remaining_matches():

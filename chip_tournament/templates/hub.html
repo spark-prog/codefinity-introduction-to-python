@@ -16,7 +16,8 @@
   <div class="event-grid">
     {% for r in live %}{% set s = r.t.settings %}
     <a class="card event-card" href="{{ url_for('home', event=r.event.id) }}">
-      <span class="event-status {{ r.t.status }}">{{ "Live now" if r.t.status == RUNNING else "Registration open" if r.t.status == SETUP else r.t.status }}</span>
+      {% set st, when = reg_window(s) %}
+      <span class="event-status {{ r.t.status }}">{% if r.t.status == RUNNING %}Live now{% elif st == "open" %}Registration open{% elif st == "before" %}Opens {{ when.strftime("%a, %b") }} {{ when.day }}{% else %}Registration closed{% endif %}</span>
       <h2>{{ s.name }}</h2>
       <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
       {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}

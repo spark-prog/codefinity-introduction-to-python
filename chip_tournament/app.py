@@ -26,7 +26,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
-from chips import backup, export, importer, rules as rulebook, themes
+from chips import backup, export, importer, rules as rulebook, schedule, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -172,6 +172,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["day"] = day
     app.jinja_env.filters["last4"] = last4
     app.jinja_env.globals["event_when"] = event_when
+    app.jinja_env.globals["reg_window"] = schedule.reg_window
+    app.jinja_env.globals["reg_when"] = schedule.when_text
+    app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
+    app.jinja_env.globals["now"] = datetime.now
     # Who runs the text program, shown on the Terms and Privacy pages (they must match the
     # carrier registration). Override with environment variables if they ever change.
     # The number tournament texts come from, so players can save it as a contact (Twilio setting).
@@ -423,8 +427,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             solo = f.get("solo") == "1"
 
             def register_team(t):
-                if t.settings.registration_closed:
-                    raise TournamentError("Registration is closed for now.")
+                if t.settings.registration_shut:
+                    raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
                 players = players_from_form(f)[:1 if solo else TEAM_SIZE]
@@ -641,6 +645,9 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if "registration_opens" in f:
+                s.registration_opens, s.registration_closes = schedule.check_times(
+                    f.get("registration_opens", ""), f.get("registration_closes", ""))
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             if not tables:
                 raise TournamentError("Add at least one table.")

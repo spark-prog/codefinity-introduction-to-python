@@ -514,6 +514,10 @@
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
+    <label>Online registration opens (blank = open now) <input type="datetime-local" name="registration_opens" value="{{ s.registration_opens }}"></label>
+    <label>Online registration closes (blank = stays open) <input type="datetime-local" name="registration_closes" value="{{ s.registration_closes }}"></label>
+    {% set st, when = reg_window(s) %}
+    <p class="muted small-note wide">Right now: <b>{{ {"open": "open", "before": "not open yet", "after": "closed (past the closing time)", "closed": "closed (box above)"}[st] }}</b>{% if when %} · {{ "opens" if st == "before" else "closes" if st == "open" else "closed" }} {{ reg_when(when) }}{% endif %}. Times are venue time. You can always add teams yourself.</p>
     <label>Rules this event plays by
       <select name="rule_set">
         <option value="">Not chosen yet</option>

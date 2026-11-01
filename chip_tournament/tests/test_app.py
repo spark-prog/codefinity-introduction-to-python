@@ -796,3 +796,17 @@ def test_team_page_shows_names_not_phone_digits(client):
     page = public.get(f"/team/{team.id}").get_data(as_text=True)  # signed in: Bob's opt-in box
     assert "I'm Bob. Yes, text me tournament alerts at the cell number on my registration." in page
     assert "6543" not in page and "4567" not in page
+
+
+def test_text_alerts_sit_at_the_top_until_everyone_opts_in(client):
+    client.post("/register", data={"name": "Sharks", "agree_terms": "1", "sms_consent": "1",
+                                   "player_name_0": "Ann", "player_phone_0": "5551234567", "player_skill_0": "5",
+                                   "player_name_1": "Bob", "player_phone_1": "5559876543", "player_skill_1": "5"})
+    team = client.application.config["store"].load().field_teams[0]
+    player = client.application.test_client()
+    page = player.get(f"/team/{team.id}").get_data(as_text=True)
+    assert page.index('id="text-alerts"') < page.index('class="split"')  # Bob hasn't turned texts on: at the top
+    player.post(f"/team/{team.id}/login", data={"pin": team.pin})
+    player.post(f"/team/{team.id}/texts", data={"player": "1", "sms_consent": "1"})
+    page = player.get(f"/team/{team.id}").get_data(as_text=True)
+    assert page.index('id="text-alerts"') > page.index('class="split"') and page.count('id="text-alerts"') == 1

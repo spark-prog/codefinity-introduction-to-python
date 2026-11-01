@@ -246,6 +246,7 @@ class BracketSettings:
     tables_closing: list[str] = field(default_factory=list)  # out of service once the current match ends
     auto_call: bool = True  # no longer used: see call_mode
     call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
+    test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
     seeding: str = "random"  # "random" draw at the start, or "manual" (the order on the Entries list)

@@ -458,6 +458,8 @@
     <label>Card turns red after (min) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
 
     <div class="settings-group">Texts &amp; look</div>
+    <label class="checkbox"><input type="hidden" name="test_event_shown" value="1"><input type="checkbox" name="test_event" value="1" {% if s.test_event %}checked{% endif %}>
+      Test event: never send texts (they're only logged below) and hide it from All Events. Players can still use a direct link.</label>
     <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
     <label>Questions phone <input name="contact_phone" value="{{ s.contact_phone }}"></label>
     <label>Colors

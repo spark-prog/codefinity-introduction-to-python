@@ -26,7 +26,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
-from chips import export, importer, rules as rulebook, themes
+from chips import backup, export, importer, rules as rulebook, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -53,6 +53,14 @@ def clock(value) -> str:
         return ""
     dt = value if isinstance(value, datetime) else datetime.fromisoformat(value)
     return dt.strftime("%I:%M %p").lstrip("0")
+
+
+def day(value) -> str:
+    """'2026-11-01T03:02:00' -> 'Sun, Nov 1'."""
+    if not value:
+        return ""
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return f"{dt:%a, %b} {dt.day}"
 
 
 def parse_money(text: str) -> int:
@@ -161,6 +169,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["money"] = money
     app.jinja_env.filters["urlquote"] = quote_plus
     app.jinja_env.filters["clock"] = clock
+    app.jinja_env.filters["day"] = day
     app.jinja_env.filters["last4"] = last4
     app.jinja_env.globals["event_when"] = event_when
     # Who runs the text program, shown on the Terms and Privacy pages (they must match the
@@ -241,8 +250,9 @@ def create_app(data_dir: str | None = None) -> Flask:
         messages, t.outbox = list(t.outbox), []
         if messages:
             sender = sms._get_current_object()  # this tournament's sender: the thread runs outside the request
+            test = t.settings.test_event  # a test event never texts anyone
             threading.Thread(
-                target=lambda: [sender.send(m.to, m.body) for m in messages], daemon=True
+                target=lambda: [sender.send(m.to, m.body, test=test) for m in messages], daemon=True
             ).start()
 
     def act(label: str, fn, success: str | None = None):
@@ -271,7 +281,9 @@ def create_app(data_dir: str | None = None) -> Flask:
         def send_texts(t) -> None:
             messages, t.outbox = list(t.outbox), []
             if messages:
-                threading.Thread(target=lambda: [sms.send(m.to, m.body) for m in messages], daemon=True).start()
+                test = t.settings.test_event
+                threading.Thread(target=lambda: [sms.send(m.to, m.body, test=test) for m in messages],
+                                 daemon=True).start()
 
         probe = store.load()
         solos = [x.name for x in probe.solo_teams_in_field]
@@ -305,6 +317,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         if not app.testing and not clock_started.is_set():
             clock_started.set()
             threading.Thread(target=clock_loop, daemon=True).start()
+            threading.Thread(target=backup.nightly_loop, args=(data_path, app.logger.error), daemon=True).start()
 
     app.config["tick"] = tick_all
 
@@ -662,6 +675,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             if call_mode not in (DIRECTOR_CALLS, CONTINUOUS):
                 raise TournamentError("Pick how matches are called.")
             s.call_mode = call_mode
+            if f.get("test_event_shown"):
+                s.test_event = f.get("test_event") == "1"
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
@@ -1110,13 +1125,85 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("hub.html", t=None, rows=hub.summaries())
+        rows = hub.summaries()
+        if not (session.get("admin") or session.get("viewer")):  # practice events stay off the public list
+            rows = [r for r in rows if not r["t"].settings.test_event]
+        return render_template("hub.html", t=None, rows=rows)
 
     @app.get("/admin")
     @director_view
     def director():
         return render_template("hub_admin.html", t=None, rows=hub.summaries(), formats=FORMATS,
-                               final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"))
+                               final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"),
+                               backup_status=backup.load_status(data_path), backup_setup=backup.configured())
+
+    # ----------------------------------------------------------------- backups
+
+    @app.get("/admin/backups")
+    @director_view
+    def admin_backups():
+        files, drive_error = [], ""
+        try:
+            drive = backup.Drive.from_env()
+            files = drive.list() if drive else []
+        except backup.BackupError as exc:
+            drive_error = str(exc)
+        safety = sorted((data_path / backup.SAFETY_DIR).glob("before-restore-*.zip"), reverse=True)
+        return render_template("backups.html", t=None, backup_status=backup.load_status(data_path),
+                               backup_setup=backup.configured(), files=files, drive_error=drive_error,
+                               safety=[p.name for p in safety])
+
+    @app.post("/admin/backup")
+    @admin_required
+    def admin_backup_now():
+        status = backup.run(data_path, reason="by hand")
+        if status.get("error"):
+            flash(f"Backup didn't save: {status['error']}", "error")
+        else:
+            flash(f"Backed up to {status['last_where']} ({status['last_name']})."
+                  + (f" Note: {status['warning']}" if status.get("warning") else ""), "ok")
+        back = request.form.get("back", "")
+        return redirect(back if back in (url_for("director"), url_for("admin_backups")) else url_for("admin_backups"))
+
+    @app.get("/admin/backup.zip")
+    @admin_required
+    def admin_backup_download():
+        """A copy of everything, to keep on this device. It holds names, phone numbers and PINs."""
+        return app.response_class(backup.make_zip(data_path), mimetype="application/zip", headers={
+            "Content-Disposition": f'attachment; filename="{backup.backup_name()}"', "Cache-Control": "no-store"})
+
+    @app.post("/admin/backups/restore")
+    @admin_required
+    def admin_restore_backup():
+        request.max_content_length = 200 * 1024 * 1024  # a backup can be bigger than a CSV or photo
+        f = request.form
+        if f.get("confirm", "").strip().upper() != "RESTORE":
+            flash("Type RESTORE to confirm. Nothing was changed.", "error")
+            return redirect(url_for("admin_backups"))
+        try:
+            if f.get("file_id"):
+                drive = backup.Drive.from_env()
+                if drive is None:
+                    raise backup.BackupError("Google Drive isn't set up.")
+                data, source = drive.download(f["file_id"]), f.get("file_name", "the Drive backup")
+            elif f.get("safety"):
+                name = f["safety"]
+                path = data_path / backup.SAFETY_DIR / name
+                if "/" in name or "\\" in name or not name.startswith("before-restore-") or not path.is_file():
+                    raise backup.BackupError("Unknown backup.")
+                data, source = path.read_bytes(), name
+            else:
+                upload = request.files.get("file")
+                if not upload or not upload.filename:
+                    raise backup.BackupError("Pick a backup file to restore.")
+                data, source = upload.read(), upload.filename
+            info = backup.restore_zip(data_path, data, hub)
+        except backup.BackupError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_backups"))
+        flash(f"Restored {source}: {info['events']} tournament(s) from {info['made'].replace('T', ' ')}. "
+              "Your data from just before the restore is kept under Undo a restore.", "ok")
+        return redirect(url_for("director"))
 
     @app.post("/admin/new")
     @admin_required
@@ -1124,7 +1211,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         f = request.form
         kind = f.get("kind", "")
         settings = {"date": f.get("date", "").strip(), "start_time": f.get("start_time", "").strip(),
-                    "venue": f.get("venue", "").strip()}
+                    "venue": f.get("venue", "").strip(), "test_event": f.get("test_event") == "1" or None}
         if kind in dict(FORMATS):
             settings["format"], kind = kind, BRACKET
         elif kind != CHIP:
@@ -1152,7 +1239,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Links from before Control Table hosted several tournaments (old texts, bookmarks, the TV).
     def only_live_event():
         """Where an old /board or /register link should go: the one tournament that's on now."""
-        rows = [r for r in hub.summaries() if r["t"].status != FINISHED]
+        rows = [r for r in hub.summaries() if r["t"].status != FINISHED and not r["t"].settings.test_event]
         today = datetime.now().strftime("%Y-%m-%d")
         for pick in (
             [r for r in rows if r["t"].status == RUNNING],                   # under way

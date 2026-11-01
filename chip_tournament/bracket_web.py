@@ -162,6 +162,8 @@ def register(app, h) -> dict:
             if call_mode not in (DIRECTOR_CALLS, CONTINUOUS):
                 raise TournamentError("Pick how matches are called.")
             s.call_mode = call_mode
+            if f.get("test_event_shown"):
+                s.test_event = f.get("test_event") == "1"
             if t.status == SETUP:
                 fmt = f.get("format", s.format)
                 if fmt not in dict(FORMATS):

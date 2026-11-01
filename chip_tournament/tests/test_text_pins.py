@@ -48,7 +48,7 @@ def test_director_button_sends_the_texts(tmp_path, monkeypatch):
     for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "VIEWER_PASSWORD"):
         monkeypatch.delenv(var, raising=False)
     sent = []
-    monkeypatch.setattr(SmsSender, "send", lambda self, to, body: sent.append((to, body)) or "logged")
+    monkeypatch.setattr(SmsSender, "send", lambda self, to, body, test=False: sent.append((to, body)) or "logged")
     app = create_app(str(tmp_path))
     app.testing = True
     ev = app.config["hub"].create("Chips", "chip")
@@ -76,7 +76,7 @@ def test_site_url_setting_sets_the_link_in_texts(tmp_path, monkeypatch):
     for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "VIEWER_PASSWORD"):
         monkeypatch.delenv(var, raising=False)
     sent = []
-    monkeypatch.setattr(SmsSender, "send", lambda self, to, body: sent.append(body) or "logged")
+    monkeypatch.setattr(SmsSender, "send", lambda self, to, body, test=False: sent.append(body) or "logged")
     app = create_app(str(tmp_path))
     app.testing = True
     ev = app.config["hub"].create("Chips", "chip")

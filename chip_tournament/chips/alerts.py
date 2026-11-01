@@ -42,10 +42,12 @@ class SmsSender:
     def enabled(self) -> bool:
         return bool(self.sid and self.token and self.from_number)
 
-    def send(self, to: str, body: str) -> str:
+    def send(self, to: str, body: str, test: bool = False) -> str:
         to = normalize_phone(to)
         if not to:
             status = "skipped: no number"
+        elif test:
+            status = "not sent (test event)"
         elif not self.enabled:
             status = "logged (SMS not configured)"
         else:

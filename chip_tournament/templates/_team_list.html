@@ -1,0 +1,13 @@
+{# Every team, A to Z, with where it is right now. Rows carry data-search for the board's search bar. #}
+{% set listed = t.teams.values()|rejectattr("status", "equalto", "no_show")|sort(attribute="name")|list %}
+<div class="table-wrap"><table class="grid team-list">
+  <thead><tr><th>Team</th><th>Chips</th><th title="Wins–losses">W–L</th><th>Where</th></tr></thead>
+  {% for tm in listed %}
+  <tr id="team-{{ tm.id }}" data-team="{{ tm.id }}" data-search="{{ (tm.name ~ ' ' ~ tm.partners)|lower }}">
+    <td><a href="{{ url_for('team_page', team_id=tm.id) }}"><b>{{ tm.name }}</b></a>{% if tm.shows_names %}<div class="muted small-note">{{ tm.first_names }}</div>{% endif %}</td>
+    <td data-label="Chips">{{ tm.chips if t.status != SETUP else "–" }}</td>
+    <td data-label="W–L">{{ tm.wins }}–{{ tm.losses }}</td>
+    <td class="where">{{ t.where(tm) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">No teams yet.</td></tr>{% endfor %}
+</table></div>

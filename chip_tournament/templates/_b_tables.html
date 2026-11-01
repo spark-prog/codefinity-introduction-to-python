@@ -1,30 +1,39 @@
-{% set playing = t.in_play() %}
+{# Every table in table-number order, always in the same spot: who's on it, who's set for it, or Open. #}
+{% set open_ms = t.matches|selectattr("status", "in", ("called", "ready"))|selectattr("table")|list %}
 {% set queue = t.ready_queue() %}
-<div class="split">
-  <div>
-    <h3>Now playing</h3>
-    {% if playing %}
-    <div class="tables">
-      {% for m in playing %}
-      <div class="table-card">
-        <div class="table-no">Table {{ m.table }}</div>
-        <div class="vs"><span>{{ t.name_of(m.a) }}</span><b>{{ m.score_a }}</b></div>
-        <div class="vs"><span>{{ t.name_of(m.b) }}</span><b>{{ m.score_b }}</b></div>
-        <div class="muted">{% if m.race_a %}{{ t.race_text(m) }}{% else %}Race to {{ m.race_to }}{% endif %} · {{ t.match_label(m) }}</div>
-        <div class="keep-score"><span class="muted">Keep score:</span>
-          {% for x in (m.a, m.b) %}<a class="button small secondary" href="{{ url_for('b_entry', entry_id=x) }}">{{ t.name_of(x) }}</a>{% endfor %}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}<p class="muted">No matches on the tables.</p>{% endif %}
-    {% if t.settings.tables_down %}<p class="muted">Out of service: table {{ t.settings.tables_down|join(", ") }}.</p>{% endif %}
+<div class="table-grid">
+  {% for tbl in t.settings.tables %}
+  {% set m = (open_ms|selectattr("table", "equalto", tbl)|list or [none])[0] %}
+  {% if tbl in t.settings.tables_down %}
+  <div class="tcell down" id="tbl-{{ tbl }}"><div class="tcell-head"><b>Table {{ tbl }}</b><span class="tcell-state">Out of service</span></div></div>
+  {% elif m %}
+  {% set state = "sent" if m.sent_at else ("playing" if m.status == "called" else "set") %}
+  <div class="tcell {{ state }}" id="tbl-{{ tbl }}" data-teams="{{ m.a }} {{ m.b }}">
+    <div class="tcell-head"><b>Table {{ tbl }}</b>
+      <span class="tcell-state">{{ {"sent": "Result sent", "playing": "Playing", "set": "Up next"}[state] }}</span></div>
+    {% for eid, side, sc in ((m.a, "a", m.score_a), (m.b, "b", m.score_b)) %}{% set e = t.entries[eid] %}
+    <div class="tcell-side"><span class="nm">{{ e.name }}{% if e.shows_names %}<small>{{ e.first_names }}</small>{% endif %}</span>
+      {% if m.status == "called" %}<b>{{ sc }}{% if m.race_a %}<small>/{{ t.race_of(m, side) }}</small>{% endif %}</b>{% endif %}</div>
+    {% endfor %}
+    <p class="muted tcell-next">{{ t.match_label(m) }}{% if not m.race_a %} · race to {{ m.race_to }}{% endif %}</p>
+    {% if m.status == "called" and not m.sent_at %}
+    <div class="keep-score"><span class="muted">Keep score:</span>
+      {% for x in (m.a, m.b) %}<a class="button small secondary" href="{{ url_for('b_entry', entry_id=x) }}">{{ t.name_of(x) }}</a>{% endfor %}</div>
+    {% endif %}
   </div>
-  <div class="card">
-    <h3>Up next</h3>
-    {% if queue %}
-    <ol class="queue">
-      {% for m in queue[:12] %}<li><b>{{ t.name_of(m.a) }}</b> vs <b>{{ t.name_of(m.b) }}</b> <span class="muted">· #{{ m.num }}</span></li>{% endfor %}
-    </ol>
-    {% else %}<p class="muted">Nobody is waiting for a table.</p>{% endif %}
+  {% else %}
+  <div class="tcell open" id="tbl-{{ tbl }}">
+    <div class="tcell-head"><b>Table {{ tbl }}</b><span class="tcell-state">Open</span></div>
+    {% if queue %}<p class="muted tcell-next">Next up: {{ t.name_of(queue[0].a) }} vs {{ t.name_of(queue[0].b) }}</p>{% endif %}
   </div>
+  {% endif %}
+  {% endfor %}
 </div>
+{% if queue %}
+<div class="card" style="margin-top: 24px">
+  <h3>Up next</h3>
+  <ol class="queue">
+    {% for m in queue[:12] %}<li><b>{{ t.name_of(m.a) }}</b> vs <b>{{ t.name_of(m.b) }}</b> <span class="muted">· {{ t.match_label(m) }}</span></li>{% endfor %}
+  </ol>
+</div>
+{% endif %}

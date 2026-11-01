@@ -135,88 +135,95 @@
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min since the call):
     {% for m in long %}<b>Table {{ m.table }}</b> ({{ t.name_of(m.team_a) }} vs {{ t.name_of(m.team_b) }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
-  {% set order = s.tables %}
   {% set open = (t.matches|selectattr("status", "equalto", CALLED)|list) + ready %}
-  <div class="match-grid">
-  {% for tbl in order %}{% for m in open if m.table == tbl %}
-  {% if m.status == CALLED %}
+  {% set queue = t.table_queue() %}
+  <div class="match-grid compact">
+  {% for tbl in s.tables %}
+  {% set m = (open|selectattr("table", "equalto", tbl)|list or [none])[0] %}
+  {% if m and m.status == CALLED %}
   {% set mins = t.match_minutes_played(m) %}
   {% set quiet = not (m.score_a or m.score_b) %}
   <div class="card match {{ m.status }}{% if m.sent_at %} sent{% elif mins is not none and mins >= s.long_match_minutes %} long{% elif t.needs_a_look(m) %} over{% endif %}" id="table-{{ m.table }}">
     <div class="match-head">
       <span class="table-label">Table {{ m.table }}</span>
       {% if m.start_at %}<span class="elapsed" data-since="{{ m.start_at }}" data-over="{{ s.no_rack_minutes if quiet else 100000 }}" data-long="{{ s.long_match_minutes }}"></span>{% endif %}
-      <span class="muted">match #{{ m.round }} · {{ m.bracket }} · race to {{ s.race_to }}</span>
     </div>
-    {% include "_match_clock.html" %}
+    <p class="muted card-meta">#{{ m.round }} · {{ m.bracket }} · race to {{ s.race_to }} · called {{ m.called_at|clock }}</p>
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
-    <div class="scorekeeper-line">
-      {% if m.scorekeeper %}Scorekeeper: <b>{{ m.scorekeeper }}</b>{% if m.scorekeeper_locked %} <span class="tag">locked</span>{% endif %}
-      {% else %}<span class="muted">No scorekeeper yet</span>{% endif %}
-      {% if not is_viewer and m.scorekeeper %}
-      <form method="post" action="{{ url_for('admin_scorekeeper', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="action" value="clear"><button class="button small secondary">Change</button></form>
-      <form method="post" action="{{ url_for('admin_scorekeeper', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="action" value="{{ 'unlock' if m.scorekeeper_locked else 'lock' }}"><button class="button small secondary">{{ "Unlock" if m.scorekeeper_locked else "Lock" }}</button></form>
-      {% endif %}
-      {% if m.scorekeeper_note %}<div class="muted small-note">{{ m.scorekeeper_note }}</div>{% endif %}
-    </div>
-    {% if m.sent_at %}<div class="banner await-banner">Result sent by {{ m.sent_by }} — approve it under <b>Results to approve</b>, or fix the score here first.</div>{% endif %}
-    {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}
+    {% if m.sent_at %}<p class="sent-note">Result sent by {{ m.sent_by }}: approve it above, or fix the score first.</p>{% endif %}
+    {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}{% set tm = t.teams[tid] %}
     <div class="score-row">
-      <div class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span></div>
+      <div class="team-name">{{ tm.name }}<small class="muted names">{% if tm.shows_names %}{{ tm.first_names }} · {% endif %}{{ tm.chips }} chips</small></div>
       <div class="score-ctl">
         <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
-          <button class="button secondary small square">−</button></form>
+          <button class="button secondary small square" {% if is_viewer %}disabled{% endif %}>−</button></form>
         <b class="score">{{ sc }}</b>
         <form method="post" action="{{ url_for('admin_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
-          <button class="button small square">+</button></form>
+          <button class="button small square" {% if is_viewer %}disabled{% endif %}>+</button></form>
       </div>
-      <form method="post" action="{{ url_for('admin_winner', match_id=m.id) }}" class="inline"
-            data-dialog-title="{{ t.name_of(tid) }} won the match"
-            data-dialog-text="Score {{ sc }}–{{ m.score_b if side == 'a' else m.score_a }}. Submit the result, or go back.">
-        <input type="hidden" name="winner" value="{{ tid }}"><button class="button secondary small">Winner</button></form>
     </div>
     {% endfor %}
+    <p class="keeper-note muted">{% if m.scorekeeper %}Scorekeeper: <b>{{ m.scorekeeper }}</b>{% if m.scorekeeper_locked %} <span class="tag">locked</span>{% endif %}{% else %}No scorekeeper yet{% endif %}
+      {% if m.scorekeeper_note %}<br>{{ m.scorekeeper_note }}{% endif %}</p>
     {% set won = t.race_winner(m) %}
     {% if won and not m.sent_at %}
-    <div class="banner await-banner" style="margin-top: 12px">
-      <b>{{ t.name_of(won) }} reached {{ s.race_to }}.</b> Waiting for the scorekeeper to send it, or record it yourself.
-      <form method="post" action="{{ url_for('admin_submit', match_id=m.id) }}" class="inline"
+    <div class="banner await-banner">
+      <b>{{ t.name_of(won) }} reached {{ s.race_to }}.</b> Waiting for the scorekeeper.
+      {% if not is_viewer %}<form method="post" action="{{ url_for('admin_submit', match_id=m.id) }}" class="inline"
             data-dialog-title="{{ t.name_of(won) }} won the match"
-            data-dialog-text="Score {{ m.score_a }}–{{ m.score_b }}. Submit the result, or go back.">
-        <button class="button small">Submit result</button></form>
+            data-dialog-text="Score {{ m.score_a }}–{{ m.score_b }}. Record the result, or go back.">
+        <button class="button small">Record result</button></form>{% endif %}
     </div>
     {% endif %}
     {% if not is_viewer %}
-    <details class="inline-details forfeit-menu"><summary class="button small secondary">Forfeit</summary>
-      {% for tid, other in ((m.team_a, m.team_b), (m.team_b, m.team_a)) %}
-      <form method="post" action="{{ url_for('admin_forfeit', match_id=m.id) }}" class="inline"
-            data-dialog-title="{{ t.name_of(tid) }} wins by forfeit?" data-dialog-text="{{ t.name_of(other) }} forfeits and gives back a chip." data-dialog-ok="Record forfeit">
-        <input type="hidden" name="winner" value="{{ tid }}"><button class="button small danger-outline">{{ t.name_of(tid) }} wins by forfeit</button></form>
-      {% endfor %}
-      <form method="post" action="{{ url_for('admin_forfeit', match_id=m.id) }}" class="inline"
-            data-dialog-title="Both teams forfeit?" data-dialog-text="Neither team played: both give back a chip." data-dialog-ok="Both forfeit">
-        <input type="hidden" name="winner" value="both"><button class="button small danger-outline">Both forfeit</button></form>
+    <details class="inline-details more-menu"><summary class="button small secondary">⋯ More</summary>
+      <div class="more-group"><span class="muted">Winner</span>
+        {% for tid in (m.team_a, m.team_b) %}
+        <form method="post" action="{{ url_for('admin_winner', match_id=m.id) }}" class="inline"
+              data-dialog-title="{{ t.name_of(tid) }} won the match?" data-dialog-text="Records the win now (score {{ m.score_a }}–{{ m.score_b }})." data-dialog-ok="Record it">
+          <input type="hidden" name="winner" value="{{ tid }}"><button class="button small secondary">{{ t.name_of(tid) }}</button></form>
+        {% endfor %}</div>
+      <div class="more-group"><span class="muted">Forfeit</span>
+        {% for tid, other in ((m.team_a, m.team_b), (m.team_b, m.team_a)) %}
+        <form method="post" action="{{ url_for('admin_forfeit', match_id=m.id) }}" class="inline"
+              data-dialog-title="{{ t.name_of(tid) }} wins by forfeit?" data-dialog-text="{{ t.name_of(other) }} forfeits and gives back a chip." data-dialog-ok="Record forfeit">
+          <input type="hidden" name="winner" value="{{ tid }}"><button class="button small danger-outline">{{ t.name_of(tid) }} wins</button></form>
+        {% endfor %}
+        <form method="post" action="{{ url_for('admin_forfeit', match_id=m.id) }}" class="inline"
+              data-dialog-title="Both teams forfeit?" data-dialog-text="Neither team played: both give back a chip." data-dialog-ok="Both forfeit">
+          <input type="hidden" name="winner" value="both"><button class="button small danger-outline">Both forfeit</button></form></div>
+      {% if m.scorekeeper %}
+      <div class="more-group"><span class="muted">Scorekeeper</span>
+        <form method="post" action="{{ url_for('admin_scorekeeper', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="action" value="clear"><button class="button small secondary">Change</button></form>
+        <form method="post" action="{{ url_for('admin_scorekeeper', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="action" value="{{ 'unlock' if m.scorekeeper_locked else 'lock' }}"><button class="button small secondary">{{ "Unlock" if m.scorekeeper_locked else "Lock" }}</button></form></div>
+      {% endif %}
     </details>
     {% endif %}
   </div>
-  {% else %}
-  <div class="card match ready-to-call">
-    <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">match #{{ m.round }} · {{ m.bracket }} · ready to call</span></div>
-    {% for tid in (m.team_a, m.team_b) %}
-    <div class="score-row"><div class="team-name">{{ t.name_of(tid) }} <span class="muted">({{ t.teams[tid].chips }} chips)</span></div></div>
+  {% elif m %}
+  <div class="card match ready-to-call" id="table-{{ m.table }}">
+    <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">ready to call</span></div>
+    <p class="muted card-meta">#{{ m.round }} · {{ m.bracket }}</p>
+    {% for tid in (m.team_a, m.team_b) %}{% set tm = t.teams[tid] %}
+    <div class="score-row"><div class="team-name">{{ tm.name }}<small class="muted names">{% if tm.shows_names %}{{ tm.first_names }} · {% endif %}{{ tm.chips }} chips</small></div></div>
     {% endfor %}
     {% if not is_viewer %}
     <form method="post" action="{{ url_for('admin_call_match', match_id=m.id) }}" class="button-row">
       <button class="button">Call match</button></form>
     {% endif %}
   </div>
+  {% else %}
+  <div class="card match open-table" id="table-{{ tbl }}">
+    <div class="match-head"><span class="table-label">Table {{ tbl }}</span><span class="muted">open</span></div>
+    {% if queue %}<p class="muted card-meta">Next up: {{ t.name_of(queue[0].team_a) }} vs {{ t.name_of(queue[0].team_b) }}</p>
+    {% else %}<p class="muted card-meta">Nobody waiting for a table.</p>{% endif %}
+  </div>
   {% endif %}
-  {% endfor %}{% endfor %}
-  {% if not open %}<p class="muted">No open matches.</p>{% endif %}
+  {% endfor %}
   </div>
   {% set finished = t.matches|selectattr("status", "equalto", "done")|selectattr("team_b")|list %}
   {% if finished %}

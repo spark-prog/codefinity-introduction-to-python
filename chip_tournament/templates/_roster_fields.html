@@ -1,4 +1,4 @@
-<label>Team name <input name="name" required value="{{ v.name }}"></label>
+<label>Team name (optional) <input name="name" value="{{ v.name }}" placeholder="Leave blank to use your first names (Ann &amp; Bob)"></label>
 {% if solo_allowed %}
 <div class="solo-box">
   <label class="checkbox"><input type="checkbox" name="solo" value="1" id="solo" {% if solo_checked %}checked{% endif %}>

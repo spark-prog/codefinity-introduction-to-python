@@ -5,10 +5,13 @@
   <header class="page-head">
     <p class="eyebrow">Live board · refreshes every 15 seconds</p>
     <h1>{{ t.settings.name }}</h1>
-    {% with teams = t.teams.values()|rejectattr("status", "equalto", "no_show")|list %}{% include "_find_team.html" %}{% endwith %}
   </header>
+  {% include "_board_find.html" %}
   {% include "_stats.html" %}
-  {% include "_tables.html" %}
-  <section>{% include "_standings.html" %}</section>
+  <section id="tab-tables">
+    {% include "_tables.html" %}
+    <section>{% include "_standings.html" %}</section>
+  </section>
+  <section id="tab-teams" hidden>{% include "_team_list.html" %}</section>
 </div>
 {% endblock %}

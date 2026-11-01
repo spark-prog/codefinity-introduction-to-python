@@ -163,6 +163,16 @@ class Team:
     def partners(self) -> str:
         return " & ".join([p.name for p in self.players] + (["partner TBD"] if self.needs_partner else []))
 
+    @property
+    def first_names(self) -> str:
+        """'Ann & Bob': who to look for at the table."""
+        return " & ".join(p.name.split()[0] for p in self.players if p.name.strip())
+
+    @property
+    def shows_names(self) -> bool:
+        """Whether the players' names add anything under the team name (not when the name is just them)."""
+        return bool(self.first_names) and self.first_names.lower() != self.name.lower()
+
 
 @dataclass
 class Match:
@@ -364,6 +374,32 @@ class Tournament:
 
     def waitlist_position(self, team: Team) -> int | None:
         return self.waitlist.index(team.id) + 1 if team.id in self.waitlist else None
+
+    def where(self, team: Team) -> str:
+        """Where a team is right now, for the board's Teams list ("On table 5", "#3 in line", ...)."""
+        if team.status == NO_SHOW:
+            return "No-show"
+        if team.status == WAITLISTED:
+            return f"Waiting list #{self.waitlist_position(team)}"
+        if team.status == REGISTERED:
+            return "Checked in" if team.checked_in_at else "Registered"
+        if team.status == ELIMINATED:
+            return "Out"
+        if team.status == CASHED_OUT:
+            return f"Cashed in {money(team.payout_cents)}"
+        m = self.current_match_for(team.id)
+        if m is not None and m.status == CALLED:
+            return f"Table {m.table}: result sent" if m.sent_at else f"On table {m.table}"
+        if m is not None and m.table:
+            return f"Table {m.table}, waiting for the call"
+        if m is not None:
+            queue = self.table_queue()
+            return f"Paired, #{queue.index(m) + 1} for a table" if m in queue else "Paired"
+        for lst, label in ((self.winners_list, "winners"), (self.losers_list, "losers")):
+            order = self.queue_order(lst)
+            if team.id in order:
+                return f"#{order.index(team.id) + 1} in line ({label})"
+        return "Waiting"
 
     def standings(self) -> list[Team]:
         order = {ACTIVE: 0, CASHED_OUT: 1, ELIMINATED: 2, REGISTERED: 3, WAITLISTED: 4, NO_SHOW: 5}
@@ -622,8 +658,14 @@ class Tournament:
     def register_team(self, name: str, players: list[Player], list_seeking: bool = False) -> Team:
         """Register a team. With just one player, the team holds a spot until it adds a partner."""
         name = name.strip()
-        if not name:
-            raise TournamentError("Team name is required.")
+        if not name:  # no team name: the players' first names ("Ann & Bob"), numbered if that's taken
+            base = " & ".join(p.name.strip().split()[0] for p in players if p.name.strip())
+            if not base:
+                raise TournamentError("Enter the players' names.")
+            name, n = base, 1
+            while any(t.name.lower() == name.lower() for t in self.teams.values()):
+                n += 1
+                name = f"{base} ({n})"
         if any(t.name.lower() == name.lower() for t in self.teams.values()):
             raise TournamentError(f"A team named '{name}' is already registered.")
         if self.status == FINISHED:
@@ -1106,7 +1148,8 @@ class Tournament:
         self._say(f"Match #{m.round}: called {a.name} vs {b.name} to table {m.table}.")
 
         def side(t: Team) -> str:
-            return f"{t.name} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
+            who = f"{t.name} ({t.first_names})" if t.shows_names else t.name
+            return f"{who} with combined skill {t.combined_skill} currently holding {t.chips} chip{'s' if t.chips != 1 else ''}"
 
         body = f"New match: Table {m.table}: {side(a)} VS {side(b)}. Good Luck!"
         for team in (a, b):

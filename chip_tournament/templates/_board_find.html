@@ -1,0 +1,66 @@
+{# Board search: type a team or player name, pick a match, jump to that team (its table, or its row on the Teams tab).
+   Expects the Tables tab (#tab-tables) with table cells carrying data-teams, and the Teams tab rows (#team-<id>). #}
+<div class="board-find">
+  <label for="team-search" class="eyebrow">Find your team</label>
+  <input id="team-search" type="search" placeholder="Type a team or player name" autocomplete="off" aria-controls="team-hits">
+  <ul id="team-hits" class="team-hits" hidden></ul>
+</div>
+<nav class="board-tabs" role="tablist">
+  <button type="button" role="tab" data-tab="tables">Tables</button>
+  <button type="button" role="tab" data-tab="teams">{{ "Players" if t.kind == "bracket" and t.settings.team_size == 1 else "Teams" }}</button>
+</nav>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".board-tabs [data-tab]"));
+  function show(name, remember) {
+    tabs.forEach(function (b) {
+      var on = b.dataset.tab === name;
+      b.classList.toggle("active", on); b.setAttribute("aria-selected", on);
+      var panel = document.getElementById("tab-" + b.dataset.tab);
+      if (panel) panel.hidden = !on;
+    });
+    if (remember && history.replaceState) history.replaceState(null, "", name === "teams" ? "#teams" : location.pathname);
+  }
+  tabs.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.tab, true); }); });
+  show(location.hash === "#teams" ? "teams" : "tables");
+
+  var input = document.getElementById("team-search"), hits = document.getElementById("team-hits");
+  var rows = Array.prototype.slice.call(document.querySelectorAll("tr[data-team]"));
+  function focusTeam(id) {
+    document.querySelectorAll(".found").forEach(function (el) { el.classList.remove("found"); });
+    var cell = document.querySelector('.tcell[data-teams~="' + id + '"]');
+    var row = document.getElementById("team-" + id);
+    var target = cell || row;
+    if (!target) return;
+    show(cell ? "tables" : "teams", true);
+    target.classList.add("found");
+    if (cell && row) row.classList.add("found");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    try { sessionStorage.setItem("board-found", id); } catch (e) {}
+  }
+  function search() {
+    var q = input.value.trim().toLowerCase();
+    hits.innerHTML = "";
+    if (q.length < 2) { hits.hidden = true; return; }
+    var found = rows.filter(function (r) { return r.dataset.search.indexOf(q) !== -1; }).slice(0, 8);
+    found.forEach(function (r) {
+      var li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; b.textContent = r.querySelector("b").textContent;
+      var sub = r.querySelector(".small-note"), where = r.lastElementChild.textContent;
+      b.title = where;
+      var span = document.createElement("span"); span.className = "muted"; span.textContent = (sub ? sub.textContent + " · " : "") + where;
+      b.appendChild(span);
+      b.addEventListener("click", function () { hits.hidden = true; input.value = ""; input.blur(); focusTeam(r.dataset.team); });
+      li.appendChild(b); hits.appendChild(li);
+    });
+    if (!found.length) { var li = document.createElement("li"); li.className = "muted"; li.textContent = "No team or player matches “" + input.value + "”."; hits.appendChild(li); }
+    hits.hidden = false;
+  }
+  input.addEventListener("input", search);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { var first = hits.querySelector("button"); if (first) { e.preventDefault(); first.click(); } }
+  });
+  // After the board refreshes, keep showing the team that was picked.
+  try { var keep = sessionStorage.getItem("board-found"); if (keep) focusTeam(keep); } catch (e) {}
+});
+</script>

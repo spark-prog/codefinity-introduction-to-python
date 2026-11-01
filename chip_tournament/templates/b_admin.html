@@ -91,71 +91,94 @@
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min):
     {% for m in long %}<b>Table {{ m.table }}</b> (#{{ m.num }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
-  <div class="match-grid">
+  <div class="match-grid compact">
   {% set shown = t.in_play() + ready %}
-  {% for tbl in s.tables %}{% for m in shown if m.table == tbl %}
-  {% if m.status == READY %}
-  <div class="card match ready-to-call">
-    <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · ready to call</span></div>
-    <div class="score-row"><div class="team-name">{{ t.name_of(m.a) }}</div></div>
-    <div class="score-row"><div class="team-name">{{ t.name_of(m.b) }}</div></div>
+  {% set queue = t.ready_queue() %}
+  {% for tbl in s.tables %}
+  {% set m = (shown|selectattr("table", "equalto", tbl)|list or [none])[0] %}
+  {% if m and m.status == READY %}
+  <div class="card match ready-to-call" id="table-{{ m.table }}">
+    <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">ready to call</span></div>
+    <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }}</p>
+    {% for id in (m.a, m.b) %}{% set e = t.entries[id] %}
+    <div class="score-row"><div class="team-name">{{ e.name }}{% if e.shows_names %}<small class="muted names">{{ e.first_names }}</small>{% endif %}</div></div>
+    {% endfor %}
     {% if not is_viewer %}<form method="post" action="{{ url_for('b_call_match', match_id=m.id) }}" class="button-row"><button class="button">Call match</button></form>{% endif %}
   </div>
-  {% else %}
+  {% elif m %}
   {% set mins = t.match_minutes_played(m) %}
   <div class="card match{% if m.sent_at %} sent{% elif mins >= s.long_match_minutes %} long{% elif t.needs_a_look(m) %} over{% endif %}" id="table-{{ m.table }}">
     <div class="match-head">
       <span class="table-label">Table {{ m.table }}</span>
       <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.no_rack_minutes if not (m.score_a or m.score_b) else 100000 }}" data-long="{{ s.long_match_minutes }}"></span>
-      <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</span>
     </div>
+    <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</p>
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
-    <div class="scorekeeper-line">
-      {% if m.scorekeeper %}Scorekeeper: <b>{{ m.scorekeeper }}</b>{% if m.scorekeeper_locked %} <span class="tag">locked</span>{% endif %}
-      {% else %}<span class="muted">No scorekeeper yet</span>{% endif %}
-      {% if not is_viewer and m.scorekeeper %}
-      <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="action" value="clear"><button class="button small secondary">Change</button></form>
-      <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
-        <input type="hidden" name="action" value="{{ 'unlock' if m.scorekeeper_locked else 'lock' }}"><button class="button small secondary">{{ "Unlock" if m.scorekeeper_locked else "Lock" }}</button></form>
-      {% endif %}
-      {% if m.scorekeeper_note %}<div class="muted small-note">{{ m.scorekeeper_note }}</div>{% endif %}
-    </div>
-    {% if m.sent_at %}<div class="banner await-banner">Result sent by {{ m.sent_by }}: approve it under <b>Results to approve</b>, or fix the score here first.</div>{% endif %}
-    {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}
+    {% if m.sent_at %}<p class="sent-note">Result sent by {{ m.sent_by }}: approve it above, or fix the score first.</p>{% endif %}
+    {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}{% set e = t.entries[id] %}
     <div class="score-row">
-      <div class="team-name">{{ t.name_of(id) }}</div>
+      <div class="team-name">{{ e.name }}{% if e.shows_names %}<small class="muted names">{{ e.first_names }}</small>{% endif %}</div>
       <div class="score-ctl">
         <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
-          <button class="button secondary small square">−</button></form>
+          <button class="button secondary small square" {% if is_viewer %}disabled{% endif %}>−</button></form>
         <b class="score">{{ sc }}</b>
         <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
-          <button class="button small square">+</button></form>
+          <button class="button small square" {% if is_viewer %}disabled{% endif %}>+</button></form>
       </div>
-      <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline"
-            data-dialog-title="{{ t.name_of(id) }} won the match?" data-dialog-text="Records the win now (the score stays as entered)." data-dialog-ok="Record it">
-        <input type="hidden" name="winner" value="{{ id }}"><input type="hidden" name="forfeit" value="1">
-        <button class="button small secondary">Winner</button></form>
     </div>
     {% endfor %}
-    <div class="button-row">
-      {% set w = t.race_winner(m) %}
-      {% if w %}
-      <form method="post" action="{{ url_for('b_submit', match_id=m.id) }}" class="inline"><button class="button">Submit: {{ t.name_of(w) }} won</button></form>
-      {% endif %}
+    <p class="keeper-note muted">{% if m.scorekeeper %}Scorekeeper: <b>{{ m.scorekeeper }}</b>{% if m.scorekeeper_locked %} <span class="tag">locked</span>{% endif %}{% else %}No scorekeeper yet{% endif %}
+      {% if m.scorekeeper_note %}<br>{{ m.scorekeeper_note }}{% endif %}</p>
+    {% set w = t.race_winner(m) %}
+    {% if w and not m.sent_at %}
+    <div class="banner await-banner"><b>{{ t.name_of(w) }} reached the race.</b> Waiting for the scorekeeper.
+      {% if not is_viewer %}<form method="post" action="{{ url_for('b_submit', match_id=m.id) }}" class="inline"><button class="button small">Record result</button></form>{% endif %}</div>
+    {% endif %}
+    {% if not is_viewer %}
+    <details class="inline-details more-menu"><summary class="button small secondary">⋯ More</summary>
+      <div class="more-group"><span class="muted">Winner</span>
+        {% for id in (m.a, m.b) %}
+        <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline"
+              data-dialog-title="{{ t.name_of(id) }} won the match?" data-dialog-text="Records the win now (score {{ m.score_a }}–{{ m.score_b }})." data-dialog-ok="Record it">
+          <input type="hidden" name="winner" value="{{ id }}"><button class="button small secondary">{{ t.name_of(id) }}</button></form>
+        {% endfor %}</div>
+      <div class="more-group"><span class="muted">Forfeit</span>
+        {% for id, other in ((m.a, m.b), (m.b, m.a)) %}
+        <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline"
+              data-dialog-title="{{ t.name_of(id) }} wins by forfeit?" data-dialog-text="{{ t.name_of(other) }} forfeits this match." data-dialog-ok="Record forfeit">
+          <input type="hidden" name="winner" value="{{ id }}"><input type="hidden" name="forfeit" value="1">
+          <button class="button small danger-outline">{{ t.name_of(id) }} wins</button></form>
+        {% endfor %}</div>
       {% set free = t.free_tables() %}
       {% if free %}
-      <form method="post" action="{{ url_for('b_call', match_id=m.id) }}" class="inline">
-        <select name="table" aria-label="Move to table">{% for x in free %}<option>{{ x }}</option>{% endfor %}</select>
-        <button class="button small secondary">Move table</button></form>
+      <div class="more-group"><span class="muted">Move table</span>
+        <form method="post" action="{{ url_for('b_call', match_id=m.id) }}" class="inline"
+              data-dialog-title="Move this match?" data-dialog-text="Both sides are texted the new table." data-dialog-ok="Move it">
+          <select name="table" aria-label="Move to table" required><option value="" selected disabled>Move to…</option>{% for x in free %}<option value="{{ x }}">Table {{ x }}</option>{% endfor %}</select>
+          <button class="button small secondary">Move</button></form></div>
       {% endif %}
-    </div>
+      {% if m.scorekeeper %}
+      <div class="more-group"><span class="muted">Scorekeeper</span>
+        <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="action" value="clear"><button class="button small secondary">Change</button></form>
+        <form method="post" action="{{ url_for('b_scorekeeper', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="action" value="{{ 'unlock' if m.scorekeeper_locked else 'lock' }}"><button class="button small secondary">{{ "Unlock" if m.scorekeeper_locked else "Lock" }}</button></form></div>
+      {% endif %}
+    </details>
+    {% endif %}
+  </div>
+  {% elif tbl in s.tables_down %}
+  <div class="card match open-table" id="table-{{ tbl }}"><div class="match-head"><span class="table-label">Table {{ tbl }}</span><span class="muted">out of service</span></div></div>
+  {% else %}
+  <div class="card match open-table" id="table-{{ tbl }}">
+    <div class="match-head"><span class="table-label">Table {{ tbl }}</span><span class="muted">open</span></div>
+    {% if queue %}<p class="muted card-meta">Next up: {{ t.name_of(queue[0].a) }} vs {{ t.name_of(queue[0].b) }}</p>
+    {% else %}<p class="muted card-meta">Nobody waiting for a table.</p>{% endif %}
   </div>
   {% endif %}
-  {% endfor %}{% endfor %}
-  {% if not shown %}<p class="muted">No matches on the tables.</p>{% endif %}
+  {% endfor %}
   </div>
 
   {% set queue = t.ready_queue() %}

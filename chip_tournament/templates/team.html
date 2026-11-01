@@ -29,7 +29,7 @@
       <section class="card table-play" style="margin-top: 0">
         <p class="eyebrow">Your match</p>
         <h2>Table {{ match.table }} · race to {{ t.settings.race_to }}</h2>
-        <p>Go to <b>TABLE {{ match.table }}</b> now — vs {{ t.name_of(opp) }}, race to {{ t.settings.race_to }}.</p>
+        <p>Go to <b>TABLE {{ match.table }}</b> now — vs {{ t.name_of(opp) }}{% if t.teams[opp].shows_names %} ({{ t.teams[opp].first_names }}){% endif %}, race to {{ t.settings.race_to }}.</p>
         {% set m = match %}{% include "_match_clock.html" %}
         {% if not is_team %}
           <form method="post" action="{{ url_for('team_login', team_id=team.id) }}" class="form">
@@ -62,7 +62,7 @@
         {% endif %}
         {% for side, tid, sc in (("a", match.team_a, match.score_a), ("b", match.team_b, match.score_b)) %}
         <div class="play-row">
-          <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% endif %}</span>
+          <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% elif t.teams[tid].shows_names %}<small class="muted names">{{ t.teams[tid].first_names }}</small>{% endif %}</span>
           {% if keeper and not match.sent_at %}
           <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
             <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
@@ -103,6 +103,7 @@
       </section>
       {% else %}
       <div class="card"><p class="eyebrow">Next match</p><h2>vs {{ t.name_of(opp) }}</h2>
+        {% if t.teams[opp].shows_names %}<p class="muted">{{ t.teams[opp].first_names }}</p>{% endif %}
         <p>{% if match.table %}You're set for <b>table {{ match.table }}</b> against {{ t.name_of(opp) }}. Stay close: we'll text you when the director calls your match.
         {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}</p></div>
       {% endif %}

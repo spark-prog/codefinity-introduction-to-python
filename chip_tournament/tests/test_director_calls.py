@@ -116,7 +116,7 @@ def test_director_page_calls_and_forfeits(tmp_path, monkeypatch):
     r = admin.post(f"{base}/call-all", follow_redirects=True).get_data(as_text=True)
     assert "Called 1 match(es)" in r
     page = admin.get(base).get_data(as_text=True)
-    assert "Forfeit</summary>" in page and "Both forfeit" in page and "Arrived" not in page
+    assert "⋯ More</summary>" in page and "Both forfeit" in page and "Arrived" not in page
 
     with ev.store.change("quiet table") as t:  # called 20 minutes ago, no rack yet
         t.match(first.id).called_at = (datetime.now() - timedelta(minutes=20)).isoformat(timespec="seconds")

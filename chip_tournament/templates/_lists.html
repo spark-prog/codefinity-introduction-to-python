@@ -5,7 +5,7 @@
   <div><h3>{{ label }} <span class="muted">— not paired yet</span></h3>
     <ol>
     {% for id in waiting %}{% set tm = t.teams[id] %}
-      <li>{{ tm.name }} <span class="muted">({{ tm.matches_played }} played)</span>
+      <li>{{ tm.name }}{% if tm.shows_names %} <span class="muted">({{ tm.first_names }})</span>{% endif %} <span class="muted">· {{ tm.matches_played }} played</span>
         {% if tm.priority %}<span class="tag call">called next</span>{% elif t.is_behind(tm) %}<span class="tag behind">catching up</span>{% endif %}
         {% if waiting|length > 1 %}<span class="tag wait">waiting for a new opponent</span>{% endif %}
         {% if admin_controls and not tm.priority %}

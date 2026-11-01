@@ -151,6 +151,9 @@
     <p class="muted card-meta">#{{ m.round }} · {{ m.bracket }} · race to {{ s.race_to }} · called {{ m.called_at|clock }}</p>
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
     {% if m.sent_at %}<p class="sent-note">Result sent by {{ m.sent_by }}: approve it above, or fix the score first.</p>{% endif %}
+    {% if m.table in s.tables_closing %}<p class="look-note">Closing after this match.
+      {% if not is_viewer %}<form method="post" action="{{ url_for('admin_table_state', table=m.table) }}" class="inline">
+        <input type="hidden" name="action" value="open"><button class="button small secondary">Keep open</button></form>{% endif %}</p>{% endif %}
     {% for side, tid, sc in (("a", m.team_a, m.score_a), ("b", m.team_b, m.score_b)) %}{% set tm = t.teams[tid] %}
     <div class="score-row">
       <div class="team-name">{{ tm.name }}<small class="muted names">{% if tm.shows_names %}{{ tm.first_names }} · {% endif %}{{ tm.chips }} chips</small></div>
@@ -194,6 +197,23 @@
         <form method="post" action="{{ url_for('admin_forfeit', match_id=m.id) }}" class="inline"
               data-dialog-title="Both teams forfeit?" data-dialog-text="Neither team played: both give back a chip." data-dialog-ok="Both forfeit">
           <input type="hidden" name="winner" value="both"><button class="button small danger-outline">Both forfeit</button></form></div>
+      {% set free = t.free_tables() %}
+      {% if free %}
+      <div class="more-group"><span class="muted">Move table</span>
+        <form method="post" action="{{ url_for('admin_move_match', match_id=m.id) }}" class="inline"
+              data-dialog-title="Move this match?" data-dialog-text="{% if m.status == CALLED %}Both teams are texted the new table.{% else %}It hasn't been called yet, so nobody is texted.{% endif %}" data-dialog-ok="Move it">
+          <select name="table" aria-label="Move to table" required><option value="" selected disabled>Move to…</option>{% for x in free %}<option value="{{ x }}">Table {{ x }}</option>{% endfor %}</select>
+          <button class="button small secondary">Move</button></form></div>
+      {% endif %}
+      <div class="more-group"><span class="muted">Table {{ m.table }}</span>
+        {% if m.table not in s.tables_closing %}
+        <form method="post" action="{{ url_for('admin_table_state', table=m.table) }}" class="inline"
+              data-dialog-title="Close table {{ m.table }} after this match?" data-dialog-text="{% if m.status == CALLED %}This match finishes here, then nothing new is assigned to the table until you reopen it.{% else %}This match moves to the front of the line for another table.{% endif %}" data-dialog-ok="Close after match">
+          <input type="hidden" name="action" value="close"><button class="button small secondary">Close after this match</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin_table_state', table=m.table) }}" class="inline"
+              data-dialog-title="Table {{ m.table }} out of service now?" data-dialog-text="The match moves to a free table, or to the front of the line with its score kept." data-dialog-ok="Out of service">
+          <input type="hidden" name="action" value="down"><button class="button small danger-outline">Out of service now</button></form></div>
       {% if m.scorekeeper %}
       <div class="more-group"><span class="muted">Scorekeeper</span>
         <form method="post" action="{{ url_for('admin_scorekeeper', match_id=m.id) }}" class="inline">
@@ -214,13 +234,40 @@
     {% if not is_viewer %}
     <form method="post" action="{{ url_for('admin_call_match', match_id=m.id) }}" class="button-row">
       <button class="button">Call match</button></form>
+    <details class="inline-details more-menu"><summary class="button small secondary">⋯ More</summary>
+      {% set free = t.free_tables() %}
+      {% if free %}
+      <div class="more-group"><span class="muted">Move table</span>
+        <form method="post" action="{{ url_for('admin_move_match', match_id=m.id) }}" class="inline"
+              data-dialog-title="Move this match?" data-dialog-text="{% if m.status == CALLED %}Both teams are texted the new table.{% else %}It hasn't been called yet, so nobody is texted.{% endif %}" data-dialog-ok="Move it">
+          <select name="table" aria-label="Move to table" required><option value="" selected disabled>Move to…</option>{% for x in free %}<option value="{{ x }}">Table {{ x }}</option>{% endfor %}</select>
+          <button class="button small secondary">Move</button></form></div>
+      {% endif %}
+      <div class="more-group"><span class="muted">Table {{ m.table }}</span>
+        {% if m.table not in s.tables_closing %}
+        <form method="post" action="{{ url_for('admin_table_state', table=m.table) }}" class="inline"
+              data-dialog-title="Close table {{ m.table }} after this match?" data-dialog-text="{% if m.status == CALLED %}This match finishes here, then nothing new is assigned to the table until you reopen it.{% else %}This match moves to the front of the line for another table.{% endif %}" data-dialog-ok="Close after match">
+          <input type="hidden" name="action" value="close"><button class="button small secondary">Close after this match</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin_table_state', table=m.table) }}" class="inline"
+              data-dialog-title="Table {{ m.table }} out of service now?" data-dialog-text="The match moves to a free table, or to the front of the line with its score kept." data-dialog-ok="Out of service">
+          <input type="hidden" name="action" value="down"><button class="button small danger-outline">Out of service now</button></form></div>
+    </details>
     {% endif %}
+  </div>
+  {% elif tbl in s.tables_down %}
+  <div class="card match open-table down" id="table-{{ tbl }}">
+    <div class="match-head"><span class="table-label">Table {{ tbl }}</span><span class="muted">out of service</span></div>
+    {% if not is_viewer %}<form method="post" action="{{ url_for('admin_table_state', table=tbl) }}" class="button-row">
+      <input type="hidden" name="action" value="open"><button class="button small secondary">Back in service</button></form>{% endif %}
   </div>
   {% else %}
   <div class="card match open-table" id="table-{{ tbl }}">
     <div class="match-head"><span class="table-label">Table {{ tbl }}</span><span class="muted">open</span></div>
     {% if queue %}<p class="muted card-meta">Next up: {{ t.name_of(queue[0].team_a) }} vs {{ t.name_of(queue[0].team_b) }}</p>
     {% else %}<p class="muted card-meta">Nobody waiting for a table.</p>{% endif %}
+    {% if not is_viewer %}<form method="post" action="{{ url_for('admin_table_state', table=tbl) }}" class="button-row">
+      <input type="hidden" name="action" value="down"><button class="button small secondary">Out of service</button></form>{% endif %}
   </div>
   {% endif %}
   {% endfor %}
@@ -275,27 +322,27 @@
   </div>
   {% endif %}
   <div class="table-wrap">
-  <table class="grid">
+  <table class="grid team-table">
     <thead><tr><th>Team</th><th>Partners</th><th>Combined skill</th><th>Chips</th><th>Played</th><th>Status</th>{% if t.status == SETUP %}<th>Check-in</th>{% endif %}<th>Value / paid</th><th>Actions</th></tr></thead>
     <tbody>
     {% for team in t.standings() %}
     <tr class="status-{{ team.status }}" data-search="{{ ([team.name] + team.players|map(attribute='name')|list + ([] if is_viewer else team.players|map(attribute='phone')|map('last4')|select|list))|join(' ')|lower }}"
         data-unchecked="{{ '1' if t.status == SETUP and team.status in ('registered', 'waitlisted') and not team.checked_in_at else '' }}">
       <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ "••••" if is_viewer else team.pin }}</span></td>
-      <td class="partners-cell">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}
+      <td class="partners-cell" data-label="Partners">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}
         {% if team.needs_partner %}<div><span class="tag solo" style="margin-left: 0">Needs partner</span>{% if team.list_seeking %} <span class="muted">· on public list</span>{% endif %}</div>{% endif %}</td>
-      <td>{{ team.combined_skill }}
+      <td data-label="Skill">{{ team.combined_skill }}
         {% if t.status == SETUP %}
           {% set c = t.chips_preview(team) %}
           <br>{% if team.needs_partner %}<span class="muted">partner up to {{ [s.registration_cap - team.combined_skill, 9]|min }}</span>
           {% elif c %}<span class="muted">{{ c }} chips</span>{% else %}<span class="warn">over {{ t.max_skill }} — needs new partner</span>{% endif %}
         {% endif %}
       </td>
-      <td>{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
-      <td>{{ team.matches_played }}{% if t.is_behind(team) %} <span class="tag behind">behind</span>{% endif %}</td>
-      <td>{{ team.status.replace("_", " ") }}{% if team.status == "waitlisted" %} #{{ t.waitlist_position(team) }}{% endif %}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
+      <td data-label="Chips">{{ team.chips if team.status == ACTIVE else "–" }}{% if team.starting_chips %} <span class="muted">/ {{ team.starting_chips }}</span>{% endif %}</td>
+      <td data-label="Played">{{ team.matches_played }}{% if t.is_behind(team) %} <span class="tag behind">behind</span>{% endif %}</td>
+      <td data-label="Status">{{ team.status.replace("_", " ") }}{% if team.status == "waitlisted" %} #{{ t.waitlist_position(team) }}{% endif %}{% if team.status == ACTIVE and team.matches_left %}<br><span class="warn">{% if team.matches_left == 1 %}last match{% else %}{{ team.matches_left }} matches left{% endif %}</span>{% endif %}</td>
       {% if t.status == SETUP %}
-      <td class="checkin-cell">
+      <td class="checkin-cell" data-label="Check-in">
         {% if team.status == "no_show" %}
           <form method="post" action="{{ url_for('admin_restore', team_id=team.id) }}" class="inline"><button class="button small secondary">Restore</button></form>
         {% elif team.checked_in_at %}<span class="arrived">✓ {{ team.checked_in_at|clock }}</span>
@@ -309,7 +356,7 @@
         {% endif %}
       </td>
       {% endif %}
-      <td class="value-cell">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}
+      <td class="value-cell" data-label="Value">{{ (t.payout_for(team) if team.status == ACTIVE else team.payout_cents)|money }}
         {% if team.status == ACTIVE and t.cash_in_open %}
         <form method="post" action="{{ url_for('admin_cash_in', team_id=team.id) }}"
               onsubmit="return confirm('Cash in {{ team.name|e }} for {{ t.payout_for(team)|money }}?')">
@@ -345,6 +392,13 @@
             <input name="change" type="number" step="1" placeholder="±" required>
             <input name="reason" placeholder="Reason" required>
             <button class="button secondary small">Adjust</button></form>
+        {% elif team.status == "eliminated" and t.status == RUNNING and not is_viewer %}
+          <form method="post" action="{{ url_for('admin_restore_out', team_id=team.id) }}" class="inline adjust"
+                data-dialog-title="Bring {{ team.name }} back?"
+                data-dialog-text="They go back in line with the chips you entered. With 1 chip, the chip value goes from {{ t.chip_value_cents|money }} to {{ t.chip_value_if_restored(1)|money }}."
+                data-dialog-ok="Restore">
+            <input name="chips" type="number" min="1" max="10" value="1" aria-label="Chips to restore with" required>
+            <button class="button small checkin">Restore</button></form>
         {% endif %}
       </td>
     </tr>

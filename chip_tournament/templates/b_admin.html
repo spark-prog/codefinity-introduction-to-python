@@ -115,6 +115,9 @@
     <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</p>
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
     {% if m.sent_at %}<p class="sent-note">Result sent by {{ m.sent_by }}: approve it above, or fix the score first.</p>{% endif %}
+    {% if m.table in s.tables_closing %}<p class="look-note">Closing after this match.
+      {% if not is_viewer %}<form method="post" action="{{ url_for('b_table', table=m.table) }}" class="inline">
+        <input type="hidden" name="down" value="0"><button class="button small secondary">Keep open</button></form>{% endif %}</p>{% endif %}
     {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}{% set e = t.entries[id] %}
     <div class="score-row">
       <div class="team-name">{{ e.name }}{% if e.shows_names %}<small class="muted names">{{ e.first_names }}</small>{% endif %}</div>
@@ -158,6 +161,12 @@
               data-dialog-title="Move this match?" data-dialog-text="Both sides are texted the new table." data-dialog-ok="Move it">
           <select name="table" aria-label="Move to table" required><option value="" selected disabled>Move to…</option>{% for x in free %}<option value="{{ x }}">Table {{ x }}</option>{% endfor %}</select>
           <button class="button small secondary">Move</button></form></div>
+      {% endif %}
+      {% if m.table not in s.tables_closing %}
+      <div class="more-group"><span class="muted">Table {{ m.table }}</span>
+        <form method="post" action="{{ url_for('b_table', table=m.table) }}" class="inline"
+              data-dialog-title="Close table {{ m.table }} after this match?" data-dialog-text="This match finishes here, then nothing new is assigned to the table until you bring it back." data-dialog-ok="Close after match">
+          <input type="hidden" name="close" value="1"><button class="button small secondary">Close after this match</button></form></div>
       {% endif %}
       {% if m.scorekeeper %}
       <div class="more-group"><span class="muted">Scorekeeper</span>
@@ -234,21 +243,21 @@
   <p class="muted">{{ "With manual seeding, the order below is the seed order (1 at the top): byes go to the top seeds."
      if s.seeding == "manual" else "Seeding is a random draw at the start. Switch to manual seeding in Settings to set the order yourself." }}</p>
   {% endif %}
-  <div class="table-wrap"><table class="grid">
+  <div class="table-wrap"><table class="grid team-table entry-table">
     <thead><tr><th>#</th><th>Entry</th>{% if not is_viewer %}<th>PIN</th>{% endif %}<th>Status</th><th></th></tr></thead>
     {% for e in t.listed_entries %}
     <tr>
-      <td>{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
-      <td><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
+      <td class="seed-cell">{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
+      <td class="team-cell"><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
         {% if s.team_size > 1 and e.partners != e.name %}<div class="muted">{{ e.partners }}</div>{% endif %}
         {% if asks_two_levels(s) %}{% set p = e.players[0] %}<div class="muted small-note">8-Ball {{ p.skill_8 or "—" }} · 9-Ball {{ p.skill_9 or "—" }}{% if not p.skill_8 and not p.skill_9 and p.skill %} · SL {{ p.skill }}{% endif %}{% if e.division %} · <b>{{ e.division }}</b>{% elif not e.skill %} · <b>needs a skill level</b>{% endif %}</div>{% endif %}
         {% if not is_viewer %}<div class="muted small-note">{% for p in e.players if p.phone %}{{ p.name }} ···{{ p.phone|last4 }}{% if p.sms_consent %} ✓texts{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
-      {% if not is_viewer %}<td>{{ e.pin }}</td>{% endif %}
-      <td>{% if e.status == "waitlisted" %}Waiting list #{{ t.waitlist_position(e) }}
+      {% if not is_viewer %}<td data-label="PIN">{{ e.pin }}</td>{% endif %}
+      <td data-label="Status">{% if e.status == "waitlisted" %}Waiting list #{{ t.waitlist_position(e) }}
         {% elif e.status == "no_show" %}No-show
         {% elif setup %}{{ ("Checked in " ~ e.checked_in_at|clock) if e.checked_in_at else "Not checked in" }}
         {% else %}{{ {"active": "Still in", "eliminated": "Out", "champion": "Champion"}.get(e.status, e.status) }}{% if e.withdrawn %} (withdrew){% endif %}{% endif %}</td>
-      <td class="nowrap">
+      <td class="nowrap actions">
         {% if setup %}
           {% if e.status == "registered" %}
           <form method="post" action="{{ url_for('b_entry_action', entry_id=e.id, action='check-in') }}" class="inline"><button class="button small{% if e.checked_in_at %} secondary{% endif %}">{{ "Undo check-in" if e.checked_in_at else "Check in" }}</button></form>

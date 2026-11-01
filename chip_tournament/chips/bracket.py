@@ -243,6 +243,7 @@ class BracketSettings:
     race_finals: int = 5
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     tables_down: list[str] = field(default_factory=list)
+    tables_closing: list[str] = field(default_factory=list)  # out of service once the current match ends
     auto_call: bool = True  # no longer used: see call_mode
     call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
@@ -354,7 +355,7 @@ class BracketTournament:
         return (self.match_minutes_played(m) or 0) >= self.settings.no_rack_minutes
 
     def free_tables(self) -> list[str]:
-        busy, down = self.busy_tables(), set(self.settings.tables_down)
+        busy, down = self.busy_tables(), set(self.settings.tables_down) | set(self.settings.tables_closing)
         return [t for t in self.settings.tables if t not in busy and t not in down]
 
     def in_play(self) -> list[BMatch]:
@@ -1146,6 +1147,7 @@ class BracketTournament:
     def _call_ready(self) -> None:
         """Give ready matches the free tables. With continuous play they're called right away;
         otherwise they wait on their table for the director to press Call match."""
+        self._close_finished_tables()
         busy = {x for m in self.matches if m.status == CALLED or (m.status == READY and m.table) for x in (m.a, m.b)}
         free = self.free_tables()
         for m in self.ready_queue():
@@ -1514,6 +1516,8 @@ class BracketTournament:
         s = self.settings
         if table not in s.tables:
             raise TournamentError("Unknown table.")
+        if down and table in s.tables_closing:
+            s.tables_closing.remove(table)
         if down and table not in s.tables_down:
             s.tables_down.append(table)
             self._say(f"Table {table} is out of service.")
@@ -1530,11 +1534,40 @@ class BracketTournament:
                         for x in (m.a, m.b):
                             self._text(self.entries[x], f"Table {table} is out of service. Your match (#{m.num}) "
                                                         "goes next when a table opens; the score is kept.")
-        elif not down and table in s.tables_down:
-            s.tables_down.remove(table)
+        elif not down and (table in s.tables_down or table in s.tables_closing):
+            for lst in (s.tables_down, s.tables_closing):
+                if table in lst:
+                    lst.remove(table)
             self._say(f"Table {table} is back in service.")
         if self.status == RUNNING:
             self._call_ready()
+
+    def close_table_after_match(self, table: str) -> None:
+        """Director: the match on this table finishes, then the table leaves the rotation."""
+        s = self.settings
+        if table not in s.tables:
+            raise TournamentError("Unknown table.")
+        if table in s.tables_down or table in s.tables_closing:
+            raise TournamentError(f"Table {table} is already out of the rotation.")
+        playing = any(m.status == CALLED and m.table == table for m in self.matches)
+        for m in self.matches:
+            if m.status == READY and m.table == table:  # set but not called: it waits for another table
+                m.table = None
+        if playing:
+            s.tables_closing.append(table)
+            self._say(f"Table {table} closes after its current match.")
+        else:
+            s.tables_down.append(table)
+            self._say(f"Table {table} is out of service.")
+        if self.status == RUNNING:
+            self._call_ready()
+
+    def _close_finished_tables(self) -> None:
+        for table in list(self.settings.tables_closing):
+            if not any(m.status in (CALLED, READY) and m.table == table for m in self.matches):
+                self.settings.tables_closing.remove(table)
+                self.settings.tables_down.append(table)
+                self._say(f"Table {table}'s match is over: the table is out of service.")
 
     def call_waiting(self) -> None:
         """Set tables for whatever fits now and call every match that has one."""

@@ -633,10 +633,12 @@ def create_app(data_dir: str | None = None) -> Flask:
                 raise TournamentError("Add at least one table.")
             if len(set(tables)) != len(tables):
                 raise TournamentError("Table names must be different.")
-            busy = {m.table for m in t.matches if m.status == CALLED}
+            busy = {m.table for m in t.matches if m.status in (CALLED, WAITING) and m.table}
             if busy - set(tables):
-                raise TournamentError("You can't remove a table that has a match on it.")
+                raise TournamentError("You can't remove a table that has a match on it (or set for it).")
             s.tables = tables
+            s.tables_down = [x for x in s.tables_down if x in tables]
+            s.tables_closing = [x for x in s.tables_closing if x in tables]
             race = f.get("race_to", "3")
             if not race.isdigit() or int(race) < 1:
                 raise TournamentError("Race must be a whole number of games.")
@@ -903,6 +905,38 @@ def create_app(data_dir: str | None = None) -> Flask:
         else:
             abort(400)
         return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/table-state/<path:table>")
+    @admin_required
+    def admin_table_state(table):
+        action = request.form.get("action")
+        actions = {"close": ("Close table after match", lambda t: t.close_table_after_match(table)),
+                   "down": ("Table out of service", lambda t: t.table_out_now(table)),
+                   "open": ("Table back in service", lambda t: t.reopen_table(table))}
+        if action not in actions:
+            abort(400)
+        label, fn = actions[action]
+        act(f"{label}: {table}", fn, f"{label}: table {table}.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/match/<match_id>/move")
+    @admin_required
+    def admin_move_match(match_id):
+        table = request.form.get("table", "")
+        act(f"Move to table {table}", lambda t: t.move_match(match_id, table),
+            f"Moved to table {table}. Both teams were texted if the match had been called.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/team/<team_id>/restore-out")
+    @admin_required
+    def admin_restore_out(team_id):
+        chips = request.form.get("chips", "1").strip()
+        if not chips.isdigit():
+            flash("Enter a number of chips.", "error")
+        else:
+            act(f"Restore: {store.load().name_of(team_id)}", lambda t: t.restore_eliminated(team_id, int(chips)),
+                "Restored: the team is back in line.")
+        return redirect(url_for("admin") + "#teams")
 
     @app.post("/t/<event>/admin/match/<match_id>/undo-forfeit")
     @admin_required

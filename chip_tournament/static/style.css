@@ -839,3 +839,25 @@ tr.found td { background: rgba(var(--accent-rgb), .18); }
 main:has(.match-grid.compact) { max-width: 1680px; }
 .more-menu > summary.button { min-height: 32px; padding: 4px 12px; display: inline-flex; align-items: center; }
 .match-grid.compact { align-items: start; }
+
+/* ---------- Teams & chips on the director page ---------- */
+/* Wider screens: the team name stays in view while the table scrolls sideways. */
+.team-table td.team-cell, .team-table th:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface-solid, #1a1424); }
+@media (max-width: 760px) {
+  /* Phones: each team is its own card, name on top, so an action never lands on the wrong row. */
+  .team-table thead { display: none; }
+  .team-table, .team-table tbody { display: block; }
+  .team-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; padding: 14px 16px; border-top: 2px solid var(--line-strong); }
+  .team-table td { display: block; padding: 0; border: 0; position: static; background: none !important; }
+  .team-table td.team-cell { grid-column: 1 / -1; font-size: 1.1rem; font-weight: 700; }
+  .team-table td.partners-cell, .team-table td.actions, .team-table td.checkin-cell { grid-column: 1 / -1; }
+  .team-table td[data-label]::before { content: attr(data-label); display: block; font-size: .72rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .team-table td.actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+}
+.entry-table th:first-child, .entry-table td.seed-cell { position: static; }
+.entry-table td.team-cell { position: sticky; left: 0; z-index: 1; background: var(--surface-solid, #1a1424); }
+@media (max-width: 760px) { .entry-table td.seed-cell { display: none; } }
+.more-group select { min-height: 34px; padding: 0 10px; font: inherit; font-size: .85rem; color: var(--ink); background: rgba(0, 0, 0, .3);
+  border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm); }
+.more-group select option { background: var(--surface-solid); color: var(--ink); }

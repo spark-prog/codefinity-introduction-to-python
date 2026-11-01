@@ -32,7 +32,7 @@
       <li><b>Tables</b>, as a comma-separated list using the names on the tables (e.g. <code>1, 2, 3, 7</code>).</li>
       <li><b>Race to</b> (now {{ s.race_to }}).</li>
       <li><b>Chip brackets</b> and the <b>registration cap</b> (now {{ s.registration_cap }}). These lock once every team has completed a match.</li>
-      <li><b>Check-in times</b>: warm-up {{ s.warmup_minutes }} min, check-in {{ s.checkin_minutes }} min, grace {{ s.grace_minutes }} min.</li>
+      <li><b>Calling matches</b> (now {{ "Continuous Play" if s.call_mode == CONTINUOUS else "Director Calls" }}) and when a quiet table turns orange (now {{ s.no_rack_minutes }} min with no rack scored).</li>
       <li><b>Cash-in</b> and <b>last call</b> times. These are reminders on screen only; nothing happens until you press the button.</li>
     </ul></li>
   <li><b>Post the rules</b> with <b>Edit rules</b> on the Director page: paste each game's rules (8-Ball, 9-Ball, Fast 8, Fast Saratoga). Players read and search them under <b>Rules</b> in the menu.</li>
@@ -75,16 +75,14 @@
 <div class="table-wrap"><table class="grid">
   <thead><tr><th>When</th><th>What you do</th><th>What the app does</th></tr></thead>
   <tbody>
-    <tr><td>A team reaches its table</td><td>Nothing. The team taps <b>We're at the table</b> on its own team page (after entering its PIN). If a team can't, tap <b>Arrived</b> for it.</td><td>Shows a ✓ and the time.</td></tr>
-    <tr><td>Both teams are there</td><td>Nothing.</td><td>Sets the start time {{ s.warmup_minutes }} min later and texts both teams.</td></tr>
-    <tr><td>A team isn't there {{ s.checkin_minutes }} min after being called</td><td>Nothing (the Arrived button turns red).</td><td>Starts a {{ s.grace_minutes }}-minute grace period and texts the team its forfeit time.</td></tr>
-    <tr><td>The team arrives during grace</td><td>Nothing if it checks in itself; otherwise tap <b>Arrived</b>.</td><td>Cancels the forfeit. The start is {{ s.warmup_minutes }} min later.</td></tr>
-    <tr><td>Grace runs out</td><td>Nothing.</td><td>Records a forfeit: the no-show gives a chip back and the opponent wins. If neither team showed, both give a chip back and go to the losers list.</td></tr>
-    <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Entering a score also counts both teams as checked in.</td></tr>
+    <tr><td>A pair gets a table</td><td>With <b>Director Calls</b>, press <b>Call match</b> on the table's card when you're ready (or <b>Call all</b>). With <b>Continuous Play</b>, nothing.</td><td>Texts both teams their table and starts the match clock.</td></tr>
+    <tr><td>No rack is scored {{ s.no_rack_minutes }} min after the call</td><td>Walk over and see what's going on.</td><td>Turns the card orange ("worth a walk over"). Nothing is ever forfeited automatically.</td></tr>
+    <tr><td>A team doesn't show (or both don't)</td><td>Open <b>Forfeit</b> on the card and pick who wins, or <b>Both forfeit</b>.</td><td>The forfeiting team gives a chip back (both do, if neither showed) and the lists update.</td></tr>
+    <tr><td>Each game is won</td><td>Nothing. Either team taps <b>+</b> on its team page (<b>−</b> fixes a slip). You can also score from your card.</td><td>Shows the score live on the board.</td></tr>
     <tr><td>A team reaches the race</td><td>Nothing: the players get a "won the match" pop-up and tap <b>Submit</b> (or <b>Go back</b> to fix the score). If they walk away, tap <b>Submit result</b> on the card. Tap <b>Winner</b> to end a match early.</td><td>Once submitted: ends the match, takes a chip from the loser, updates the chip value and texts both teams.</td></tr>
   </tbody>
 </table></div>
-<p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when they're called.</p>
+<p><b>Pairing is rolling, so there's nothing to do between matches.</b> When a match ends, the winner goes to the bottom of the winners list and the loser to the bottom of the losers list. A team joining a list is compared with the top team on that list, then the second, and so on, and is paired with the first one it hasn't played yet. The pair goes into <b>Teams waiting on a table</b>, and pairs are sent to free tables fewest rounds played first. Both teams get a text with the match-up when the match is called.</p>
 <ul>
   <li><b>No rematches unless it's the only option.</b> A team that has already played everyone waiting on its list is tagged <i>waiting for a new opponent</i> and holds until another team arrives, even if a table sits free. A rematch happens only when both teams have played everyone still in, or when nothing is playing or queued that could bring a new opponent. Rematches are tagged in the queue.</li>
   <li><b>Winners vs losers</b> matches only happen when teams are stuck on opposite lists with nothing else coming, or for a team that's catching up.</li>
@@ -137,13 +135,13 @@
     <tr><td>The wrong team was recorded as the winner</td><td>Open <i>Recent results</i> under Tables and press <b>Fix result</b>. It swaps the winner, corrects both teams' chips and records, redoes any pairing made since, and texts both teams. It only works while neither team has started a later match; after that, use <b>Adjust</b>.</td></tr>
     <tr><td>Undo removed a team</td><td>Undo takes back the most recent action for everyone, including a player's own registration. The Undo button names what it will take back, and asks first. To take out one team, use <b>Remove</b> next to it instead of Undo.</td></tr>
     <tr><td>Wrong score, or any button pressed by mistake</td><td><b>Undo</b> reverses the most recent action; press again to go further back (up to 40 steps). The button shows what it will undo. Texts already sent can't be recalled, so send a correction with <i>Text every team</i>.</td></tr>
-    <tr><td>A forfeit went through but the team was there</td><td>Press <b>Undo</b>. The app pauses the auto-forfeit on that match; then tap <b>Arrived</b>.</td></tr>
+    <tr><td>You recorded a forfeit by mistake</td><td>Press <b>Undo</b> right away.</td></tr>
     <tr><td>A team's chip count is wrong and Undo would go back too far</td><td>Use <b>Adjust</b> in the team's row (e.g. <code>+1</code> or <code>-1</code>) and enter a reason. Adjusting to 0 eliminates the team.</td></tr>
     <tr><td>A team forgot its PIN</td><td>It's shown under the team name in <i>Teams &amp; chips</i>.</td></tr>
     <tr><td>A team didn't get a text</td><td>Check <i>Text alerts → Recent texts</i> for the number and status, then fix the number with <i>Roster</i>.</td></tr>
     <tr><td>A table goes out of service</td><td>Remove it from <i>Tables</i> in Settings once its match is finished. A table with a match on it can't be removed.</td></tr>
     <tr><td>Need to announce something</td><td>Use <b>Text every team</b> (e.g. "15-minute break, back at 9:45").</td></tr>
-    <tr><td>The laptop restarts or the app closes</td><td>Nothing is lost; everything is saved after each action. Start the app again and open the Director page. The check-in clock resumes once a page is opened.</td></tr>
+    <tr><td>The laptop restarts or the app closes</td><td>Nothing is lost; everything is saved after each action. Start the app again and open the Director page.</td></tr>
   </tbody>
 </table></div>
 </section>

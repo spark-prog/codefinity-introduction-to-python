@@ -32,19 +32,14 @@
         {% set m = match %}{% include "_match_clock.html" %}
         {% if not is_team %}
           <form method="post" action="{{ url_for('team_login', team_id=team.id) }}" class="form">
-            <p>Enter your team PIN to check in and keep score.</p>
+            <p>Enter your team PIN to keep score.</p>
             <label>Team PIN <input name="pin" inputmode="numeric" maxlength="4" required></label>
             <button class="button big block">Continue</button>
-          </form>
-        {% elif not match["arrived_" ~ mine] %}
-          <form method="post" action="{{ url_for('team_arrived', team_id=team.id) }}">
-            <button class="button big block accent arrive">We're at the table</button>
           </form>
         {% endif %}
         {% for side, tid, sc in (("a", match.team_a, match.score_a), ("b", match.team_b, match.score_b)) %}
         <div class="play-row">
-          <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% endif %}
-            <br>{% if match["arrived_" ~ side] %}<span class="arrived">✓ at the table</span>{% else %}<span class="muted">not checked in</span>{% endif %}</span>
+          <span class="team-name">{{ t.name_of(tid) }}{% if tid == team.id %} <span class="muted">(you)</span>{% endif %}</span>
           {% if is_team %}
           <form method="post" action="{{ url_for('team_score', team_id=team.id) }}" class="inline">
             <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
@@ -80,7 +75,9 @@
         {% elif is_team %}<p class="muted" style="margin-top: 16px">Either team can keep score. Tap + each time a team wins a game. When a team reaches {{ t.settings.race_to }}, you'll be asked to submit the result.</p>{% endif %}
       </section>
       {% else %}
-      <div class="card"><p class="eyebrow">Next match</p><h2>vs {{ t.name_of(opp) }}</h2><p>You're paired with {{ t.name_of(opp) }} and waiting for a table.</p></div>
+      <div class="card"><p class="eyebrow">Next match</p><h2>vs {{ t.name_of(opp) }}</h2>
+        <p>{% if match.table %}You're set for <b>table {{ match.table }}</b> against {{ t.name_of(opp) }}. Stay close: we'll text you when the director calls your match.
+        {% else %}You're paired with {{ t.name_of(opp) }} and waiting for a table.{% endif %}</p></div>
       {% endif %}
     {% elif team.status == ACTIVE %}
       <div class="card"><p class="eyebrow">Next match</p><h2>In line</h2><p class="muted">Waiting in line for the next free table.</p></div>

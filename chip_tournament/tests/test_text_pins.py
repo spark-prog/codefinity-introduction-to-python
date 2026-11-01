@@ -19,7 +19,7 @@ def test_each_team_gets_its_own_pin_only_on_opted_in_numbers():
     assert (sent, unreachable) == (3, 1)
     by_number = {m.to: m.body for m in t.outbox}
     assert set(by_number) == {"5551110000", "5552220000", "5552223333"}  # B and Owls never opted in
-    assert f"PIN for {t.settings.name} is {sharks.pin}" in by_number["5551110000"]
+    assert f"\nTeam PIN: {sharks.pin}\n" in by_number["5551110000"]
     assert f"/team/{sharks.id}" in by_number["5551110000"]
     assert jets.pin in by_number["5552223333"] and sharks.pin not in by_number["5552223333"]
     assert "STOP" in by_number["5551110000"]
@@ -66,5 +66,28 @@ def test_director_button_sends_the_texts(tmp_path, monkeypatch):
         if sent:
             break
         time.sleep(0.02)
-    assert sent == [("5551110000", f"Sharks, your team PIN for Chips is {team.pin}."
-                    f" Team page: http://localhost/t/{ev.id}/team/{team.id} Reply STOP to opt out.")]
+    assert sent == [("5551110000", f"Sharks, here's your team info for Chips.\nTeam PIN: {team.pin}"
+                    f"\nTeam page: http://localhost/t/{ev.id}/team/{team.id}\nReply STOP to opt out.")]
+
+
+def test_site_url_setting_sets_the_link_in_texts(tmp_path, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    monkeypatch.setenv("SITE_URL", "https://controltable.app/")
+    for var in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "VIEWER_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
+    sent = []
+    monkeypatch.setattr(SmsSender, "send", lambda self, to, body: sent.append(body) or "logged")
+    app = create_app(str(tmp_path))
+    app.testing = True
+    ev = app.config["hub"].create("Chips", "chip")
+    with ev.store.change("teams") as t:
+        team = t.register_team("Sharks", [Player("A", "5551110000", 4, True), Player("B", "", 4)])
+        t.outbox = []
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    admin.post(f"/t/{ev.id}/admin/text-pins")
+    for _ in range(100):
+        if sent:
+            break
+        time.sleep(0.02)
+    assert f"https://controltable.app/t/{ev.id}/team/{team.id}" in sent[0]

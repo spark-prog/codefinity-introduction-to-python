@@ -17,7 +17,7 @@ def test_entry_finds_its_page_and_scores_with_pin(tmp_path, monkeypatch, fmt):
     app.testing = True
     ev = app.config["hub"].create("Bracket", "bracket")
     with ev.store.change("setup") as t:
-        t.settings.format, t.settings.tables = fmt, ["1", "2"]
+        t.settings.format, t.settings.tables, t.settings.call_mode = fmt, ["1", "2"], "continuous"
         for name in ("Ann", "Bob", "Cy", "Di"):
             t.register_entry(name, [Player(name)])
         t.start(random.Random(1))

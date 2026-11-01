@@ -57,7 +57,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
-from .engine import MAX_PLAYER_SKILL, Message, Player, TournamentError, money, now
+from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, money, now
 from .races import group_for, group_label, rack_race
 
 BYE = "bye"
@@ -226,7 +226,9 @@ class BracketSettings:
     race_finals: int = 5
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     tables_down: list[str] = field(default_factory=list)
-    auto_call: bool = True
+    auto_call: bool = True  # no longer used: see call_mode
+    call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
+    no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
     seeding: str = "random"  # "random" draw at the start, or "manual" (the order on the Entries list)
     final_cut: int = 8  # modified single elimination: single elimination from this many
@@ -320,7 +322,19 @@ class BracketTournament:
         return [e for e in self.field_entries if not e.checked_in_at]
 
     def busy_tables(self) -> set[str]:
-        return {m.table for m in self.matches if m.status == CALLED}
+        """Tables with a match on them, or set for a match waiting to be called."""
+        return {m.table for m in self.matches if m.status in (CALLED, READY) and m.table}
+
+    def assigned_matches(self) -> list[BMatch]:
+        """Ready matches given a table and waiting for the director to call them, in table order."""
+        return sorted((m for m in self.matches if m.status == READY and m.table),
+                      key=lambda m: (self._table_index(m.table), m.num))
+
+    def needs_a_look(self, m: BMatch) -> bool:
+        """A called match with no rack scored `no_rack_minutes` after the call: worth walking over."""
+        if m.status != CALLED or not m.called_at or m.score_a or m.score_b:
+            return False
+        return (self.match_minutes_played(m) or 0) >= self.settings.no_rack_minutes
 
     def free_tables(self) -> list[str]:
         busy, down = self.busy_tables(), set(self.settings.tables_down)
@@ -337,8 +351,8 @@ class BracketTournament:
             return 999
 
     def ready_queue(self) -> list[BMatch]:
-        """Matches waiting for a table, in the order they'll be called."""
-        return sorted((m for m in self.matches if m.status == READY),
+        """Matches waiting for a table, in the order they'll get one."""
+        return sorted((m for m in self.matches if m.status == READY and not m.table),
                       key=lambda m: (not m.priority, m.ready_at or "", m.num))
 
     def recent_results(self, limit: int = 12) -> list[BMatch]:
@@ -374,9 +388,9 @@ class BracketTournament:
 
     def _welcome(self, entry: Entry, opening: str) -> str:
         link = self.entry_link(entry)
-        return (f"{opening} Your PIN is {entry.pin}."
-                + (f" Your page: {link}" if link else "")
-                + " You'll get tournament alerts: registration, table calls and results."
+        return (f"{opening}\nPIN: {entry.pin}"  # the PIN and link each get their own line
+                + (f"\nYour page: {link}" if link else "")
+                + "\nYou'll get tournament alerts: registration, table calls and results."
                   " Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out."
                 + self._questions())
 
@@ -415,8 +429,8 @@ class BracketTournament:
                 unreachable += 1
                 continue
             link = self.entry_link(entry)
-            self._text(entry, f"{entry.name}, your PIN for {self.settings.name} is {entry.pin}."
-                       + (f" Your page: {link}" if link else "") + " Reply STOP to opt out.")
+            self._text(entry, f"{entry.name}, here's your info for {self.settings.name}.\nPIN: {entry.pin}"
+                       + (f"\nYour page: {link}" if link else "") + "\nReply STOP to opt out.")
         self._say(f"Resent PINs: {len(self.outbox) - before} text(s).")
         return len(self.outbox) - before, unreachable
 
@@ -1091,17 +1105,42 @@ class BracketTournament:
                                                      r["entry"].seed or 0))
 
     def _call_ready(self) -> None:
-        if not self.settings.auto_call:
-            return
-        busy = {x for m in self.matches if m.status == CALLED for x in (m.a, m.b)}
+        """Give ready matches the free tables. With continuous play they're called right away;
+        otherwise they wait on their table for the director to press Call match."""
+        busy = {x for m in self.matches if m.status == CALLED or (m.status == READY and m.table) for x in (m.a, m.b)}
         free = self.free_tables()
         for m in self.ready_queue():
             if not free:
                 break
             if m.a in busy or m.b in busy:
                 continue
-            self._call(m, free.pop(0))
+            m.table = free.pop(0)
             busy |= {m.a, m.b}
+            if self.settings.call_mode != CONTINUOUS:
+                self._say(f"#{m.num} ({self.name_of(m.a)} vs {self.name_of(m.b)}) set for table {m.table}, "
+                          "waiting for the director to call it.")
+        if self.settings.call_mode == CONTINUOUS:
+            for m in self.assigned_matches():
+                self._call(m, m.table)
+
+    def call_match(self, match_id: str) -> BMatch:
+        """Director: call a ready match to the table it was given (texts both sides, starts the clock)."""
+        m = self.match(match_id)
+        if m.status == CALLED:
+            raise TournamentError(f"Table {m.table} has already been called.")
+        if m.status != READY or not m.table:
+            raise TournamentError("That match doesn't have a table yet.")
+        self._call(m, m.table)
+        return m
+
+    def call_all(self) -> int:
+        """Director: call every ready match that has a table. Returns how many were called."""
+        assigned = self.assigned_matches()
+        if not assigned:
+            raise TournamentError("No matches are waiting to be called.")
+        for m in assigned:
+            self._call(m, m.table)
+        return len(assigned)
 
     def _call(self, m: BMatch, table: str) -> None:
         m.status, m.table, m.called_at, m.priority = CALLED, table, now(), False
@@ -1350,6 +1389,9 @@ class BracketTournament:
             s.tables_down.append(table)
             self._say(f"Table {table} is out of service.")
             for m in self.matches:
+                if m.status == READY and m.table == table:  # set but not called: it waits for another table
+                    m.table = None
+            for m in self.matches:
                 if m.status == CALLED and m.table == table:
                     free = self.free_tables()
                     if free:
@@ -1366,12 +1408,10 @@ class BracketTournament:
             self._call_ready()
 
     def call_waiting(self) -> None:
-        """Call whatever fits on the free tables now (used after turning auto-call back on)."""
-        auto, self.settings.auto_call = self.settings.auto_call, True
-        try:
-            self._call_ready()
-        finally:
-            self.settings.auto_call = auto
+        """Set tables for whatever fits now and call every match that has one."""
+        self._call_ready()
+        for m in self.assigned_matches():
+            self._call(m, m.table)
 
     def withdraw(self, entry_id: str) -> None:
         entry = self.entry(entry_id)

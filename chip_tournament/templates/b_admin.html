@@ -59,20 +59,35 @@
 
 {% if t.status == RUNNING %}
 <section id="tables" class="jump-target">
+  {% set ready = t.assigned_matches() %}
   <div class="section-head"><h2>Tables</h2>
-    <span class="muted">Ready matches go to free tables {{ "automatically" if s.auto_call else "when you send them (auto-call is off)" }}.</span></div>
+    {% if ready and not is_viewer %}<form method="post" action="{{ url_for('admin_call_all') }}" class="inline"
+        data-dialog-title="Call all {{ ready|length }} match(es)?" data-dialog-text="Every match set for a table is texted now." data-dialog-ok="Call all">
+      <button class="button small">Call all ({{ ready|length }})</button></form>{% endif %}
+    <span class="muted">{{ "Director Calls: press Call match to text the players" if s.call_mode != CONTINUOUS else "Continuous Play: matches are called automatically" }}.
+      Orange: no rack scored {{ s.no_rack_minutes }} min after the call · red at {{ s.long_match_minutes }} min.</span></div>
   {% set long = t.long_matches() %}
   {% if long %}<div class="banner danger">Running long ({{ s.long_match_minutes }}+ min):
     {% for m in long %}<b>Table {{ m.table }}</b> (#{{ m.num }}, {{ t.match_minutes_played(m)|int }} min){% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
   <div class="match-grid">
-  {% for m in t.in_play() %}
+  {% set shown = t.in_play() + ready %}
+  {% for tbl in s.tables %}{% for m in shown if m.table == tbl %}
+  {% if m.status == READY %}
+  <div class="card match ready-to-call">
+    <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · ready to call</span></div>
+    <div class="score-row"><div class="team-name">{{ t.name_of(m.a) }}</div></div>
+    <div class="score-row"><div class="team-name">{{ t.name_of(m.b) }}</div></div>
+    {% if not is_viewer %}<form method="post" action="{{ url_for('b_call_match', match_id=m.id) }}" class="button-row"><button class="button">Call match</button></form>{% endif %}
+  </div>
+  {% else %}
   {% set mins = t.match_minutes_played(m) %}
-  <div class="card match{% if mins >= s.long_match_minutes %} long{% elif mins >= s.match_minutes %} over{% endif %}">
+  <div class="card match{% if mins >= s.long_match_minutes %} long{% elif t.needs_a_look(m) %} over{% endif %}">
     <div class="match-head">
       <span class="table-label">Table {{ m.table }}</span>
-      <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.match_minutes }}" data-long="{{ s.long_match_minutes }}"></span>
+      <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.no_rack_minutes if not (m.score_a or m.score_b) else 100000 }}" data-long="{{ s.long_match_minutes }}"></span>
       <span class="muted">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</span>
     </div>
+    {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
     {% for side, id, sc in (("a", m.a, m.score_a), ("b", m.b, m.score_b)) %}
     <div class="score-row">
       <div class="team-name">{{ t.name_of(id) }}</div>
@@ -104,8 +119,9 @@
       {% endif %}
     </div>
   </div>
-  {% else %}<p class="muted">No matches on the tables.</p>
-  {% endfor %}
+  {% endif %}
+  {% endfor %}{% endfor %}
+  {% if not shown %}<p class="muted">No matches on the tables.</p>{% endif %}
   </div>
 
   {% set queue = t.ready_queue() %}
@@ -364,8 +380,12 @@
 
     <div class="settings-group">Tables</div>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
-    <label class="checkbox"><input type="checkbox" name="auto_call" value="1" {% if s.auto_call %}checked{% endif %}>
-      Send ready matches to free tables automatically</label>
+    <label class="wide">Calling matches
+      <select name="call_mode">
+        <option value="director" {% if s.call_mode != CONTINUOUS %}selected{% endif %}>Director Calls: the app sets each table; you press Call match to text the players</option>
+        <option value="continuous" {% if s.call_mode == CONTINUOUS %}selected{% endif %}>Continuous Play: matches are called automatically when a table is free</option>
+      </select></label>
+    <label>Turn a table orange when no rack is scored this long after the call (min) <input name="no_rack_minutes" type="number" min="1" value="{{ s.no_rack_minutes }}"></label>
     <label>Card turns amber after (min) <input name="match_minutes" type="number" min="1" value="{{ s.match_minutes }}"></label>
     <label>Card turns red after (min) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
 

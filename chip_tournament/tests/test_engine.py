@@ -6,14 +6,24 @@ from chips.engine import (
     ACTIVE,
     CALLED,
     CASHED_OUT,
+    CONTINUOUS,
     ELIMINATED,
     FINISHED,
     RUNNING,
     WAITING,
     Player,
-    Tournament,
     TournamentError,
 )
+from chips.engine import Tournament as _Tournament
+
+
+class Tournament(_Tournament):
+    """These tests cover pairing and play, so matches are called the moment a table is free
+    (Continuous Play). Director Calls has its own tests in test_director_calls.py."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.settings.call_mode = CONTINUOUS
 
 
 def partners(combined, phone="5550000000"):
@@ -436,14 +446,10 @@ def test_table_call_text():
 def test_long_match_flag():
     t = make(n_teams=2)
     t.start(random.Random(43))
-    m, base = called_at(t)
-    t.check_in(m.id, "a", at=base)
-    t.check_in(m.id, "b", at=base)  # starts at base + 2 min
-    start = base + timedelta(minutes=2)
-    assert t.match_minutes_played(m, at=base) is None  # not started yet
-    assert t.match_minutes_played(m, at=start + timedelta(minutes=16)) == pytest.approx(16)
-    assert t.long_matches(at=start + timedelta(minutes=19)) == []
-    assert t.long_matches(at=start + timedelta(minutes=20)) == [m]
+    m, base = called_at(t)  # the clock starts at the call
+    assert t.match_minutes_played(m, at=base + timedelta(minutes=16)) == pytest.approx(16)
+    assert t.long_matches(at=base + timedelta(minutes=19)) == []
+    assert t.long_matches(at=base + timedelta(minutes=20)) == [m]
 
 
 def test_round_trip_serialization():
@@ -454,7 +460,7 @@ def test_round_trip_serialization():
     assert again.to_dict() == t.to_dict()
 
 
-# ------------------------------------------------------------------ check-in
+# --------------------------------------------------------- the clock and forfeits
 
 from datetime import datetime, timedelta  # noqa: E402
 
@@ -463,57 +469,40 @@ def called_at(t, minutes_ago=0):
     """The first match on a table, with its call time set `minutes_ago`."""
     m = called(t)[0]
     base = datetime(2026, 11, 7, 21, 0, 0)
-    m.called_at = (base - timedelta(minutes=minutes_ago)).isoformat()
+    m.called_at = m.start_at = (base - timedelta(minutes=minutes_ago)).isoformat()
     return m, base
 
 
-def test_both_arrive_sets_start_two_minutes_after_the_second():
-    t = make(n_teams=2)
-    t.start(random.Random(30))
-    m, base = called_at(t)
-    t.check_in(m.id, "a", at=base + timedelta(minutes=1))
-    assert m.start_at is None
-    t.check_in(m.id, "b", at=base + timedelta(minutes=3))
-    assert m.start_at == (base + timedelta(minutes=5)).isoformat()
-    assert any("starts at 9:05 PM" in msg.body for msg in t.outbox)
-    with pytest.raises(TournamentError, match="already checked in"):
-        t.check_in(m.id, "b")
-
-
-def test_no_show_gets_grace_after_5_minutes_then_forfeits_after_15_more():
+def test_nothing_is_forfeited_automatically():
     t = make(n_teams=2)
     t.start(random.Random(31))
     m, base = called_at(t)
-    t.check_in(m.id, "a", at=base + timedelta(minutes=1))
-
-    assert t.check_clock(at=base + timedelta(minutes=4, seconds=59)) == 0
-    assert m.grace_b is None
-
-    t.outbox.clear()
-    assert t.check_clock(at=base + timedelta(minutes=5)) == 1
-    assert m.grace_b and m.grace_a is None
-    late = t.teams[m.team_b]
-    assert any("by 9:20 PM or you forfeit" in msg.body for msg in t.outbox if msg.team_id == late.id)
-    assert t.check_clock(at=base + timedelta(minutes=10)) == 0  # grace only starts once
-
-    t.check_clock(at=base + timedelta(minutes=20))
-    assert m.status == "done" and m.forfeit == "b"
-    assert m.winner == m.team_a
-    assert late.chips == 2
-    assert t.ledger[-1].reason.endswith("by forfeit")
+    assert t.check_clock(at=base + timedelta(hours=2)) == 0
+    assert m.status == CALLED and m.forfeit is None
+    assert not any("forfeit" in msg.body for msg in t.outbox)
 
 
-def test_arriving_during_grace_avoids_forfeit():
+def test_orange_when_no_rack_is_scored_in_time():
+    t = make(n_teams=2)
+    t.settings.no_rack_minutes = 15
+    t.start(random.Random(34))
+    m, base = called_at(t)
+    assert not t.needs_a_look(m, at=base + timedelta(minutes=14))
+    assert t.needs_a_look(m, at=base + timedelta(minutes=15))
+    t.score(m.id, "a", 1)
+    assert not t.needs_a_look(m, at=base + timedelta(minutes=40))
+
+
+def test_director_forfeit_one_team():
     t = make(n_teams=2)
     t.start(random.Random(32))
-    m, base = called_at(t)
-    t.check_clock(at=base + timedelta(minutes=6))
-    assert m.grace_a and m.grace_b
-    t.check_in(m.id, "a", at=base + timedelta(minutes=12))
-    t.check_in(m.id, "b", at=base + timedelta(minutes=19))
-    t.check_clock(at=base + timedelta(minutes=30))
-    assert m.status == CALLED
-    assert m.start_at == (base + timedelta(minutes=21)).isoformat()
+    m, _ = called_at(t)
+    late = t.teams[m.team_b]
+    t.outbox.clear()
+    t.record_result(m.id, m.team_a, forfeit=True)
+    assert m.status == "done" and m.forfeit == "b" and late.chips == 2
+    assert t.ledger[-1].reason.endswith("by forfeit")
+    assert any(f"forfeited your match on table {m.table}" in msg.body for msg in t.outbox if msg.team_id == late.id)
 
 
 def test_neither_team_shows_both_forfeit_a_chip():
@@ -521,42 +510,17 @@ def test_neither_team_shows_both_forfeit_a_chip():
     t.start(random.Random(33))
     m, base = called_at(t)
     next_pair = t.table_queue()[0]
-    t.check_clock(at=base + timedelta(minutes=20))
+    t.forfeit_both(m.id)
     assert m.forfeit == "both"
     assert t.teams[m.team_a].chips == 2 and t.teams[m.team_b].chips == 2
     assert called(t)[0].id == next_pair.id  # table goes to the next match
-
-
-def test_scoring_counts_as_checked_in():
-    t = make(n_teams=2)
-    t.start(random.Random(34))
-    m, base = called_at(t)
-    t.score(m.id, "a", 1)
-    assert m.arrived_a and m.arrived_b and m.start_at
-    t.check_clock(at=base + timedelta(minutes=60))
-    assert m.status == CALLED
-
-
-def test_undone_forfeit_is_not_reapplied():
-    t = make(n_teams=2)
-    t.start(random.Random(35))
-    m, base = called_at(t)
-    before = t.to_dict()  # what Undo would restore
-    t.check_clock(at=base + timedelta(minutes=20))
-    assert m.forfeit == "both"
-
-    restored = Tournament.from_dict(before)
-    assert restored.pause_overdue_forfeits(at=base + timedelta(minutes=21)) == 1
-    assert restored.check_clock(at=base + timedelta(minutes=22)) == 0
-    rm = restored.match(m.id)
-    assert rm.status == CALLED and rm.clock_paused
 
 
 def test_double_forfeit_chips_count_as_returned():
     t = make(n_teams=2)
     t.start(random.Random(36))
     m, base = called_at(t)
-    t.check_clock(at=base + timedelta(minutes=20))
+    t.forfeit_both(m.id)
     assert t.chips_returned == 2
     assert t.chips_in_play + t.chips_returned == t.total_chips_issued
 
@@ -687,7 +651,7 @@ def test_last_two_teams_both_no_show_still_pays_the_pot():
     m = called(t)[0]
     t.adjust_chips(m.team_a, -2, "test"); t.adjust_chips(m.team_b, -2, "test")  # down to 1 chip each
     m, base = called_at(t)
-    t.check_clock(at=base + timedelta(minutes=20))
+    t.forfeit_both(m.id)
     assert t.status == FINISHED and t.pot_cents == 0
     assert sum(x.payout_cents for x in t.teams.values()) == 4000
 
@@ -803,17 +767,17 @@ from chips.engine import REGISTERED, WAITLISTED  # noqa: E402
 
 def solo_event(cap=3):
     t = Tournament()
-    t.settings.date, t.settings.start_time = "2026-10-31", "9:00 PM"
+    t.settings.date, t.settings.start_time = "2099-10-31", "9:00 PM"  # far enough ahead that the deadline hasn't passed
     t.settings.field_cap = cap
     return t
 
 
 def test_partner_deadline_is_24_hours_before_the_start():
     t = solo_event()
-    assert t.partner_deadline == datetime(2026, 10, 30, 21, 0)
+    assert t.partner_deadline == datetime(2099, 10, 30, 21, 0)
     assert t.partner_deadline_text() == "Friday, October 30 at 9 PM"
     t.settings.start_time = "7:30pm"
-    assert t.partner_deadline == datetime(2026, 10, 30, 19, 30)
+    assert t.partner_deadline == datetime(2099, 10, 30, 19, 30)
     t.settings.start_time = "whenever"
     assert t.partner_deadline is None and not t.partner_deadline_passed()
 
@@ -848,8 +812,8 @@ def test_deadline_moves_solo_teams_to_the_waiting_list():
     waiting = t.register_team("Waiting", partners(8))
     other_solo = t.register_team("Cy's team", [Player("Cy", "5552220000", 3, sms_consent=True)])
     assert t.waitlist == [waiting.id, other_solo.id]
-    assert t.check_clock(datetime(2026, 10, 30, 20, 59)) == 0
-    assert t.check_clock(datetime(2026, 10, 30, 21, 0)) == 1
+    assert t.check_clock(datetime(2099, 10, 30, 20, 59)) == 0
+    assert t.check_clock(datetime(2099, 10, 30, 21, 0)) == 1
     assert solo.status == WAITLISTED and waiting.status == REGISTERED
     assert t.waitlist == [other_solo.id, solo.id]
     assert "waiting list" in t.outbox[-2].body or "waiting list" in t.outbox[-1].body

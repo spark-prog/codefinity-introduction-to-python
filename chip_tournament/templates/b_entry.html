@@ -8,6 +8,21 @@
   {% if t.settings.team_size > 1 and entry.partners != entry.name %}<p class="lede">{{ entry.partners }}</p>{% endif %}
 </header>
 
+{% if is_entry and entry.awaiting_texts %}
+<section class="card">
+  <h3>Get tournament texts</h3>
+  {% include "_save_contact.html" %}
+  {% for p in entry.players %}{% if p.phone and not p.sms_consent %}
+  <form method="post" action="{{ url_for('b_entry_texts', entry_id=entry.id) }}" class="form">
+    <input type="hidden" name="player" value="{{ loop.index0 }}">
+    <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
+      Text {{ p.name }} table calls and results. Msg &amp; data rates may apply. Reply STOP to opt out.</label>
+    <button class="button small">Turn on alerts</button>
+  </form>
+  {% endif %}{% endfor %}
+</section>
+{% endif %}
+
 <section class="card">
   {% if entry.status == "waitlisted" %}
     <p class="lede">You're #{{ t.waitlist_position(entry) }} on the waiting list.</p>
@@ -95,18 +110,6 @@
     <button class="button">Sign in</button>
   </form>
   <p class="muted">Your 4-digit PIN came with your registration (or ask the tournament desk).</p>
-</section>
-{% elif entry.awaiting_texts %}
-<section class="card">
-  <h3>Text alerts</h3>
-  {% for p in entry.players %}{% if p.phone and not p.sms_consent %}
-  <form method="post" action="{{ url_for('b_entry_texts', entry_id=entry.id) }}" class="form">
-    <input type="hidden" name="player" value="{{ loop.index0 }}">
-    <label class="checkbox"><input type="checkbox" name="sms_consent" value="1" required>
-      Text {{ p.name }} table calls and results. Msg &amp; data rates may apply. Reply STOP to opt out.</label>
-    <button class="button small">Turn on alerts</button>
-  </form>
-  {% endif %}{% endfor %}
 </section>
 {% endif %}
 

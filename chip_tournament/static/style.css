@@ -749,7 +749,16 @@ html, body { overflow-x: clip; }
 
 /* ---------- Scorekeeper and director approval ---------- */
 .scorekeeper-line { margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.approve-list { margin-bottom: 20px; border-left: 4px solid var(--accent); }
+.approve-list { margin-bottom: 20px; border: 2px solid #ff3b4a; animation: approve-glow 1.6s ease-in-out infinite; }
+.approve-list h3 { color: #ff6b76; }
+@keyframes approve-glow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 59, 74, .45); }
+  50% { box-shadow: 0 0 22px 6px rgba(255, 59, 74, .85); }
+}
+@media (prefers-reduced-motion: reduce) { .approve-list { animation: none; box-shadow: 0 0 16px 4px rgba(255, 59, 74, .7); } }
+/* The final score on the player's Send to director pop-up: big and red so it's checked before sending. */
+.final-score { font-family: var(--display); font-size: clamp(3.5rem, 18vw, 6rem); font-weight: 800; line-height: 1;
+  color: #ff3b4a; text-align: center; margin: 12px 0 16px; letter-spacing: .02em; text-shadow: 0 0 18px rgba(255, 59, 74, .45); }
 .approve-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
 .approve-row:first-of-type { border-top: 0; }
 .match.sent { border-left-color: var(--accent); }

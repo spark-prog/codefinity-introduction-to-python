@@ -113,15 +113,18 @@
   tick(); setInterval(tick, 1000);
 })();
 (function () {
-  // Live pages reload on a timer, but wait while a form field is in use or has something typed in it.
+  // Live pages reload on a timer, but never while someone is using them: a field in focus, anything
+  // typed or changed and not yet sent, an open pop-up, or an open button menu (Forfeit, Edit, ...).
   var meta = document.querySelector('meta[name="auto-refresh"]');
   if (!meta) return;
-  var secs = +meta.content || 15, idle = 0;
+  var secs = +meta.content || 15, idle = 0, dirty = false;
+  document.addEventListener("input", function () { dirty = true; }, true);
+  document.addEventListener("change", function () { dirty = true; }, true);
   function busy() {
     var a = document.activeElement;
     if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return true;
-    return Array.prototype.some.call(document.querySelectorAll("input:not([type=hidden]), textarea"),
-                                     function (el) { return el.value && el.type !== "checkbox" && el.type !== "radio"; });
+    if (dirty) return true;
+    return !!document.querySelector("dialog[open], details.inline-details[open], details.take-over[open]");
   }
   setInterval(function () {
     idle = busy() ? 0 : idle + 1;

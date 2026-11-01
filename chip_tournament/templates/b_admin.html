@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Director — {{ t.settings.name }}{% endblock %}
+{% block head %}{% if t.status == RUNNING %}{% set secs = 20 %}{% include "_refresh.html" %}{% endif %}{% endblock %}
 {% block content %}
 {% set s = t.settings %}
 {% set setup = t.status == SETUP %}

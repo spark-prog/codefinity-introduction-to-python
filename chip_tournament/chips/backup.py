@@ -346,9 +346,11 @@ def run(root: str | os.PathLike, reason: str = "nightly", drive: Drive | None = 
         if not where and mailer is not None:
             try:
                 if len(data) <= EMAIL_LIMIT:
+                    why = ("" if drive is None else
+                           f"Google Drive didn't take this backup ({drive_error}), so it's attached here instead. ")
                     mailer.send(f"Control Table backup {now:%b %-d, %Y}",
-                                f"Google Drive didn't take tonight's backup ({drive_error}), so it's attached here "
-                                "instead. Keep this email: the attachment can be restored from the director page.\n\n"
+                                f"{why}This is a backup of every Control Table tournament. Keep this email: the "
+                                "attachment can be restored from the director page (Backups, Restore a file).\n\n"
                                 "It holds player names, phone numbers and team PINs.",
                                 (name, data))
                     where = "email"
@@ -357,7 +359,9 @@ def run(root: str | os.PathLike, reason: str = "nightly", drive: Drive | None = 
         if where:
             status.update(last_ok=status["last_try"], last_where=where, last_name=name, last_size=len(data),
                           last_reason=reason)
-            status["warning"] = f"Saved by email because Google Drive failed: {drive_error}" if where == "email" else ""
+            # Email is the normal route when Drive isn't set up; it's only a warning when Drive failed.
+            status["warning"] = (f"Saved by email because Google Drive failed: {drive_error}"
+                                 if where == "email" and drive is not None else "")
             status["warning"] = "; ".join(x for x in [status["warning"]] + problems if x)
             status["error"] = ""
         else:

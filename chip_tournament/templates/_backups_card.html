@@ -15,8 +15,10 @@
     <p class="muted small-note">Every night after 3 AM, a copy of every tournament goes to the Google shared drive{% if backup_setup.email %}, or by email to {{ backup_setup.email_to }} if Drive fails{% endif %}.</p>
   {% elif backup_setup.drive_error %}
     <p class="backup-status bad">Google Drive setting problem: {{ backup_setup.drive_error }}</p>
-  {% elif not b.error or backup_setup.email %}
-    <p class="backup-status warn">Google Drive backups aren't set up yet{% if backup_setup.email %}: backups go by email to {{ backup_setup.email_to }}{% endif %}.</p>
+  {% elif backup_setup.email %}
+    <p class="muted small-note">Every night after 3 AM, a copy of every tournament is emailed to {{ backup_setup.email_to }}.</p>
+  {% elif not b.error %}
+    <p class="backup-status warn">Backups aren't set up yet.</p>
   {% endif %}
   {% if not is_viewer %}
   <div class="button-row">

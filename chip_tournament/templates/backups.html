@@ -12,11 +12,11 @@
 {% include "_backups_card.html" %}
 
 <section class="card">
-  <h2>Backups in Google Drive</h2>
+  <h2>{{ 'Backups in Google Drive' if backup_setup.drive or drive_error else 'Where backups go' }}</h2>
   {% if drive_error %}
     <p class="backup-status bad">{{ drive_error }}</p>
   {% elif not backup_setup.drive %}
-    <p class="muted">Google Drive isn't set up, so there's nothing to list here. You can still restore a downloaded or emailed copy below.</p>
+    <p class="muted">Backups are emailed{% if backup_setup.email %} to {{ backup_setup.email_to }}{% endif %}. To restore one, download the zip from its email and use Restore a file below.</p>
   {% elif not files %}
     <p class="muted">No backups in the shared drive yet. Press Back up now to make the first one.</p>
   {% else %}

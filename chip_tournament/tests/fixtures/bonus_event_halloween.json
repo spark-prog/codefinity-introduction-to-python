@@ -1,0 +1,241 @@
+{
+  "schema_version": "control-table-bonus-event/v1",
+  "source": {
+    "system": "APA Bonus Event Approval",
+    "external_id": "sample-halloween-0001",
+    "response_sheet_id": "SAMPLE_SHEET_ID",
+    "response_sheet_tab_id": 665631031,
+    "response_row": 3,
+    "response_timestamp": "10/11/2026 19:11:56",
+    "submitted_by": "office@example.com",
+    "approval_status": "Approved",
+    "generated_at": "2026-10-27T04:34:48.283Z"
+  },
+  "event": {
+    "name": "Halloween Doubles",
+    "public_description": "The Halloween Doubles is a doubles tournament for First Coast APA players to come together, dress up in costumes, play something a little different, and win prizes. While the vibe is casual, the competition is real. Prepare for the wheel of torture, Fast Saratoga, and a fast-paced Chips tournament.",
+    "date": "2026-10-31",
+    "timezone": "America/New_York",
+    "venue": "Park Ave",
+    "doors_open": null,
+    "practice_tables_open": "8:00:00 PM",
+    "start_time": "9:00:00 PM",
+    "estimated_end_time": null,
+    "status": "draft"
+  },
+  "administration": {
+    "league_area_number": "322",
+    "consultant": "Vicki",
+    "internal_purpose": "General player appreciation",
+    "approval_notes": "Second try"
+  },
+  "registration": {
+    "opens_on": "2026-09-30",
+    "closes_on": "2026-10-28",
+    "method": "Google Form",
+    "registration_url": null,
+    "contact_instructions": "Call or text the league office.",
+    "entry_fee": 40,
+    "entry_fee_raw": "$40/team",
+    "currency": "USD",
+    "payment_methods": [
+      {
+        "method": "Cash",
+        "availability": "Accepted On Site"
+      },
+      {
+        "method": "Stripe",
+        "availability": "Not Accepted"
+      },
+      {
+        "method": "Cash App",
+        "availability": "Not Accepted"
+      },
+      {
+        "method": "Venmo",
+        "availability": "Not Accepted"
+      },
+      {
+        "method": "Zelle",
+        "availability": "Not Accepted"
+      },
+      {
+        "method": "Payment link",
+        "availability": "Not Accepted"
+      },
+      {
+        "method": "Eligible voucher / gift card",
+        "availability": "Not Accepted"
+      }
+    ],
+    "check_in_requirements": [
+      "30 minutes before start time",
+      "At least one player must be on site with full entry for the team to check-in"
+    ],
+    "minimum_entries": 12,
+    "maximum_entries": 55,
+    "standby_policy": "Begin a standby list only after field is full",
+    "field_lock_policy": "After registration deadline, attendance confirmation, and final skill review; later changes require LO approval."
+  },
+  "format": {
+    "event_type": "Scotch Doubles",
+    "players_per_entry": 2,
+    "game_format": "Fast Saratoga",
+    "tournament_structure": "Chips Tournament",
+    "race_method": "Straight Race",
+    "maximum_racks": 3,
+    "estimated_unit_time": "7 minutes",
+    "calculated_round_minutes": 21,
+    "grouping_method": "Everyone in One Single Field",
+    "available_tables": 16,
+    "available_tables_raw": "16",
+    "available_event_timeframe": "Half-day: 5 to 7 hours"
+  },
+  "eligibility": {
+    "requirements": [
+      {
+        "requirement": "Active in this League Area",
+        "selection": "Required"
+      },
+      {
+        "requirement": "Active on any handicapped division roster",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Active on a Masters roster",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Active on a Ladies roster",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Active on an 8-Ball roster",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Active on a 9-Ball roster",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Has at least 10 lifetime matches in either 8-Ball or 9-Ball",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Has at least 6 lifetime matches in either 8-Ball or 9-Ball",
+        "selection": "Required"
+      },
+      {
+        "requirement": "Has played at least one match in the current session",
+        "selection": "Required"
+      },
+      {
+        "requirement": "Must be a Team Captain",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Must be a Team Co-Captain",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "Must be a Division Rep",
+        "selection": "Not Required"
+      },
+      {
+        "requirement": "In good standing with the league office",
+        "selection": "Required"
+      },
+      {
+        "requirement": "Must be invited / listed as eligible",
+        "selection": "Not Required"
+      }
+    ],
+    "skill_level_basis": "8-Ball Skill Level Used",
+    "gender_requirement": "Not applicable, open to all gender and gender combos",
+    "skill_level_limit": "Doubles Team - Maximum combined skill level 10",
+    "singles_movement_policy": "Not Applicable",
+    "team_movement_policy": "Team may still play with an adjusted race"
+  },
+  "rules": {
+    "baseline": "Standard APA rules apply unless an approved tournament-specific rule states otherwise.",
+    "sudden_death": "No Sudden Death",
+    "scorekeeping": [
+      {
+        "item": "Innings",
+        "selection": "Do not need to be tracked"
+      },
+      {
+        "item": "Defense",
+        "selection": "Do not need to be tracked"
+      },
+      {
+        "item": "Ball count",
+        "selection": "Do not need to be tracked"
+      },
+      {
+        "item": "Racks won",
+        "selection": "Must be tracked"
+      },
+      {
+        "item": "Strokes",
+        "selection": "Do not need to be tracked"
+      },
+      {
+        "item": "Timeouts",
+        "selection": "Must be tracked"
+      },
+      {
+        "item": "On the Break/Break & Run",
+        "selection": "Use recommended rules"
+      }
+    ],
+    "coaching": "One timeout per team per rack",
+    "electronics": "Discouraged, but not restricted",
+    "additional_rules": "We will have the wheel of torture set up to add a little extra fun to this event. Round one will play normal to get the rules of Fast Saratoga down. Starting in round 2 teams will spin the wheel and apply any added rules to their next round.",
+    "additional_penalty_notes": "No Refunds"
+  },
+  "operations": {
+    "tools": [
+      "Paper and pencils"
+    ],
+    "staffing_model": "League Operator(s) only",
+    "tournament_director": null,
+    "referee_status": "Yes, I already have trained referees",
+    "host_wifi": "Yes",
+    "host_schedule_conflicts": "No",
+    "host_fact_sheet_requested": true
+  },
+  "attendance": {
+    "minimum_entries": 12,
+    "maximum_entries": 55,
+    "players_per_entry": 2,
+    "minimum_player_headcount": 24,
+    "maximum_player_headcount": 110
+  },
+  "awards": {
+    "gifts": "Bonus Event tee, plaques for top teams, plaques for costume contest winners",
+    "public_cash_structure": "Chips payout based on chip value",
+    "payout_model": "Pay 20-25% of the field",
+    "create_calculator": true
+  },
+  "control_table_setup": {
+    "bracket_generated": false,
+    "registrations_imported": false,
+    "scoring_configuration_confirmed": false,
+    "table_assignments_confirmed": false,
+    "notifications_configured": false,
+    "ready_to_publish": false
+  },
+  "validation": {
+    "blocking": [],
+    "warnings": [],
+    "setup_required": [
+      "Supply registration URL if online registration is used",
+      "Confirm scoring configuration, race chart or point target",
+      "Import eligible player/team registrations using APA member numbers",
+      "Confirm bracket, seeding, byes and table assignment",
+      "Configure notification channels and message templates",
+      "Review and approve payout amounts where applicable"
+    ]
+  }
+}

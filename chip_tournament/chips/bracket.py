@@ -247,6 +247,7 @@ class BracketSettings:
     auto_call: bool = True  # no longer used: see call_mode
     call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
     test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
+    bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
     seeding: str = "random"  # "random" draw at the start, or "manual" (the order on the Entries list)

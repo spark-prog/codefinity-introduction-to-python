@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}New from the Bonus Event form — Control Table{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">New tournament from the Bonus Event form</p>
+  <h1>{{ plan.name }}</h1>
+  <p class="lede">Check this before creating it. You can change any of it afterwards in the event's Settings.</p>
+  <p><a href="{{ url_for('director') }}">← Back without creating</a></p>
+</header>
+
+<section class="card">
+  <h2>What will be set</h2>
+  <ul class="facts">
+    {% for label, value in plan.summary %}<li><span class="k">{{ label }}</span><span class="v">{{ value }}</span></li>{% endfor %}
+    {% if test_event %}<li><span class="k">Test event</span><span class="v">Yes: no texts, hidden from All Events</span></li>{% endif %}
+  </ul>
+</section>
+
+{% if plan.warnings %}
+<section class="card">
+  <h2>Check these</h2>
+  <ul class="bonus-warnings">{% for w in plan.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Shown to players</h2>
+  <p class="eyebrow">Event details</p>
+  <div class="bonus-text">{{ plan.settings.details }}</div>
+  {% if plan.settings.event_rules %}
+  <p class="eyebrow" style="margin-top: 16px">Tournament rules (top of its Rules page)</p>
+  <div class="bonus-text">{{ plan.settings.event_rules }}</div>
+  {% endif %}
+  <p class="muted small-note">Eligibility from the form is saved with the event for automatic checks later; it isn't enforced yet.</p>
+</section>
+
+<form method="post" action="{{ url_for('create_from_bonus_event') }}" class="card">
+  <textarea name="raw" hidden>{{ raw }}</textarea>
+  {% if test_event %}<input type="hidden" name="test_event" value="1">{% endif %}
+  <p>Online registration will be <b>closed</b> until you open it in Settings{% if plan.settings.registration_opens %}; then it
+    follows the form's dates{% endif %}.</p>
+  <button class="button big">Create {{ plan.name }}</button>
+</form>
+{% endblock %}

@@ -875,3 +875,7 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 /* Registration opens / closes, with its countdown */
 .reg-window { margin: 12px 0 0; font-size: 1.05rem; }
 .reg-window .countdown { color: var(--accent, #4fb3ff); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Creating an event from the Bonus Event form */
+.bonus-text { white-space: pre-line; }
+.bonus-warnings li { color: #ffb020; font-weight: 600; margin: 6px 0; }

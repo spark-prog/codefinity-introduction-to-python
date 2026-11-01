@@ -12,6 +12,7 @@ In production: gunicorn --workers 1 --threads 8 "app:create_app()"
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import threading
@@ -26,7 +27,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
-from chips import backup, export, importer, rules as rulebook, schedule, themes
+from chips import backup, bonus_event, export, importer, rules as rulebook, schedule, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -1230,6 +1231,55 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(str(exc), "error")
             return redirect(url_for("director"))
         flash(f"Created {f.get('name', '').strip()}. Finish its settings below, then share the link.", "ok")
+        return redirect(url_for("admin", event=ev.id) + "#settings")
+
+    # ------------------------------------------------- an event from the Bonus Event form
+
+    def bonus_plan(raw):
+        doc = bonus_event.read(raw)
+        p = bonus_event.plan(doc, rule_book.load())
+        if p.external_id:
+            for ev in hub.events():
+                if ev.load().settings.bonus_event_id == p.external_id:
+                    raise TournamentError(f"This form entry was already made into '{ev.load().settings.name}'. "
+                                          "Open it from the list, or delete it first to start over.")
+        return doc, p
+
+    @app.post("/admin/new/bonus-event")
+    @admin_required
+    def new_from_bonus_event():
+        """Step 1: read the export and show what will be created."""
+        upload = request.files.get("file")
+        try:
+            if not upload or not upload.filename:
+                raise TournamentError("Pick the Bonus Event export (.json) first.")
+            raw = upload.read()
+            doc, p = bonus_plan(raw)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("director") + "#from-form")
+        return render_template("bonus_preview.html", t=None, plan=p, doc=doc, raw=raw.decode("utf-8"),
+                               test_event=request.form.get("test_event") == "1")
+
+    @app.post("/admin/new/bonus-event/create")
+    @admin_required
+    def create_from_bonus_event():
+        """Step 2: the director confirmed; create the event (registration stays closed until they open it)."""
+        raw = request.form.get("raw", "")
+        try:
+            doc, p = bonus_plan(raw)
+            extra = {"format": p.settings["format"]} if p.kind == BRACKET else {}
+            ev = hub.create(p.name, p.kind, **extra)
+            with ev.store.change("Created from the Bonus Event form") as t:
+                bonus_event.apply(t, p)
+                t.settings.test_event = request.form.get("test_event") == "1"
+            (ev.dir / bonus_event.SAVED_AS).write_text(json.dumps(doc, indent=1))
+        except TournamentError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("director") + "#from-form")
+        flash(f"Created {p.name} from the Bonus Event form. Online registration is closed until you check the settings "
+              "below and untick Close registration" + (f". Still to do: {' '.join(p.warnings)}" if p.warnings else "."),
+              "ok")
         return redirect(url_for("admin", event=ev.id) + "#settings")
 
     @app.post("/admin/event/<event_id>/delete")

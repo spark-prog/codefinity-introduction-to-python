@@ -313,7 +313,8 @@
 {% endif %}
 
 <section id="teams" class="jump-target">
-  <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span></div>
+  <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span>
+    {% if not is_viewer and t.teams %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download teams (CSV)</a>{% endif %}</div>
   {% if t.teams %}
   <div class="team-search">
     <input type="search" id="team-search" placeholder="Search a team, player{% if not is_viewer %} or last 4 of a cell{% endif %}" aria-label="Search teams" autocomplete="off">

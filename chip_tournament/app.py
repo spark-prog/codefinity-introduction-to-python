@@ -26,7 +26,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
-from chips import importer, rules as rulebook, themes
+from chips import export, importer, rules as rulebook, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -938,6 +938,17 @@ def create_app(data_dir: str | None = None) -> Flask:
                 "Restored: the team is back in line.")
         return redirect(url_for("admin") + "#teams")
 
+    @app.get("/t/<event>/admin/export.csv")
+    @admin_required
+    def admin_export():
+        """Every team (or entry) with PINs, cells and text consent, as a spreadsheet. Directors only."""
+        t = store.load()
+        rows = export.chip_teams(t) if g.event.kind == CHIP else export.bracket_entries(t)
+        name = f"{g.event.id}-teams-{datetime.now():%Y-%m-%d}.csv"
+        return app.response_class(export.to_csv(rows), mimetype="text/csv",
+                                  headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                           "Cache-Control": "no-store"})
+
     @app.post("/t/<event>/admin/match/<match_id>/undo-forfeit")
     @admin_required
     def admin_undo_forfeit(match_id):
@@ -1173,7 +1184,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     # Pages every tournament type shares; the rest belong to chip tournaments, and a bracket
     # tournament gets its own version (or a 404) from bracket_web.
     shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
-              "admin_broadcast", "admin_text_pins", "find_team", "admin_call_all"}
+              "admin_broadcast", "admin_text_pins", "find_team", "admin_call_all",
+              "admin_export"}
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,

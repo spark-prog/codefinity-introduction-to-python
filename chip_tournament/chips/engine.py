@@ -383,6 +383,12 @@ class Tournament:
         to the front of the line with its score kept."""
         self._check_table(table)
         s, m = self.settings, self.match_on(table)
+        if m is not None and m.status == CALLED and m.sent_at:
+            # The match is over and waiting for approval: nothing to move. The table goes once it's approved.
+            if table not in s.tables_closing:
+                s.tables_closing.append(table)
+            self._say(f"Table {table} goes out of service once its result is approved.")
+            return
         if table in s.tables_closing:
             s.tables_closing.remove(table)
         if table not in s.tables_down:
@@ -1363,6 +1369,10 @@ class Tournament:
             when = datetime.now().strftime("%I:%M %p").lstrip("0")
             m.scorekeeper_note = f"Scorekeeper changed: {m.scorekeeper} → {label} at {when}"
             self._say(f"Table {m.table}: {m.scorekeeper_note}.")
+            for tid in (m.team_a, m.team_b):  # both teams hear about it, so nobody changes the score unseen
+                self._text_team(self.teams[tid], f"Table {m.table}: {label} is now keeping score (was {m.scorekeeper}). "
+                                                 f"Score {self.name_of(m.team_a)} {m.score_a}, {self.name_of(m.team_b)} "
+                                                 f"{m.score_b}. If that's wrong, tell the director.")
         else:
             self._say(f"Table {m.table}: {label} is keeping score.")
         m.scorekeeper, m.scorekeeper_team, m.scorekeeper_device = label, team_id, device

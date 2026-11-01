@@ -1335,6 +1335,10 @@ class BracketTournament:
             when = datetime.now().strftime("%I:%M %p").lstrip("0")
             m.scorekeeper_note = f"Scorekeeper changed: {m.scorekeeper} → {label} at {when}"
             self._say(f"Table {m.table}: {m.scorekeeper_note}.")
+            for eid in (m.a, m.b):  # both sides hear about it, so nobody changes the score unseen
+                self._text(self.entries[eid], f"Table {m.table}: {label} is now keeping score (was {m.scorekeeper}). "
+                                              f"Score {self.name_of(m.a)} {m.score_a}, {self.name_of(m.b)} {m.score_b}. "
+                                              "If that's wrong, tell the director.")
         else:
             self._say(f"Table {m.table}: {label} is keeping score.")
         m.scorekeeper, m.scorekeeper_entry, m.scorekeeper_device = label, entry_id, device

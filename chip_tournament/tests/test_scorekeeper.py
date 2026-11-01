@@ -140,9 +140,12 @@ def test_web_scorekeeper_send_and_director_approval(tmp_path, monkeypatch):
     assert f"Scorekeeper: <b>{a.players[0].name} ({a.name})</b>" in page and "Take over scoring" in page
     cy.post(f"{base}/team/{b.id}/score", data={"side": "a", "delta": "1"})
     assert ev.load().match(m.id).score_a == 0  # not the scorekeeper
+    cy.post(f"{base}/team/{b.id}/keep-score", data={"player": b.players[0].name})  # takeover...
+    ann.post(f"{base}/team/{a.id}/keep-score", data={"player": a.players[0].name})  # ...and back
     ann.post(f"{base}/team/{a.id}/score", data={"side": "a", "delta": "1"})
     ann.post(f"{base}/team/{a.id}/submit")
     page = admin.get(f"{base}/admin").get_data(as_text=True)
+    assert "Scoring changed hands" in page and "Check the score with both teams" in page
     assert "Results to approve (1)" in page and ">Approve</button>" in page and "Send back" in page
     admin.post(f"{base}/admin/match/{m.id}/scorekeeper", data={"action": "lock"})
     assert ev.load().match(m.id).scorekeeper_locked
@@ -157,7 +160,7 @@ def test_bracket_scorekeeper_and_approval():
     t = BracketTournament()
     t.settings.tables, t.settings.race_winners, t.settings.race_finals, t.settings.format = ["1"], 2, 2, "single"
     for n in ("Ann", "Bob"):
-        t.register_entry(n, [Player(n)])
+        t.register_entry(n, [Player(n, "5550000" + str(len(n) * 111)[:3], sms_consent=True)])
     t.start(random.Random(1))
     m = t.assigned_matches()[0]
     t.call_match(m.id)
@@ -167,6 +170,7 @@ def test_bracket_scorekeeper_and_approval():
     assert m.scorekeeper == t.entries[m.a].name  # singles: just the player's name
     t.claim_scorekeeper(m.id, m.b, t.entries[m.b].name, "p2")  # takeover
     assert "Scorekeeper changed" in m.scorekeeper_note
+    assert sum("is now keeping score" in x.body for x in t.outbox) == 2  # both players hear about it
     t.lock_scorekeeper(m.id, True)
     with pytest.raises(TournamentError, match="locked"):
         t.claim_scorekeeper(m.id, m.a, t.entries[m.a].name, "p1")
@@ -178,3 +182,25 @@ def test_bracket_scorekeeper_and_approval():
     t.send_result(m.id, "p2")
     t.approve_result(m.id)
     assert m.status == "done" and m.winner == m.b and t.status == "finished"
+
+
+def test_a_takeover_texts_both_teams_and_flags_the_approval():
+    from chips.engine import Player, Tournament
+    import random
+    t = Tournament()
+    t.settings.require_checkin, t.settings.race_to, t.settings.tables = False, 2, ["1", "2"]
+    t.settings.call_mode = "continuous"
+    for i in range(4):
+        t.register_team(f"Team {i}", [Player(f"Ann{i}", f"55500000{i:02d}", 5, sms_consent=True),
+                                      Player(f"Bob{i}", f"55500001{i:02d}", 5, sms_consent=True)])
+    t.start(random.Random(1))
+    m = next(x for x in t.matches if x.status == "called")
+    a, b = t.teams[m.team_a], t.teams[m.team_b]
+    t.claim_scorekeeper(m.id, a.id, a.players[0].name, "phone-a")
+    t.outbox.clear()
+    t.claim_scorekeeper(m.id, a.id, a.players[0].name, "phone-a")  # same phone again: nothing new
+    assert not t.outbox
+    t.claim_scorekeeper(m.id, b.id, b.players[0].name, "phone-b")  # the other team takes over
+    alerts = [x for x in t.outbox if "is now keeping score" in x.body]
+    assert len({x.to for x in alerts}) == 4  # every opted-in player on both teams
+    assert "Score Team" in alerts[0].body and m.scorekeeper_note

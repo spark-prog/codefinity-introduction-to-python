@@ -832,6 +832,7 @@ tr.found td { background: rgba(var(--accent-rgb), .18); }
 .match-grid.compact .card.open-table { opacity: .65; min-height: 0; }
 .keeper-note { font-size: .82rem; margin: 6px 0 0; }
 .sent-note { color: #ff6b76; font-weight: 700; margin: 4px 0; font-size: .9rem; }
+.handoff-warn { color: #ffb020; font-weight: 700; font-size: .85rem; }
 .more-menu { margin-top: 8px; }
 .more-menu[open] { padding: 8px 0 0; }
 .more-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }

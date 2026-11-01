@@ -118,7 +118,8 @@
     {% for m in to_approve %}{% set w = t.race_winner(m) %}
     <div class="approve-row">
       <div><b>Table {{ m.table }}:</b> {{ t.name_of(w) if w else "No winner" }} won {{ [m.score_a, m.score_b]|max }}–{{ [m.score_a, m.score_b]|min }}
-        <span class="muted">vs {{ t.name_of(m.team_b if w == m.team_a else m.team_a) }} · sent by {{ m.sent_by }} {{ m.sent_at|clock }}</span></div>
+        <span class="muted">vs {{ t.name_of(m.team_b if w == m.team_a else m.team_a) }} · sent by {{ m.sent_by }} {{ m.sent_at|clock }}</span>
+        {% if m.scorekeeper_note %}<br><span class="handoff-warn">⚠ Scoring changed hands: {{ m.scorekeeper_note|replace("Scorekeeper changed: ", "") }}. Check the score with both teams.</span>{% endif %}</div>
       {% if not is_viewer %}
       <div class="button-row">
         <form method="post" action="{{ url_for('admin_approve', match_id=m.id) }}" class="inline"><button class="button small">Approve</button></form>

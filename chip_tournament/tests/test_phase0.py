@@ -323,3 +323,11 @@ def test_restore_from_an_uploaded_file(app):
     page = admin.get("/admin/backups").get_data(as_text=True)
     assert "Undo a restore" in page and "before-restore-" in page
     assert r.status_code == 302
+
+
+def test_email_only_is_a_normal_good_backup(tmp_path):
+    make_data(tmp_path)
+    mail = FakeMailer()
+    status = backup.run(tmp_path, drive=None, mailer=mail)  # Drive not set up: email is the route
+    assert status["last_where"] == "email" and not status["warning"] and not status["error"]
+    assert mail.sent and mail.sent[0][1].startswith("control-table-")

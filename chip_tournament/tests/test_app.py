@@ -298,17 +298,26 @@ def test_team_keeps_score_with_its_pin(client):
     assert b"Enter your team PIN first" in page and store.load().match(m.id).score_a + store.load().match(m.id).score_b == 0
 
     player.post(f"/team/{sharks.id}/login", data={"pin": sharks.pin})
-    assert "We're at the table" not in player.get(f"/team/{sharks.id}").data.decode()  # no player check-in
+    page = player.get(f"/team/{sharks.id}").data.decode()
+    assert "We're at the table" not in page and "I'll keep score" in page  # no check-in; claim scoring first
+    page = player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"}, follow_redirects=True).data
+    assert b"keep score first" in page
+    player.post(f"/team/{sharks.id}/keep-score", data={"player": "Ann"})
 
     player.post(f"/team/{sharks.id}/score", data={"side": other, "delta": "1"})  # either side can be scored
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})  # race to 2: Sharks reach it
     page = player.get(f"/team/{sharks.id}").get_data(as_text=True)
     assert 'id="result-dialog"' in page and "Sharks won the match" in page and "Go back" in page
+    assert "Send to director" in page
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "-1"})  # Go back
     assert store.load().match(m.id).status == "called"
     player.post(f"/team/{sharks.id}/score", data={"side": side, "delta": "1"})
     player.post(f"/team/{sharks.id}/submit")
+    sent = store.load().match(m.id)
+    assert sent.status == "called" and sent.sent_at  # waits for the director
+    assert "Result sent to the director" in player.get(f"/team/{sharks.id}").get_data(as_text=True)
+    admin.post(f"/admin/match/{m.id}/approve")
     done = store.load().match(m.id)
     assert done.status == "done" and done.winner == sharks.id
     assert any("Sharks entered +1" in line for line in store.load().log)

@@ -360,6 +360,12 @@ def create_app(data_dir: str | None = None) -> Flask:
             session["device"] = secrets.token_hex(8)
         return f"{request.remote_addr or '?'}|{session['device']}"
 
+    def scorer_device() -> str:
+        """This phone, for scorekeeping: the browser's own token (not its network, which can change)."""
+        if "device" not in session:
+            session["device"] = secrets.token_hex(8)
+        return session["device"]
+
     def minutes(seconds: int) -> str:
         n = max(1, (seconds + 59) // 60)
         return f"{n} minute{'s' if n != 1 else ''}"
@@ -456,7 +462,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         history = [m for m in t.matches if team_id in (m.team_a, m.team_b) and m.status == DONE]
         return render_template(
             "team.html", t=t, team=team, match=t.current_match_for(team_id), history=history,
-            is_team=bool(session.get(f"team_{team_id}") or session.get("admin")),
+            is_team=bool(session.get(f"team_{team_id}") or session.get("admin")), my_device=scorer_device(),
         )
 
     def team_match(team_id):
@@ -497,8 +503,21 @@ def create_app(data_dir: str | None = None) -> Flask:
         except TournamentError as exc:
             flash(str(exc), "error")
         else:
-            if act("Submit result (team)", lambda t: t.submit_result(m.id)):
-                flash("Result submitted. Only the tournament director can change it now.", "ok")
+            if act("Send result (scorekeeper)", lambda t: t.send_result(m.id, scorer_device())):
+                flash("Result sent to the director. It counts once the director approves it.", "ok")
+        return redirect(url_for("team_page", team_id=team_id))
+
+    @app.post("/t/<event>/team/<team_id>/keep-score")
+    def team_keep_score(team_id):
+        try:
+            m, _ = team_match(team_id)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        else:
+            player = request.form.get("player", "")
+            label = "Take over scoring" if m.scorekeeper_device else "Keep score"
+            if act(f"{label} (team)", lambda t: t.claim_scorekeeper(m.id, team_id, player, scorer_device())):
+                flash("You're keeping score for this match. Tap + each time a team wins a rack.", "ok")
         return redirect(url_for("team_page", team_id=team_id))
 
     @app.post("/t/<event>/team/<team_id>/score")
@@ -512,7 +531,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(str(exc), "error")
         else:
             name = store.load().name_of(team_id)
-            act("Score (team)", lambda t: t.score(m.id, side, delta, by=name))
+            act("Score (scorekeeper)", lambda t: t.score(m.id, side, delta, by=name, device=scorer_device()))
         return redirect(url_for("team_page", team_id=team_id))
 
     @app.route("/t/<event>/team/<team_id>/roster", methods=["GET", "POST"])
@@ -859,6 +878,39 @@ def create_app(data_dir: str | None = None) -> Flask:
         act("Submit result", lambda t: t.submit_result(match_id), "Result recorded.")
         return redirect(url_for("admin") + "#matches")
 
+    @app.post("/t/<event>/admin/match/<match_id>/approve")
+    @admin_required
+    def admin_approve(match_id):
+        act("Approve result", lambda t: t.approve_result(match_id), "Result approved. Chips and lines are updated.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/match/<match_id>/send-back")
+    @admin_required
+    def admin_send_back(match_id):
+        act("Send result back", lambda t: t.send_back(match_id), "Sent back: both teams were texted to finish the match.")
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/match/<match_id>/scorekeeper")
+    @admin_required
+    def admin_scorekeeper(match_id):
+        action = request.form.get("action")
+        if action == "clear":
+            act("Change scorekeeper", lambda t: t.clear_scorekeeper(match_id),
+                "Scorekeeper cleared: the next player to tap I'll keep score takes over.")
+        elif action in ("lock", "unlock"):
+            act("Lock scorekeeper" if action == "lock" else "Unlock scorekeeper",
+                lambda t: t.lock_scorekeeper(match_id, action == "lock"))
+        else:
+            abort(400)
+        return redirect(url_for("admin") + "#matches")
+
+    @app.post("/t/<event>/admin/match/<match_id>/undo-forfeit")
+    @admin_required
+    def admin_undo_forfeit(match_id):
+        act("Undo forfeit", lambda t: t.undo_forfeit(match_id),
+            "Forfeit undone: chips are back and the two teams replay the match next.")
+        return redirect(url_for("admin") + "#matches")
+
     @app.post("/t/<event>/admin/match/<match_id>/fix")
     @admin_required
     def admin_fix(match_id):
@@ -1092,6 +1144,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
+        "scorer_device": scorer_device,
     })
 
     @app.before_request

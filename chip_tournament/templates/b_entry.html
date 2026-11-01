@@ -24,10 +24,34 @@
     <p class="eyebrow">Now playing · {{ t.match_label(match) }}</p>
     <h2>Table {{ match.table }}</h2>
     <p class="muted">{% if match.race_a %}{{ t.race_text(match) }}{% else %}Race to {{ match.race_to }}{% endif %}{% if path.win %} · win: {{ path.win }}{% endif %}{% if path.lose %} · lose: {{ path.lose }}{% endif %}</p>
+    {% set keeper = is_entry and match.scorekeeper_device == my_device %}
+    {% if is_entry and not match.sent_at %}
+      {% if not match.scorekeeper %}
+      <form method="post" action="{{ url_for('b_entry_keep_score', entry_id=entry.id) }}" class="form keep-score-form">
+        <p><b>One player keeps score for this match.</b>{% if entry.players|length > 1 %} Pick your name to be the scorekeeper.{% endif %}</p>
+        {% if entry.players|length > 1 %}<label>Your name <select name="player" required>{% for p in entry.players %}<option>{{ p.name }}</option>{% endfor %}</select></label>
+        {% else %}<input type="hidden" name="player" value="{{ entry.players[0].name }}">{% endif %}
+        <button class="button big block">I'll keep score</button>
+      </form>
+      {% elif not keeper %}
+      <p class="scorekeeper-line">Scorekeeper: <b>{{ match.scorekeeper }}</b></p>
+      {% if match.scorekeeper_locked %}<p class="muted">The director has locked scoring to {{ match.scorekeeper }}.</p>
+      {% else %}
+      <details class="take-over"><summary class="button secondary">Take over scoring</summary>
+        <form method="post" action="{{ url_for('b_entry_keep_score', entry_id=entry.id) }}" class="form"
+              data-dialog-title="Take over scoring?" data-dialog-text="{{ match.scorekeeper }} is keeping score. Only take over if their phone died or they asked you to. The score stays as it is." data-dialog-ok="Take over">
+          {% if entry.players|length > 1 %}<label>Your name <select name="player" required>{% for p in entry.players %}<option>{{ p.name }}</option>{% endfor %}</select></label>
+          {% else %}<input type="hidden" name="player" value="{{ entry.players[0].name }}">{% endif %}
+          <button class="button">Take over scoring</button>
+        </form>
+      </details>
+      {% endif %}
+      {% else %}<p class="scorekeeper-line">You're keeping score.</p>{% endif %}
+    {% endif %}
     {% for side, id, sc in (("a", match.a, match.score_a), ("b", match.b, match.score_b)) %}
     <div class="score-row">
       <div class="team-name">{{ t.name_of(id) }}{% if id == entry.id %} <span class="muted">(you)</span>{% endif %}</div>
-      {% if is_entry %}
+      {% if keeper and not match.sent_at %}
       <div class="score-ctl">
         <form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
@@ -41,10 +65,14 @@
     </div>
     {% endfor %}
     {% set winner = t.race_winner(match) %}
-    {% if is_entry and winner %}
+    {% if match.sent_at %}
+    <div class="banner await-banner"><b>Result sent to the director</b>{% if winner %}: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}{% endif %}.
+      It counts once the director approves it.</div>
+    {% elif keeper and winner %}
     <form method="post" action="{{ url_for('b_entry_submit', entry_id=entry.id) }}" class="button-row">
-      <button class="button big">Submit: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}</button></form>
-    <p class="muted">Check the score with your opponent first. Only the director can change a submitted result.</p>
+      <button class="button big">Send to director: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}</button></form>
+    <p class="muted">Check the score with your opponent first. Press − to go back if a rack was entered by mistake.</p>
+    {% elif winner %}<p class="muted">Waiting for the scorekeeper to send the result.</p>
     {% endif %}
     {% if not is_entry %}
     <form method="post" action="{{ url_for('b_entry_login', entry_id=entry.id) }}" class="form narrow pin-inline">
@@ -53,7 +81,7 @@
     </form>
     {% endif %}
   {% elif match %}
-    <p class="lede">Next: <b>{{ t.slot_label(match, "a") }}</b> vs <b>{{ t.slot_label(match, "b") }}</b> ({{ t.match_label(match) }}). Waiting for a free table. Stay close!</p>
+    <p class="lede">Next: <b>{{ t.slot_label(match, "a") }}</b> vs <b>{{ t.slot_label(match, "b") }}</b> ({{ t.match_label(match) }}). {% if match.table %}You're set for <b>table {{ match.table }}</b>: stay close, we'll text you when the director calls it.{% else %}Waiting for a free table. Stay close!{% endif %}</p>
   {% else %}
     <p class="lede">You're still in. Your next opponent isn't decided yet: watch the <a href="{{ url_for('home') }}">bracket</a>.</p>
   {% endif %}

@@ -59,6 +59,19 @@
   </form>
 </section>
 
+{% if not is_viewer %}
+<section class="card" id="from-form">
+  <h2>New tournament from the Bonus Event form</h2>
+  <p class="muted">Upload the approved event's export (the "Control Table Event Data" .json file). You'll see what will be
+    created before anything is made, and online registration stays closed until you've checked it.</p>
+  <form method="post" action="{{ url_for('new_from_bonus_event') }}" enctype="multipart/form-data" class="form settings">
+    <label class="wide">Export file <input type="file" name="file" accept=".json,application/json" required></label>
+    <label class="checkbox wide"><input type="checkbox" name="test_event" value="1"> Test event (for practice): never sends texts and isn't listed on All Events</label>
+    <button class="button">Read the export</button>
+  </form>
+</section>
+{% endif %}
+
 {% include "_backups_card.html" %}
 
 {% if rows and not is_viewer %}

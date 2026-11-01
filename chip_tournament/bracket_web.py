@@ -453,6 +453,10 @@ def register(app, h) -> dict:
     @app.post("/t/<event>/admin/table/<path:table>")
     @admin_required
     def b_table(table):
+        if request.form.get("close") == "1":
+            act(f"Close table {table} after match", lambda t: t.close_table_after_match(table),
+                f"Table {table} closes after its current match.")
+            return redirect(back("tables"))
         down = request.form.get("down") == "1"
         act(f"Table {table} {'out of service' if down else 'back in service'}",
             lambda t: t.set_table_down(table, down),

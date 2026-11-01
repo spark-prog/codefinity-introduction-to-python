@@ -19,6 +19,8 @@
       {% for x in (m.team_a, m.team_b) %}<a class="button small secondary" href="{{ url_for('team_page', team_id=x) }}">{{ t.name_of(x) }}</a>{% endfor %}</div>
     {% endif %}
   </div>
+  {% elif tbl in t.settings.tables_down %}
+  <div class="tcell down" id="tbl-{{ tbl }}"><div class="tcell-head"><b>Table {{ tbl }}</b><span class="tcell-state">Out of service</span></div></div>
   {% else %}
   <div class="tcell open" id="tbl-{{ tbl }}">
     <div class="tcell-head"><b>Table {{ tbl }}</b><span class="tcell-state">Open</span></div>

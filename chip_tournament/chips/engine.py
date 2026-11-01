@@ -240,6 +240,8 @@ class Settings:
     # them and start the clock. CONTINUOUS: matches are called the moment a table is free.
     call_mode: str = DIRECTOR_CALLS
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
+    tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them
+    tables_closing: list[str] = field(default_factory=list)  # out of service once the current match ends
     rule_set: str = ""  # id of the league rule set this event plays by (its Rules tab shows only that one)
     event_rules: str = ""  # APA-approved rules for this tournament only, shown at the top of its Rules tab
     registration_closed: bool = False  # director closed online registration (the director can still add teams)
@@ -347,8 +349,110 @@ class Tournament:
         return None
 
     def free_tables(self) -> list[str]:
+        s = self.settings
         busy = {m.table for m in self.matches if m.status in (CALLED, WAITING) and m.table}
-        return [t for t in self.settings.tables if t not in busy]
+        return [t for t in s.tables if t not in busy and t not in s.tables_down and t not in s.tables_closing]
+
+    def match_on(self, table: str) -> Match | None:
+        """The match on (or set for) a table, if any."""
+        return next((m for m in self.matches if m.status in (CALLED, WAITING) and m.table == table), None)
+
+    def _check_table(self, table: str) -> None:
+        if table not in self.settings.tables:
+            raise TournamentError("Unknown table.")
+
+    def close_table_after_match(self, table: str) -> None:
+        """Director: the match on this table finishes, then the table leaves the rotation."""
+        self._check_table(table)
+        s, m = self.settings, self.match_on(table)
+        if table in s.tables_down or table in s.tables_closing:
+            raise TournamentError(f"Table {table} is already out of the rotation.")
+        if m is not None and m.status == WAITING:  # set but not called: it waits for another table
+            m.table = None
+            m.priority = True
+        if m is not None and m.status == CALLED:
+            s.tables_closing.append(table)
+            self._say(f"Table {table} closes after its current match.")
+        else:
+            s.tables_down.append(table)
+            self._say(f"Table {table} is out of service.")
+        self._advance()
+
+    def table_out_now(self, table: str) -> None:
+        """Director: the table is out of service right now. Its match moves to a free table, or goes
+        to the front of the line with its score kept."""
+        self._check_table(table)
+        s, m = self.settings, self.match_on(table)
+        if table in s.tables_closing:
+            s.tables_closing.remove(table)
+        if table not in s.tables_down:
+            s.tables_down.append(table)
+        self._say(f"Table {table} is out of service.")
+        if m is not None:
+            free = self.free_tables()
+            if m.status == CALLED and free:
+                self.move_match(m.id, free[0])
+            else:
+                was_called = m.status == CALLED
+                m.status, m.table, m.priority = WAITING, None, True
+                if was_called:
+                    for tid in (m.team_a, m.team_b):
+                        self._text_team(self.teams[tid], f"Table {table} is out of service. Your match goes on the next "
+                                                         "free table; the score is kept. Watch for the call.")
+        self._advance()
+
+    def reopen_table(self, table: str) -> None:
+        """Director: the table is back in the rotation."""
+        self._check_table(table)
+        s = self.settings
+        if table not in s.tables_down and table not in s.tables_closing:
+            raise TournamentError(f"Table {table} is already in service.")
+        for lst in (s.tables_down, s.tables_closing):
+            if table in lst:
+                lst.remove(table)
+        self._say(f"Table {table} is back in service.")
+        self._advance()
+
+    def move_match(self, match_id: str, table: str) -> Match:
+        """Director: move a match (called or just set) to a free table."""
+        self._check_table(table)
+        m = self.match(match_id)
+        if m.status not in (CALLED, WAITING) or not m.table:
+            raise TournamentError("That match doesn't have a table to move from.")
+        if table not in self.free_tables():
+            raise TournamentError(f"Table {table} isn't free.")
+        old, m.table = m.table, table
+        self._say(f"Match #{m.round} moved from table {old} to table {table}.")
+        if m.status == CALLED:
+            for tid in (m.team_a, m.team_b):
+                self._text_team(self.teams[tid], f"Table change: your match is now on table {table}.")
+        if old in self.settings.tables_closing:  # the closing table is free now
+            self.settings.tables_closing.remove(old)
+            self.settings.tables_down.append(old)
+        return m
+
+    def restore_eliminated(self, team_id: str, chips: int = 1) -> None:
+        """Director: bring back a team that's out (lost its last chip, or was forfeited out) with some chips."""
+        team = self.team(team_id)
+        if self.status != RUNNING:
+            raise TournamentError("Teams can only be restored while the tournament is running.")
+        if team.status != ELIMINATED:
+            raise TournamentError(f"{team.name} isn't out.")
+        if not 1 <= chips <= 10:
+            raise TournamentError("Restore with 1 to 10 chips.")
+        team.status = ACTIVE
+        self._chip_change(team, chips, f"Restored by the director with {chips} chip(s)")
+        if self.last_call:
+            team.matches_left = 1
+        self._enqueue(team.id, self.losers_list)
+        self._say(f"{team.name} restored with {chips} chip(s). Chip value now {money(self.chip_value_cents)}.")
+        self._text_team(team, f"{team.name}: you're back in with {chips} chip(s). Watch for your next table call.")
+        self._advance()
+
+    def chip_value_if_restored(self, chips: int = 1) -> float:
+        """What a chip would be worth after giving `chips` back to a team."""
+        total = self.chips_in_play + chips
+        return self.pot_cents / total if total else 0.0
 
     def assigned_matches(self) -> list[Match]:
         """Pairs given a table and waiting for the director to call them, in table order."""
@@ -1535,9 +1639,19 @@ class Tournament:
             return self.enforce_partner_deadline(at)
         return 0
 
+    def _close_finished_tables(self) -> None:
+        """A table set to close leaves the rotation once its match is over."""
+        for table in list(self.settings.tables_closing):
+            if self.match_on(table) is None:
+                self.settings.tables_closing.remove(table)
+                self.settings.tables_down.append(table)
+                self._say(f"Table {table}'s match is over: the table is out of service.")
+
     def _advance(self) -> None:
         """Pair whoever can be paired, then send queued pairs to free tables."""
+        self._close_finished_tables()
         if self.status != RUNNING or self._check_finished():
+            self._close_finished_tables()  # the last matches may have just been wrapped up
             return
         self._maybe_lock_entries()
         # Safety net: every active team is either on a table or on a list.
@@ -1640,6 +1754,8 @@ class Tournament:
                 self._cash_out(champ, "Last team standing")
                 self._text_team(champ, f"{champ.name}: you're the last team standing! Payout {money(champ.payout_cents)}.")
         self.winners_list, self.losers_list = [], []  # nobody is waiting for a match any more
+        self.settings.tables_down += self.settings.tables_closing  # tables set to close are done too
+        self.settings.tables_closing = []
         self.status = FINISHED
         self._say("Tournament finished.")
         return True

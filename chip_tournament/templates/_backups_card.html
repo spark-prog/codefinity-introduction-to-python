@@ -1,0 +1,29 @@
+{# Backups: last good backup, any problem, and the buttons. Needs backup_status and backup_setup. #}
+{% set b = backup_status %}
+<section class="card" id="backups">
+  <div class="section-head"><h2>Backups</h2>
+    <a class="button small secondary" href="{{ url_for('admin_backups') }}">All backups &amp; restore</a></div>
+  {% if b.error %}
+    <p class="backup-status bad">⚠ The last backup failed{% if b.last_try %} ({{ b.last_try|clock }}){% endif %}: {{ b.error }}</p>
+  {% endif %}
+  {% if b.last_ok %}
+    <p class="backup-status {{ 'warn' if b.warning else 'good' }}">Last good backup: {{ b.last_ok|day }} at {{ b.last_ok|clock }}, to {{ b.last_where }}{% if b.warning %}. {{ b.warning }}{% endif %}</p>
+  {% elif not b.error %}
+    <p class="muted">No backup yet.</p>
+  {% endif %}
+  {% if backup_setup.drive %}
+    <p class="muted small-note">Every night after 3 AM, a copy of every tournament goes to the Google shared drive{% if backup_setup.email %}, or by email to {{ backup_setup.email_to }} if Drive fails{% endif %}.</p>
+  {% elif backup_setup.drive_error %}
+    <p class="backup-status bad">Google Drive setting problem: {{ backup_setup.drive_error }}</p>
+  {% elif not b.error or backup_setup.email %}
+    <p class="backup-status warn">Google Drive backups aren't set up yet{% if backup_setup.email %}: backups go by email to {{ backup_setup.email_to }}{% endif %}.</p>
+  {% endif %}
+  {% if not is_viewer %}
+  <div class="button-row">
+    <form method="post" action="{{ url_for('admin_backup_now') }}" class="inline">
+      <input type="hidden" name="back" value="{{ request.path }}"><button class="button small">Back up now</button></form>
+    <a class="button small secondary" href="{{ url_for('admin_backup_download') }}">Download a copy</a>
+  </div>
+  <p class="muted small-note">Backups hold player names, phone numbers and team PINs: keep downloaded copies private.</p>
+  {% endif %}
+</section>

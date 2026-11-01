@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en" data-theme="{{ theme_key(t.settings.theme if t else none) }}">
 <head>
+  {% if t and t.settings.test_event %}<meta name="robots" content="noindex">{% endif %}
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ t.settings.name if t else "Control Table" }}{% endblock %}</title>
@@ -68,6 +69,7 @@
     </div>
   </header>
   <main>
+    {% if t and t.settings.test_event %}<div class="test-banner">TEST EVENT: practice only. No texts are sent, and it isn't listed on All Events.</div>{% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
     {% endwith %}

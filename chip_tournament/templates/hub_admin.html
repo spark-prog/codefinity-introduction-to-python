@@ -20,7 +20,7 @@
     <thead><tr><th>Tournament</th><th>Type</th><th>Date</th><th>Status</th><th>Field</th><th></th></tr></thead>
     {% for r in rows %}{% set s = r.t.settings %}
     <tr>
-      <td><b>{{ s.name }}</b><div class="muted small-note">/t/{{ r.event.id }}</div></td>
+      <td><b>{{ s.name }}</b>{% if s.test_event %} <span class="tag-test">TEST</span>{% endif %}<div class="muted small-note">/t/{{ r.event.id }}</div></td>
       <td>{{ r.format }}</td>
       <td>{{ event_when(s.date, s.start_time) or "—" }}</td>
       <td><span class="event-status {{ r.t.status }}">{{ {"setup": "Setting up", "running": "Live", "finished": "Finished"}[r.t.status] }}</span></td>
@@ -52,11 +52,14 @@
     <label>Date <input name="date" type="date" value="{{ today }}"></label>
     <label>Start time <input name="start_time" placeholder="7:00 PM"></label>
     <label class="wide">Venue <input name="venue" placeholder="Corner Pocket Billiards"></label>
+    <label class="checkbox wide"><input type="checkbox" name="test_event" value="1"> Test event (for practice): never sends texts and isn't listed on All Events</label>
     <p class="muted wide">Modified single elimination is double elimination down to a final {{ final_cuts|join("/") }}, then single elimination.
       Round robin can send the top entries of each group to a playoff. You'll set races, tables, payouts and the rest next.</p>
     <button class="button big">Create tournament</button>
   </form>
 </section>
+
+{% include "_backups_card.html" %}
 
 {% if rows and not is_viewer %}
 <section class="card">

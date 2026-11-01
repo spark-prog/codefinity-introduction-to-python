@@ -239,6 +239,7 @@ class Settings:
     # DIRECTOR_CALLS: the app pairs teams and gives them a table; the director presses Call match to text
     # them and start the clock. CONTINUOUS: matches are called the moment a table is free.
     call_mode: str = DIRECTOR_CALLS
+    test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them
     tables_closing: list[str] = field(default_factory=list)  # out of service once the current match ends

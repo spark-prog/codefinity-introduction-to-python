@@ -84,6 +84,7 @@
     <div class="banner await-banner"><b>Result sent to the director</b>{% if winner %}: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}{% endif %}.
       It counts once the director approves it.</div>
     {% elif keeper and winner %}
+    <p class="final-score" aria-label="Final score">{{ [match.score_a, match.score_b]|max }}–{{ [match.score_a, match.score_b]|min }}</p>
     <form method="post" action="{{ url_for('b_entry_submit', entry_id=entry.id) }}" class="button-row">
       <button class="button big">Send to director: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}</button></form>
     <p class="muted">Check the score with your opponent first. Press − to go back if a rack was entered by mistake.</p>

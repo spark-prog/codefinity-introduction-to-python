@@ -91,8 +91,8 @@
           {% if keeper %}
           <dialog class="result-dialog" id="result-dialog">
             <h2>{{ t.name_of(won) }} won the match</h2>
-            <p>Final score {{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}, race to {{ t.settings.race_to }}.
-              Check it with the other team. Once you send it, only the director can change it.</p>
+            <p class="final-score" aria-label="Final score">{{ match.score_a if won_side == "a" else match.score_b }}–{{ match.score_b if won_side == "a" else match.score_a }}</p>
+            <p>Race to {{ t.settings.race_to }}. Check the score with the other team. Once you send it, only the director can change it.</p>
             {% include "_submit_forms.html" %}
           </dialog>
           <script>

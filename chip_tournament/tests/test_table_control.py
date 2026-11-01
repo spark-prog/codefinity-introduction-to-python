@@ -144,3 +144,17 @@ def test_web_table_controls_restore_and_phone_list(tmp_path, monkeypatch):
     assert f'action="/t/{ev.id}/admin/team/{loser}/restore-out"' in page and "chip value goes from" in page
     admin.post(f"{base}/team/{loser}/restore-out", data={"chips": "1"})
     assert ev.load().teams[loser].status == ACTIVE and ev.load().teams[loser].chips == 1
+
+
+def test_out_of_service_after_a_result_was_sent_waits_for_the_approval():
+    t = started(n_teams=4, tables=("1", "2", "3"))
+    t.call_all()
+    m = t.match_on("1")
+    t.claim_scorekeeper(m.id, m.team_a, t.teams[m.team_a].players[0].name, "phone")
+    t.score(m.id, "a", 1, device="phone")
+    t.send_result(m.id, "phone")
+    t.table_out_now("1")
+    assert m.table == "1" and m.status == CALLED and t.results_to_approve() == [m]
+    assert "1" in t.settings.tables_closing
+    t.approve_result(m.id)
+    assert "1" in t.settings.tables_down and t.match_on("1") is None

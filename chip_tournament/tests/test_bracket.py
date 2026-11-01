@@ -399,3 +399,20 @@ def test_texts_on_call_and_result():
     t.record_result(m.id, m.a, forfeit=True)
     bodies = " ".join(msg.body for msg in t.outbox)
     assert "is out" in bodies and "won $" in bodies
+
+
+def test_round_robin_hand_call_never_puts_a_player_on_two_tables():
+    from chips.bracket import BracketTournament, CALLED
+    import random as _r
+    t = BracketTournament()
+    t.settings.format, t.settings.tables, t.settings.call_mode = "round_robin", ["1", "2", "3", "4"], "director"
+    for i in range(4):
+        t.register_entry(f"E{i}", [Player(f"P{i}")])
+    t.start(_r.Random(1))
+    set_ = t.assigned_matches()[0]
+    later = next(m for m in t.matches if m.status == "ready" and not m.table and {m.a, m.b} & {set_.a, set_.b})
+    t.call_to_table(later.id, t.free_tables()[0])
+    assert set_.table is None  # gave its table back
+    t.call_all() if t.assigned_matches() else None
+    playing = [x for m in t.matches if m.status == CALLED for x in (m.a, m.b)]
+    assert len(playing) == len(set(playing))

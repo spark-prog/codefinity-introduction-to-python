@@ -7,7 +7,6 @@ import pytest
 from app import create_app
 from chips import schedule
 from chips.engine import Settings, TournamentError
-from chips.bracket import BracketSettings
 
 
 def fmt(dt):

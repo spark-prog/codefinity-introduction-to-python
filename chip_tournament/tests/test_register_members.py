@@ -1,6 +1,5 @@
 """Registering with member numbers: one player, one spot; autofill for logged-in players; already registered."""
 
-import random
 from datetime import datetime, timedelta
 
 import pytest

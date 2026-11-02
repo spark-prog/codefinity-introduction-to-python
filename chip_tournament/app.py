@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -36,6 +37,7 @@ from chips.engine import (
     ACTIVE,
     CALLED,
     CONTINUOUS,
+    check_form_entry,
     DIRECTOR_CALLS,
     DONE,
     FINISHED,
@@ -117,6 +119,7 @@ def players_from_form(form, keep_phones_of=None, same_people=()) -> list[Player]
     """Partners from the form. With keep_phones_of (a team), a blank cell box keeps
     the number on file for that partner, since teams don't get to see the numbers:
     the same name, or a name marked as only corrected (same_people)."""
+    check_form_entry(form, TEAM_SIZE)
     players = []
     for i in range(TEAM_SIZE):
         skill = form.get(f"player_skill_{i}", "").strip()
@@ -169,6 +172,20 @@ def create_app(data_dir: str | None = None) -> Flask:
         if viewer_password and (len(viewer_password) < 8 or viewer_password == admin_password):
             raise RuntimeError("VIEWER_PASSWORD must be at least 8 characters and different from ADMIN_PASSWORD.")
         app.config["SESSION_COOKIE_SECURE"] = True
+        # Behind a CDN (Render's edge, or Cloudflare in front of it), the address ProxyFix finds can be the CDN's,
+        # which would make every visitor share one set of login limits. TRUSTED_IP_HEADER names the header the
+        # CDN sets to the real visitor's address (Cloudflare: CF-Connecting-IP). Only set it when every request
+        # really comes through that CDN, since anyone can send the header to a server reached directly.
+        ip_header = os.environ.get("TRUSTED_IP_HEADER", "").strip()
+        if ip_header:
+            inner, key = app.wsgi_app, "HTTP_" + ip_header.upper().replace("-", "_")
+
+            def real_ip(environ, start_response):
+                value = environ.get(key, "").split(",")[0].strip()
+                if value:
+                    environ["REMOTE_ADDR"] = value
+                return inner(environ, start_response)
+            app.wsgi_app = real_ip  # runs after ProxyFix (wrapped inside it), so it has the last word
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config["hub"] = hub
     app.config["data_dir"] = data_path
@@ -296,6 +313,15 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(str(exc), "error")
             return None
 
+    def text_in_background(ev, t) -> None:
+        """Send the texts a change produced on a background thread, so a slow text service never holds up the
+        page or the locks (shared tables lock every event in the group while one changes)."""
+        messages, t.outbox = list(t.outbox), []
+        if messages:
+            sender, test = ev.sms, t.settings.test_event
+            threading.Thread(target=lambda: [sender.send(m.to, m.body, test=test) for m in messages],
+                             daemon=True).start()
+
     def share_freed_tables(pool: dict, done_event: str) -> None:
         """After a change in one pooled event, the others get a turn at any table that's free now."""
         for other in pool["events"]:
@@ -309,9 +335,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             with ev.store.change("Shared tables: a table freed up") as t:
                 pool_mod.inform(t, hub, pool, other)
                 pool_mod.give_tables(t)
-                messages, t.outbox = list(t.outbox), []
-                for m in messages:
-                    ev.sms.send(m.to, m.body, test=t.settings.test_event)
+                text_in_background(ev, t)
 
     app.config["share_freed_tables"] = share_freed_tables
 
@@ -353,6 +377,22 @@ def create_app(data_dir: str | None = None) -> Flask:
             time.sleep(15)
 
     clock_started = threading.Event()
+
+    # Public, read-only pages a league website may show in a frame: the lists, boards and rules. Every other page
+    # (logins, registration, PIN pages, the director's) refuses to be framed by another site.
+    embeddable = re.compile(r"^/(?:$|board$|rules$|pool/[^/]+$|static/|t/[^/]+/(?:$|board$|rules$))")
+    production = os.environ.get("CHIPS_PRODUCTION") == "1"
+
+    @app.after_request
+    def security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if not embeddable.match(request.path):
+            resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+            resp.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self'")
+        if production:
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=15552000")  # 180 days: always HTTPS
+        return resp
 
     @app.before_request
     def start_clock():
@@ -509,9 +549,24 @@ def create_app(data_dir: str | None = None) -> Flask:
     def terms():
         return render_template("terms.html", t=current_t())
 
+    @app.get("/admin/whoami")
+    @admin_required
+    def admin_whoami():
+        """For the director: the address the login limits see for you, and what the host sent, to check the
+        TRUSTED_IP_HEADER setting. Only your own request's details."""
+        heads = ("X-Forwarded-For", "CF-Connecting-IP", "True-Client-IP", "X-Real-IP")
+        return {"login_limits_see_you_as": request.remote_addr,
+                "trusted_ip_header": os.environ.get("TRUSTED_IP_HEADER", "") or "(not set)",
+                "headers": {h: request.headers.get(h, "") for h in heads}}
+
     @app.get("/healthz")
     def healthz():
-        return {"ok": True}
+        """Up and answering. Lists any event file that couldn't be read at the last scan (every minute), but still
+        answers ok: one bad file shouldn't make the host restart the whole site over and over."""
+        out = {"ok": True}
+        if hub.unreadable:
+            out["unreadable_events"] = sorted(hub.unreadable)
+        return out
 
     @app.get("/t/<event>/guide")
     @director_view  # the director's guide is for directors only
@@ -653,9 +708,10 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     @app.post("/t/<event>/team/<team_id>/score")
     def team_score(team_id):
-        side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
-        if side not in ("a", "b") or delta not in (1, -1):
+        side, delta = request.form.get("side"), request.form.get("delta", "1")
+        if side not in ("a", "b") or delta not in ("1", "-1"):
             abort(400)
+        delta = int(delta)
         try:
             m, _ = team_match(team_id)
         except TournamentError as exc:
@@ -981,9 +1037,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/t/<event>/admin/match/<match_id>/score")
     @admin_required
     def admin_score(match_id):
-        side, delta = request.form.get("side"), int(request.form.get("delta", "1"))
-        if side not in ("a", "b") or delta not in (1, -1):
+        side, delta = request.form.get("side"), request.form.get("delta", "1")
+        if side not in ("a", "b") or delta not in ("1", "-1"):
             abort(400)
+        delta = int(delta)
         act("Score", lambda t: t.score(match_id, side, delta))
         return redirect(url_for("admin") + "#matches")
 
@@ -1269,7 +1326,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.get("/admin")
     @director_view
     def director():
-        return render_template("hub_admin.html", t=None, rows=hub.summaries(), formats=FORMATS,
+        rows = hub.summaries()
+        return render_template("hub_admin.html", t=None, rows=rows, unreadable=hub.unreadable, formats=FORMATS,
                                final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"),
                                backup_status=backup.load_status(data_path), backup_setup=backup.configured(),
                                pools=pools.all())
@@ -1361,9 +1419,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                         called += t.call_all()
                     except TournamentError:
                         pass
-                    messages, t.outbox = list(t.outbox), []
-                    for m in messages:
-                        ev.sms.send(m.to, m.body, test=t.settings.test_event)
+                    text_in_background(ev, t)
         flash(f"Called {called} match(es) across the events." if called else "No matches are waiting to be called.", "ok")
         return redirect(url_for("admin_pool", pool_id=pool_id))
 

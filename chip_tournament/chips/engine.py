@@ -57,7 +57,7 @@ from __future__ import annotations
 import random
 import secrets
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta
 
 # Team statuses
@@ -90,6 +90,38 @@ PARTNER_DEADLINE_HOURS = 24  # a team registered without a partner must add one 
 
 REQUIRE_MEMBER_DEFAULT = True  # (tests that predate member numbers turn this off)
 WAITLIST_OFFER_HOURS = 12  # (tests that predate waiting-list offers set this to 0)
+
+
+_FIELDS: dict[type, frozenset] = {}
+
+
+def known(kind: type, data: dict) -> dict:
+    """Only the fields this version knows. A file saved by a newer version (then rolled back, or a newer backup
+    restored) may have fields this one doesn't: they're ignored instead of making the event unreadable."""
+    names = _FIELDS.get(kind)
+    if names is None:
+        names = _FIELDS[kind] = frozenset(f.name for f in fields(kind))
+    return {k: v for k, v in data.items() if k in names}
+
+
+MAX_NAME = 60  # player, team and entry names
+
+
+def check_form_entry(form, size: int) -> None:
+    """Reject a registration form's names that are too long and cell numbers that can't be texted
+    (blank is fine). Used by every chip and bracket form that saves players."""
+    team = " ".join((form.get("name") or "").split())
+    if len(team) > MAX_NAME:
+        raise TournamentError(f"Keep the team name to {MAX_NAME} characters or fewer.")
+    for i in range(size):
+        name = " ".join((form.get(f"player_name_{i}") or "").split())
+        if len(name) > MAX_NAME:
+            raise TournamentError(f"Keep each player's name to {MAX_NAME} characters or fewer.")
+        raw = (form.get(f"player_phone_{i}") or "").strip()
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if raw and not (len(digits) == 10 or (len(digits) == 11 and digits[0] == "1")
+                        or (raw.startswith("+") and 8 <= len(digits) <= 15)):
+            raise TournamentError(f"'{raw[:30]}' isn't a cell number we can text. Use 10 digits, like 904-555-0123.")
 
 
 def start_of(settings) -> datetime | None:
@@ -2070,14 +2102,14 @@ class Tournament:
     def from_dict(cls, data: dict) -> Tournament:
         data = dict(data)
         t = cls(
-            settings=Settings(**data.pop("settings", {})),
+            settings=Settings(**known(Settings, data.pop("settings", {}))),
             teams={
-                k: Team(**{**v, "players": [Player(**p) for p in v.get("players", [])]})
+                k: Team(**known(Team, {**v, "players": [Player(**known(Player, p)) for p in v.get("players", [])]}))
                 for k, v in data.pop("teams", {}).items()
             },
-            matches=[Match(**m) for m in data.pop("matches", [])],
-            ledger=[LedgerEntry(**e) for e in data.pop("ledger", [])],
-            outbox=[Message(**m) for m in data.pop("outbox", [])],
+            matches=[Match(**known(Match, m)) for m in data.pop("matches", [])],
+            ledger=[LedgerEntry(**known(LedgerEntry, e)) for e in data.pop("ledger", [])],
+            outbox=[Message(**known(Message, m)) for m in data.pop("outbox", [])],
         )
         for key, value in data.items():
             setattr(t, key, value)

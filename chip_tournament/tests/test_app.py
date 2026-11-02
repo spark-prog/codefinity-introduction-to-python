@@ -388,6 +388,7 @@ def test_background_photo_upload_and_reset(client):
     import io
     default = client.get("/background")
     assert default.status_code == 200 and default.mimetype == "image/jpeg"
+    default.close()
     client.post("/admin/login", data={"password": "secret"})
     page = client.post("/admin/background", data={"photo": (io.BytesIO(b"not an image"), "x.txt")},
                        content_type="multipart/form-data", follow_redirects=True).data
@@ -398,8 +399,10 @@ def test_background_photo_upload_and_reset(client):
     assert b"Background photo updated" in page and b"using your own photo" in page
     custom = client.get("/background")
     assert custom.mimetype == "image/png" and custom.data == png
+    custom.close()
     client.post("/admin/background", data={"reset": "1"})
-    assert client.get("/background").mimetype == "image/jpeg"
+    with client.get("/background") as r:
+        assert r.mimetype == "image/jpeg"
 
 
 def test_header_has_league_logo_and_no_home_icon(client):
@@ -407,7 +410,8 @@ def test_header_has_league_logo_and_no_home_icon(client):
     assert 'href="https://firstcoast.poolplayers.com/"' in html
     assert "img/apa-first-coast-logo.png" in html
     assert 'class="home-icon"' not in html and "brand-mark" not in html
-    assert client.get("/static/img/apa-first-coast-logo.png").status_code == 200
+    with client.get("/static/img/apa-first-coast-logo.png") as r:
+        assert r.status_code == 200
 
 
 def wrong_pins(client, team, n):
@@ -573,9 +577,11 @@ def test_share_preview_tags(client):
     assert '<meta property="og:url" content="http://localhost/t/chip-tournament/register">' in page
     icon = client.get("/favicon.ico")
     assert icon.status_code == 200 and icon.mimetype == "image/x-icon"
+    icon.close()
     assert 'href="/favicon.ico"' in page
     for path in ("share.jpg", "favicon.png", "favicon-32.png", "apple-touch-icon.png"):
-        assert client.get(f"/static/img/{path}").status_code == 200
+        with client.get(f"/static/img/{path}") as r:
+            assert r.status_code == 200
 
 
 def test_terms_required_and_partner_opts_in_on_the_team_page(client):
@@ -727,7 +733,8 @@ def test_director_picks_a_theme_for_every_page(client):
         assert 'data-theme="halloween"' in client.get(path).get_data(as_text=True)
     client.post("/admin/settings", data={**form, "theme": "made-up"})
     assert 'data-theme="electric"' in client.get("/").get_data(as_text=True)
-    css = client.get("/static/style.css").get_data(as_text=True)
+    with client.get("/static/style.css") as r:
+        css = r.get_data(as_text=True)
     assert all(f'[data-theme="{key}"]' in css for key, *_ in THEMES if key != "electric")
 
 

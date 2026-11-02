@@ -58,7 +58,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from . import engine
-from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, money, now
+from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, known, money, now
 from .races import group_for, group_label, rack_race
 
 BYE = "bye"
@@ -1767,11 +1767,11 @@ class BracketTournament:
     def from_dict(cls, data: dict) -> BracketTournament:
         data = dict(data)
         t = cls(
-            settings=BracketSettings(**data.pop("settings", {})),
-            entries={k: Entry(**{**v, "players": [Player(**p) for p in v.get("players", [])]})
+            settings=BracketSettings(**known(BracketSettings, data.pop("settings", {}))),
+            entries={k: Entry(**known(Entry, {**v, "players": [Player(**known(Player, p)) for p in v.get("players", [])]}))
                      for k, v in data.pop("entries", {}).items()},
-            matches=[BMatch(**m) for m in data.pop("matches", [])],
-            outbox=[Message(**m) for m in data.pop("outbox", [])],
+            matches=[BMatch(**known(BMatch, m)) for m in data.pop("matches", [])],
+            outbox=[Message(**known(Message, m)) for m in data.pop("outbox", [])],
         )
         for key, value in data.items():
             setattr(t, key, value)

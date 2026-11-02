@@ -31,7 +31,7 @@ def app(tmp_path, monkeypatch):
     t.settings.eligibility = rules(active=True)
     t.register_team("Sharks", [Player("Ann Lee", "9045550100", 4, member="32200001"), Player("Cy Day", "", 3)])
     reg.store.save(t)
-    test = hub.create("Practice", "chip", date="2026-11-10", test_event=True)
+    hub.create("Practice", "chip", date="2026-11-10", test_event=True)
     return app
 
 

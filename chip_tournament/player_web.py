@@ -413,6 +413,119 @@ def register_registration(app) -> None:
 
     app.config["public_results"] = public_results
 
+    # ------------------------------------------------ Phase 11: the partner finder
+
+    asks_by_member = Throttle(limit=5, window=3600)
+
+    def doubles(ev, t) -> bool:
+        return ev.kind == "chip" or getattr(t.settings, "team_size", 1) == 2
+
+    def seekers(ev, t) -> list[dict]:
+        """Everyone looking for a partner in an event: chip players who registered alone and asked to be listed,
+        and logged-in players who listed themselves without registering."""
+        out = []
+        if ev.kind == "chip":
+            for team in t.seeking_partner:
+                p = team.players[0]
+                out.append({"member": p.member, "name": p.name, "skill": p.skill, "team": team.id,
+                            "source": "registered"})
+        game = getattr(t.settings, "skill_game", "8")
+        for x in t.settings.partner_seekers:
+            if t.registered_as(x["member"]) is not None:
+                continue  # they found a team
+            rec = store.get(x["member"])
+            if rec is None:
+                continue
+            skill, _ = players.event_skill(rec, game)
+            out.append({"member": x["member"], "name": full_name(rec), "skill": skill, "team": "", "source": "listed"})
+        return out
+
+    def partner_finder(t) -> dict:
+        """For the register page: who's looking, filtered to who fits the logged-in player."""
+        ev, me = g.event, g.get("player")
+        everyone = seekers(ev, t)
+        result = {"everyone": everyone, "fits": None, "hidden": 0, "me_listed": False, "my_skill": None,
+                  "cap": t.settings.registration_cap if ev.kind == "chip" else None, "doubles": doubles(ev, t)}
+        if not me:
+            return result
+        game = getattr(t.settings, "skill_game", "8")
+        mine, _ = players.event_skill(me, game)
+        rules, start = eligibility.rules_of(t.settings), store.config()["session_start"]
+        fits = []
+        for s_ in everyone:
+            if s_["member"] == me["member"]:
+                continue
+            if s_["member"] and eligibility.any_rules(rules) and not eligibility.override_for(t, s_["member"]):
+                no, _ = eligibility.check_player(store.get(s_["member"]), rules, start, game)
+                if no:
+                    continue
+            if result["cap"] and mine and s_["skill"] and mine + s_["skill"] > result["cap"]:
+                continue
+            fits.append({**s_, "combined": (mine or 0) + (s_["skill"] or 0)})
+        result.update(fits=fits, hidden=len([x for x in everyone if x["member"] != me["member"]]) - len(fits),
+                      my_skill=mine, me_listed=any(x["member"] == me["member"] for x in t.settings.partner_seekers))
+        return result
+
+    app.jinja_env.globals["partner_finder"] = partner_finder
+
+    @app.post("/t/<event>/partner-list")
+    def partner_list():
+        """A logged-in player adds or removes themselves from the looking-for-a-partner list."""
+        me, ev = g.get("player"), g.event
+        if not me:
+            return redirect(url_for("player_login", next=url_for("register")))
+        with ev.store.lock:  # bookkeeping: no undo step
+            t = ev.store.load()
+            t.settings.partner_seekers = [x for x in t.settings.partner_seekers if x["member"] != me["member"]]
+            if request.form.get("action") == "add":
+                if t.registered_as(me["member"]) is not None:
+                    flash("You're already on a team for this event.", "error")
+                    return redirect(url_for("register"))
+                t.settings.partner_seekers.append({"member": me["member"], "at": datetime.now().isoformat(timespec="seconds")})
+                flash("You're on the looking-for-a-partner list (your name and skill level show; nothing else).", "ok")
+            else:
+                flash("You're off the looking-for-a-partner list.", "ok")
+            ev.store.save(t)
+        return redirect(url_for("register") + "#looking")
+
+    @app.post("/t/<event>/partner-ask")
+    def partner_ask():
+        """Email a player who's looking: the asker's name, skill level and (as the reply-to) email."""
+        me, ev = g.get("player"), g.event
+        if not me:
+            return redirect(url_for("player_login", next=url_for("register")))
+        member = re.sub(r"\D", "", request.form.get("member", ""))
+        t = ev.store.load()
+        target = next((x for x in seekers(ev, t) if x["member"] == member), None)
+        rec = store.get(member) if member else None
+        if target is None or rec is None or not rec.get("email"):
+            flash("That player can't be emailed from here. Ask the tournament director to put you in touch.", "error")
+        elif asks_by_member.wait(me["member"]):
+            flash("You've sent a lot of requests. Try again in an hour.", "error")
+        elif not me.get("email"):
+            flash("There's no email on file for you, so they couldn't reply. Ask the league office to add one.", "error")
+        else:
+            mailer = backup.Mailer.from_env()
+            legal = app.jinja_env.globals["legal"]
+            game = getattr(t.settings, "skill_game", "8")
+            my_sl, _ = players.event_skill(me, game)
+            how = (f"Add them on your team page: {request.url_root.rstrip('/')}{url_for('team_page', team_id=target['team'])}"
+                   if target["team"] else
+                   f"One of you registers and picks the other as partner: {request.url_root.rstrip('/')}{url_for('register')}")
+            try:
+                if mailer is None:
+                    raise backup.BackupError("no mailer")
+                mailer.send_to(rec["email"], f"{t.settings.name}: {full_name(me)} would like to be your partner",
+                               f"Hi {rec['first']},\n\n{full_name(me)} (skill level {my_sl or '?'}) saw you're looking for a "
+                               f"partner for {t.settings.name} and would like to team up. Reply to this email to reach "
+                               f"them.\n\n{how}\n\n{legal['brand']}",
+                               sender=legal["brand"], reply_to=me["email"])
+                asks_by_member.fail(me["member"])
+                flash(f"Sent! {target['name']} can reply straight to your email.", "ok")
+            except backup.BackupError:
+                flash("The email couldn't be sent. Try again in a minute.", "error")
+        return redirect(url_for("register") + "#looking")
+
     # ------------------------------------------------ partner confirmation
 
     confirm_signer = URLSafeTimedSerializer(app.secret_key, salt="partner-confirm")

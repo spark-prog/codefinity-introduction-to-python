@@ -480,6 +480,7 @@
     If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
     Check-in, grace and start times all use this clock.</p>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    {% if not is_viewer %}<div class="button-row wide settings-save-top"><button class="button">Save settings</button></div>{% endif %}
     <div class="settings-group">Theme</div>
     <label class="wide">Colors for this tournament's pages
       <select name="theme" id="theme-pick">

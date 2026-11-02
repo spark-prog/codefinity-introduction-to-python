@@ -9,6 +9,8 @@
     <p class="lede">{{ s.name }}{% if s.date %} · {{ event_when(s.date, s.start_time) }}{% endif %}.
       {% if s.entry_fee_cents %}Entry {{ s.entry_fee_cents|money }}{% if s.team_size > 1 %} per team{% endif %}, paid at the desk.{% else %}Free entry.{% endif %}</p>
     {% if t.status == SETUP and not s.registration_shut %}{% include "_reg_window.html" %}{% endif %}
+    {% if s.max_player_skill or s.team_skill_cap %}<p class="banner">Skill-level limit:
+      {% if s.max_player_skill %}every player SL {{ s.max_player_skill }} or lower{% endif %}{% if s.max_player_skill and s.team_skill_cap and s.team_size > 1 %}, and {% endif %}{% if s.team_skill_cap and s.team_size > 1 %}the {{ "team's" if s.team_size >= 3 else "pair's" }} combined skill levels {{ s.team_skill_cap }} or lower{% endif %}.</p>{% endif %}
     {% if t.field_full %}<p class="banner">The field is full. Register to join the waiting list; we'll text you if a spot opens.</p>{% endif %}
   </header>
   {% if my_registration(t) %}
@@ -21,7 +23,8 @@
   {% if player %}{% include "_my_eligibility.html" %}{% endif %}
   <form method="post" class="card form">
     {% include "_login_nudge.html" %}
-    {% if s.team_size > 1 %}<label>Team name (optional) <input name="name" value="{{ form.get('name', '') }}" placeholder="We'll use your names if blank"></label>{% endif %}
+{% if s.team_size >= 3 %}<label>Team name <input name="name" value="{{ form.get('name', '') }}" required maxlength="60"></label>
+    {% elif s.team_size > 1 %}<label>Team name (optional) <input name="name" value="{{ form.get('name', '') }}" placeholder="We'll use your names if blank"></label>{% endif %}
     {% for i in range(s.team_size) %}
     <fieldset class="partner">
       <legend>{{ "Player" if s.team_size == 1 else "Player " ~ (i + 1) }}</legend>
@@ -35,7 +38,7 @@
       <p class="muted small-note">Enter at least one (both if you play both).{% if s.skill_groups %} You play in the skill group for the higher one:
         {% for lo, hi in s.skill_groups %}SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}.{% endif %}</p>
       {% else %}
-      <label>Skill level (optional) <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ form.get('player_skill_' ~ i, '') }}"></label>
+      <label>Skill level {% if not (s.max_player_skill or s.team_skill_cap) %}(optional){% endif %} <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ form.get('player_skill_' ~ i, '') }}" {% if s.max_player_skill or s.team_skill_cap %}required{% endif %}></label>
       {% endif %}
       <label>Cell number {% if i %}(optional){% endif %} <input name="player_phone_{{ i }}" type="tel" value="{{ form.get('player_phone_' ~ i, '') }}" placeholder="904-555-0123"></label>
     </fieldset>

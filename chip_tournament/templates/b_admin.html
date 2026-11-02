@@ -313,13 +313,15 @@
   <div class="split" style="margin-top: 24px">
     <form method="post" action="{{ url_for('b_add_entries') }}" class="form">
       <h3>Add an entry</h3>
-      {% if s.team_size > 1 %}<label>Team name (optional) <input name="name"></label>{% endif %}
+      {% if s.team_size >= 3 %}<label>Team name <input name="name" required></label>{% elif s.team_size > 1 %}<label>Team name (optional) <input name="name"></label>{% endif %}
       {% for i in range(s.team_size) %}
       <label>Player {{ i + 1 if s.team_size > 1 else "" }} name <input name="player_name_{{ i }}" required></label>
       <label>Cell (optional) <input name="player_phone_{{ i }}" type="tel"></label>
       {% if asks_two_levels(s) %}
       <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7"></label>
       <label>9-Ball SL <input name="player_skill9_{{ i }}" type="number" min="1" max="9"></label>
+      {% elif s.max_player_skill or s.team_skill_cap %}
+      <label>Skill level <input name="player_skill_{{ i }}" type="number" min="1" max="9" required></label>
       {% endif %}
       {% endfor %}
       <p class="muted small-note">Players added here don't get texts until they turn alerts on from their own page.</p>
@@ -327,7 +329,7 @@
     </form>
     <form method="post" action="{{ url_for('b_add_entries') }}" class="form">
       <h3>Add many at once</h3>
-      <label>One per line{% if s.team_size == 1 %} (<code>Name</code> or <code>Name, cell</code>){% else %} (<code>Ann &amp; Bob</code> or <code>Sharks: Ann &amp; Bob</code>){% endif %}
+      <label>One per line{% if s.team_size == 1 %} (<code>Name</code> or <code>Name, cell</code>){% elif s.team_size == 2 %} (<code>Ann &amp; Bob</code> or <code>Sharks: Ann &amp; Bob</code>){% else %} (<code>Sharks: Ann &amp; Bob &amp; Cy</code>, {{ s.team_size }} players){% endif %}{% if s.max_player_skill or s.team_skill_cap %}. Add each skill level in brackets: <code>Ann Lee (5)</code>{% endif %}
         <textarea name="bulk" rows="8"></textarea></label>
       <button class="button">Add all</button>
     </form>
@@ -387,6 +389,7 @@
 <section id="settings" class="card jump-target">
   <h2>Settings</h2>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
+    {% if not is_viewer %}<div class="button-row wide settings-save-top"><button class="button">Save settings</button></div>{% endif %}
     <div class="settings-group">Event</div>
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
@@ -428,7 +431,13 @@
       <select name="team_size" {% if not setup %}disabled{% endif %}>
         <option value="1" {% if s.team_size == 1 %}selected{% endif %}>Singles (1 player)</option>
         <option value="2" {% if s.team_size == 2 %}selected{% endif %}>Doubles (2 players)</option>
+        {% for n in range(3, max_team_size + 1) %}<option value="{{ n }}" {% if s.team_size == n %}selected{% endif %}>Team of {{ n }} players</option>{% endfor %}
       </select></label>
+    <label>Highest skill level a player can be (blank = no limit)
+      <input name="max_player_skill" type="number" min="1" max="9" value="{{ s.max_player_skill or '' }}" {% if not setup %}disabled{% endif %}></label>
+    <label>Doubles &amp; teams: combined skill levels can't be over (blank = no limit)
+      <input name="team_skill_cap" type="number" min="2" max="90" value="{{ s.team_skill_cap or '' }}" {% if not setup %}disabled{% endif %}>
+      <span class="muted small-note">Every player needs a skill level on their entry when either limit is set.</span></label>
     <label>Seeding
       <select name="seeding" {% if not setup %}disabled{% endif %}>
         <option value="random" {% if s.seeding == "random" %}selected{% endif %}>Random draw at the start</option>

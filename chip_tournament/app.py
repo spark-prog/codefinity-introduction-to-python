@@ -1319,6 +1319,8 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     @app.get("/")
     def index():
+        if (session.get("admin") or session.get("viewer")) and request.args.get("view") != "player":
+            return redirect(url_for("director"))  # directors land on their own page; View as player shows this one
         rows = hub.summaries()
         if not (session.get("admin") or session.get("viewer")):  # practice events stay off the public list
             rows = [r for r in rows if not r["t"].settings.test_event]

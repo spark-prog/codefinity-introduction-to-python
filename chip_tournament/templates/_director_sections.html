@@ -1,0 +1,100 @@
+{# Director page: fold-out sections and the settings tools. Needs g.event. #}
+<div class="unsaved-bar" id="unsaved-bar" role="status" hidden>
+  <span>You have unsaved changes</span>
+  <button type="button" class="button small" id="unsaved-save">Save settings</button>
+</div>
+<script>
+(function () {
+  var key = "ct-open:{{ g.event.id }}";
+  function read() { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) { return []; } }
+  function write(list) { try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {} }
+  var sections = Array.prototype.slice.call(document.querySelectorAll("details.settings-section"));
+
+  // Settings sections start closed; the ones you left open on this device open again.
+  var remembered = read();
+  sections.forEach(function (d) { if (remembered.indexOf(d.dataset.key) >= 0) d.open = true; });
+  var searching = false;
+  function remember() {
+    if (searching) return;  // a search opens sections for a moment; don't keep that
+    write(sections.filter(function (d) { return d.open; }).map(function (d) { return d.dataset.key; }));
+  }
+  sections.forEach(function (d) { d.addEventListener("toggle", remember); });
+  window.addEventListener("pagehide", remember);  // also when leaving, in case a toggle hadn't been saved yet
+
+  document.querySelectorAll("[data-settings]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var open = b.dataset.settings === "open";
+      sections.forEach(function (d) { d.open = open; });
+      remember();
+    });
+  });
+
+  // Jumping to a section (the menu, or a link with #...) opens it if it's folded.
+  function openFor(hash) {
+    var el = hash && document.getElementById(hash.slice(1));
+    if (!el) return;
+    var fold = el.matches("details") ? el : el.querySelector("details.fold-section");
+    if (fold && !fold.open) fold.open = true;
+    var parent = el.closest("details");
+    if (parent && !parent.open) parent.open = true;
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener("click", function () { openFor(a.getAttribute("href")); });
+  });
+  openFor(location.hash);
+
+  // Find a setting: opens the sections with a match and outlines the settings that match.
+  var find = document.querySelector(".settings-find"), note = document.querySelector(".settings-find-note");
+  var before = null;
+  if (find) {
+    find.addEventListener("input", function () {
+      var q = find.value.trim().toLowerCase();
+      document.querySelectorAll(".settings-hit").forEach(function (el) { el.classList.remove("settings-hit"); });
+      if (!q) {
+        searching = false;
+        if (before) sections.forEach(function (d) { d.open = before.indexOf(d.dataset.key) >= 0; });
+        before = null; note.textContent = "";
+        return;
+      }
+      if (!searching) { before = sections.filter(function (d) { return d.open; }).map(function (d) { return d.dataset.key; }); }
+      searching = true;
+      var hits = 0, first = null;
+      sections.forEach(function (d) {
+        var found = false;
+        d.querySelectorAll(".section-fields label, .section-fields > p, .section-fields .settings-sub").forEach(function (el) {
+          if (el.textContent.toLowerCase().indexOf(q) >= 0) {
+            el.classList.add("settings-hit"); found = true; hits++;
+            if (!first) first = el;
+          }
+        });
+        if (!found && d.querySelector("summary").textContent.toLowerCase().indexOf(q) >= 0) found = true;
+        d.open = found;
+      });
+      note.textContent = hits ? hits + " match" + (hits === 1 ? "" : "es") : "No setting matches";
+      if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    find.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });  // Enter doesn't save
+  }
+
+  // Unsaved changes: a bar with Save, and a warning before leaving the page.
+  var form = document.querySelector("#settings form.settings"), bar = document.getElementById("unsaved-bar");
+  if (!form || !bar) return;
+  var dirty = false;
+  function changed(e) {
+    if (e.target.closest("[data-no-dirty]") || !e.target.name) return;
+    dirty = true; bar.hidden = false;
+  }
+  form.addEventListener("input", changed);
+  form.addEventListener("change", changed);
+  document.getElementById("unsaved-save").addEventListener("click", function () {
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
+  });
+  form.addEventListener("submit", function () { dirty = false; bar.hidden = true; });
+  window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+  // A setting with a problem opens its section, so the browser can show what's wrong.
+  form.addEventListener("invalid", function (e) {
+    var d = e.target.closest("details");
+    if (d && !d.open) d.open = true;
+  }, true);
+})();
+</script>

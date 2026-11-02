@@ -44,7 +44,8 @@ def test_a_test_event_never_texts_and_is_hidden_from_the_public(app, monkeypatch
 
     public = app.test_client().get("/").get_data(as_text=True)
     assert "Real Night" in public and "Practice Night" not in public
-    assert "Practice Night" in admin.get("/").get_data(as_text=True)
+    assert admin.get("/").headers["Location"].endswith("/admin")  # a director lands on the Director page
+    assert "Practice Night" in admin.get("/?view=player").get_data(as_text=True)  # View as player: with test events
     assert ">TEST<" in admin.get("/admin").get_data(as_text=True)
 
     page = app.test_client().get("/t/practice-night/").get_data(as_text=True)  # a direct link still works

@@ -2,7 +2,9 @@
 <script>
 // View-only login: turn every control off (the server refuses changes either way).
 document.querySelectorAll("main form").forEach(function (f) {
-  f.querySelectorAll("button, input, select, textarea").forEach(function (el) { el.disabled = true; });
+  f.querySelectorAll("button, input, select, textarea").forEach(function (el) {
+    if (!el.closest("[data-viewer-ok]")) el.disabled = true;  // finding and opening settings still works
+  });
 });
 </script>
 {% endif %}

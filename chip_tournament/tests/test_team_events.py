@@ -61,7 +61,9 @@ def test_entries_can_be_singles_doubles_or_teams_of_3_to_10(app):
     c = director(app)
     page = c.get(f"/t/{ev.id}/admin").get_data(as_text=True)
     assert "Team of 3 players" in page and f"Team of {MAX_TEAM_SIZE} players" in page
-    assert page.count(">Save settings</button>") == 2  # top and bottom of the settings
+    form = page.split('<section id="settings"', 1)[1].split("</form>", 1)[0]
+    assert form.count(">Save settings</button>") == 2  # top and bottom of the settings
+    assert 'id="unsaved-save">Save settings</button>' in page  # and on the unsaved-changes bar
     save(c, ev, team_size=4)
     assert ev.load().settings.team_size == 4 and ev.load().entries_label == "teams of 4"
     assert "teams of 4" in app.test_client().get(f"/t/{ev.id}/").get_data(as_text=True)

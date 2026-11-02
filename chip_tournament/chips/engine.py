@@ -285,6 +285,9 @@ class Settings:
     catchup_matches: int = 2  # this many matches behind the leader = jump the queue
     chip_brackets: list[list[int]] = field(default_factory=lambda: [list(b) for b in DEFAULT_CHIP_BRACKETS])
     registration_cap: int = DEFAULT_REGISTRATION_CAP
+    header_alt: str = ""  # what the header photo shows, for screen readers (the photo itself is a file)
+    flyer_alt: str = ""
+    flyer_as_header: bool = False  # use the flyer as the header photo too
     field_cap: int = 0  # most teams in the field; 0 = no limit set
     tables: list[str] = field(default_factory=lambda: ["1", "2", "3", "4"])
     cash_in_time: str = ""

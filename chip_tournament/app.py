@@ -29,6 +29,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
+import photos_web
 import player_web
 from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, RACK_CHART
@@ -1728,6 +1729,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     })
     player_web.register(app, {"device_id": device_id})
     player_web.register_registration(app)
+    photos_web.register(app, admin_required)  # header photo and flyer: every tournament type
 
     @app.before_request
     def dispatch_by_kind():

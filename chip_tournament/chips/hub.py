@@ -157,6 +157,9 @@ class Hub:
                 else:
                     setattr(t.settings, key, moved.strftime("%Y-%m-%dT%H:%M"))
             ev.store.save(t)
+        for photo in list(source.dir.glob("header.*")) + list(source.dir.glob("flyer.*")):  # header photo, flyer
+            if photo.suffix in (".jpg", ".png"):
+                shutil.copy2(photo, ev.dir / photo.name)
         return ev, sorted(set(notes))
 
     def delete(self, event_id: str) -> bool:

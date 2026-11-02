@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% set s = t.settings %}
+{% include "_event_banner.html" %}
 <header class="page-head split center">
   <div class="hero-copy">
     <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>

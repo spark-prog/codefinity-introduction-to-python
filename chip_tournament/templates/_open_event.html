@@ -1,5 +1,6 @@
 {# My account: an upcoming event the player isn't in yet. Needs e (from public_results). #}
 <article class="card your-event">
+  {% set thumb = event_photo(e.id) %}{% if thumb %}<img class="your-event-thumb{% if header_is_flyer(e.id) %} contain{% endif %}" src="{{ thumb }}" alt="" loading="lazy">{% endif %}
   <div class="your-event-when">
     <span class="your-event-day">{{ e.date|day if e.date else "Date TBA" }}</span>
     {% if e.time %}<span class="your-event-time">{{ e.time }}</span>{% endif %}

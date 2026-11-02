@@ -457,6 +457,8 @@
 </section>
 
 {% set money_locked = t.entries_locked or t.status == FINISHED %}
+{% include "_photos_card.html" %}
+
 <section class="card jump-target" id="settings">
   <h2>Tournament details & settings</h2>
   <div class="settings-group" style="margin-top: 8px">Background photo</div>

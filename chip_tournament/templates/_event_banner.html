@@ -1,0 +1,10 @@
+{# Top of an event's page and Register page: the header photo, and a View flyer button. Needs t. #}
+{% set banner = event_photo(g.event.id) if g.event else "" %}
+{% set flyer = event_photo(g.event.id, "flyer") if g.event else "" %}
+{% if banner %}<img class="event-banner{% if header_is_flyer(g.event.id) %} contain{% endif %}" src="{{ banner }}" alt="{{ event_photo_alt(t) }}" width="1200" height="630">{% endif %}
+{% if flyer %}
+<a class="flyer-link" href="{{ flyer }}" target="_blank" rel="noopener">
+  <img class="flyer-thumb" src="{{ flyer }}" alt="{{ event_photo_alt(t, 'flyer') }}" loading="lazy">
+  <span class="button secondary small">View flyer</span>
+</a>
+{% endif %}

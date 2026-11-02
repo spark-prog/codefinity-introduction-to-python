@@ -12,14 +12,15 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from .players import skill_for
+from .players import basis_label, event_skill
 
 EITHER = "either"
 GENDERS = {"": "Open to everyone", "women": "Women only", "men": "Men only", "mixed": "Jack & Jill (one man, one woman)"}
 
 
 def default_rules() -> dict:
-    return {"active": False, "min_matches": 0, "matches_game": EITHER, "played_session": False, "active_in": "",
+    return {"active": False, "min_matches": 0, "matches_game": EITHER, "played_session": False, "played_since": "",
+            "active_in": "",
             "skill_min": 0, "skill_max": 0, "gender": "", "list_label": "", "list_column": "",
             "list_members": [], "review": []}
 
@@ -42,7 +43,8 @@ def describe(r: dict, session_start: str = "") -> list[str]:
         fmt = {"8": " in 8-Ball", "9": " in 9-Ball"}.get(r["matches_game"], " (8-Ball or 9-Ball)")
         out.append(f"At least {r['min_matches']} lifetime matches{fmt}")
     if r["played_session"]:
-        out.append("Played at least one match this session" + (f" (since {_nice(session_start)})" if session_start else ""))
+        since = r["played_since"] or session_start
+        out.append(f"Played at least one match since {_nice(since)}" if since else "Played at least one match this session")
     if r["active_in"]:
         out.append(f"Active in {r['active_in']}-Ball (has a {r['active_in']}-Ball skill level)")
     if r["skill_min"] or r["skill_max"]:
@@ -87,19 +89,19 @@ def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8")
             left = r["min_matches"] - have
             no.append(f"Needs {r['min_matches']} lifetime{fmt} matches. You have {have}: {left} more to go.")
     if r["played_session"]:
+        since = r["played_since"] or session_start
         last = max(rec.get("last8") or "", rec.get("last9") or "")
-        if not last or last < session_start:
-            no.append(f"Hasn't played a match this session (since {_nice(session_start)}). "
-                      "Play one league match to qualify.")
+        if not last or last < since:
+            no.append(f"Hasn't played a match since {_nice(since)}. Play one league match to qualify.")
     if r["active_in"] and rec.get(f"sl{r['active_in']}") is None:
         no.append(f"Not active in {r['active_in']}-Ball (no {r['active_in']}-Ball skill level).")
     if r["skill_min"] or r["skill_max"]:
-        sl, how = skill_for(rec, game)
+        sl, how = event_skill(rec, game)
         if sl is None:
-            review.append(f"No established {game}-Ball skill level ({how})")
+            review.append(f"No established {basis_label(game)} skill level ({how})")
         elif (r["skill_min"] and sl < r["skill_min"]) or (r["skill_max"] and sl > r["skill_max"]):
             lo, hi = r["skill_min"] or 1, r["skill_max"] or 9
-            no.append(f"This event is for skill level {lo}–{hi}; your {game}-Ball skill level is {sl}.")
+            no.append(f"This event is for skill level {lo}–{hi}; your {basis_label(game)} skill level is {sl}.")
     if r["gender"] in ("women", "men"):
         want = "F" if r["gender"] == "women" else "M"
         g = (rec.get("gender") or "").strip().upper()[:1]
@@ -178,6 +180,13 @@ def from_bonus_event(doc: dict) -> tuple[dict, list[str]]:
     return r, notes
 
 
+def _day(value: str) -> str:
+    try:
+        return datetime.strptime((value or "").strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return ""
+
+
 def parse_form(f, current: dict) -> dict:
     """The director's Eligibility settings."""
     def num(key, lo, hi):
@@ -193,6 +202,7 @@ def parse_form(f, current: dict) -> dict:
         "min_matches": num("elig_min_matches", 0, 999),
         "matches_game": f.get("elig_matches_game") if f.get("elig_matches_game") in ("8", "9") else EITHER,
         "played_session": f.get("elig_played_session") == "1",
+        "played_since": _day(f.get("elig_played_since", "")),
         "active_in": f.get("elig_active_in") if f.get("elig_active_in") in ("8", "9") else "",
         "skill_min": num("elig_skill_min", 0, 9), "skill_max": num("elig_skill_max", 0, 9),
         "gender": f.get("elig_gender") if f.get("elig_gender") in GENDERS else "",

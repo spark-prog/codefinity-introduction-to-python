@@ -57,13 +57,15 @@
 </section>
 
 <section class="card">
-  <h2>Current session</h2>
-  <p class="muted">"Played a match this session" counts league matches on or after this date.</p>
+  <h2>Current Session Start Date</h2>
+  <p class="muted">The {{ st.config.session_name }} session started {{ st.config.session_start|day }}. New events' "played at least one match since"
+    rule starts on this date.</p>
   {% if not is_viewer %}
   <form method="post" action="{{ url_for('admin_players_session') }}" class="reset-row">
-    <input type="date" name="session_start" value="{{ st.config.session_start }}" required>
+    <select name="session_name" aria-label="Session">{% for n in ("Spring", "Summer", "Fall") %}<option {% if st.config.session_name == n %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+    <input type="date" name="session_start" value="{{ st.config.session_start }}" required aria-label="Session start date">
     <button class="button small">Save</button></form>
-  {% else %}<p>Started {{ st.config.session_start|day }}</p>{% endif %}
+  {% endif %}
 </section>
 
 {% if st.problems %}

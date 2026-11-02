@@ -46,8 +46,10 @@ def test_each_rule_says_why_and_how_to_fix():
     assert no == ["Needs 6 lifetime matches. You have 4: 2 more to go."]
     assert el.check_player(rec(mp8="4", mp9="7"), rules(min_matches=6), START) == ([], [])  # either format
     assert el.check_player(rec(mp8="4", mp9="7"), rules(min_matches=6, matches_game="8"), START)[0]
-    assert "Hasn't played a match this session (since Sep 8)" in el.check_player(
+    assert "Hasn't played a match since Sep 8" in el.check_player(
         rec(last8="08/30/2026"), rules(played_session=True), START)[0][0]
+    assert "since Oct 1" in el.check_player(rec(last8="09/20/2026"), rules(played_session=True, played_since="2026-10-01"),
+                                            START)[0][0]  # the TD's own date beats the session start
     assert el.check_player(rec(last8="08/30/2026", last9="09/10/2026"), rules(played_session=True), START) == ([], [])
     assert "Not active in 9-Ball" in el.check_player(rec(), rules(active_in="9"), START)[0][0]
     assert "for skill level 1–4; your 8-Ball skill level is 5" in el.check_player(rec(), rules(skill_max=4), START)[0][0]
@@ -142,4 +144,15 @@ def test_registration_checks_eligibility(app):
     assert 'name="elig_min_matches"' in admin.get("/t/masters-night/admin").get_data(as_text=True)
     admin.post("/admin/players/session", data={"session_start": "2026-10-15"})
     assert app.config["players"].config()["session_start"] == "2026-10-15"
-    assert "Hasn&#39;t played a match this session (since Oct 15)" in signup(app.test_client(), "Ann Lee", "32200001")
+    assert "Hasn&#39;t played a match since Oct 15" in signup(app.test_client(), "Ann Lee", "32200001")
+
+
+def test_highest_of_8_and_9():
+    from chips.players import event_skill
+    r = rec(sl8="5", sl9="8")
+    assert event_skill(r, "high") == (8, "highest of 8-Ball & 9-Ball")
+    assert event_skill(r, "high7") == (7, "highest of 8-Ball & 9-Ball, capped at 7 (SL 8)")
+    assert event_skill(rec(sl8="6", sl9="0"), "high7") == (6, "highest of 8-Ball & 9-Ball")
+    assert event_skill(rec(sl8="0", sl9="0"), "high") == (None, "needs review")
+    no, _ = el.check_player(r, rules(skill_max=6), START, "high7")
+    assert no == ["This event is for skill level 1–6; your highest skill level is 7."]

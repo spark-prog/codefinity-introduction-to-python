@@ -8,7 +8,7 @@ the established/converted rule; skill-group events compare both levels.
 
 from __future__ import annotations
 
-from .players import PlayerStore, skill_for
+from .players import PlayerStore, event_skill
 
 OK, DIFFERS, MISSING, NOT_FOUND, AMBIGUOUS, REVIEW = "ok", "differs", "missing", "not_found", "ambiguous", "review"
 LABELS = {OK: "Matches", DIFFERS: "Differs from the list", MISSING: "No skill level entered",
@@ -52,7 +52,7 @@ def check_player(p, store: PlayerStore, index: dict, game: str, two_levels: bool
             return {**row, "status": MISSING}
         same = p.skill_8 == want["skill8"] and p.skill_9 == want["skill9"]
         return {**row, "status": OK if same else DIFFERS}
-    level, how = skill_for(rec, game)
+    level, how = event_skill(rec, game)
     row["list"], row["how"] = {"skill": level}, how
     if level is None:
         return {**row, "status": REVIEW}

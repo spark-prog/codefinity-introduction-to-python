@@ -400,8 +400,7 @@
     {% include "_eligibility_settings.html" %}
     <label>Skill levels from the player list
       <select name="skill_game">
-        <option value="8" {% if s.skill_game != "9" %}selected{% endif %}>8-Ball skill levels</option>
-        <option value="9" {% if s.skill_game == "9" %}selected{% endif %}>9-Ball skill levels</option>
+        {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
       </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
     <label>Online registration opens (blank = open now) <input type="datetime-local" name="registration_opens" value="{{ s.registration_opens }}"></label>
     <label>Online registration closes (blank = stays open) <input type="datetime-local" name="registration_closes" value="{{ s.registration_closes }}"></label>

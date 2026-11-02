@@ -7,7 +7,7 @@
   <h1>Skill &amp; eligibility check</h1>
   {% set rules_text = elig_describe(elig_rules(s), session_start()) %}
   {% if rules_text %}<p class="muted">Who can play: {{ rules_text|join(" · ") }}.</p>{% endif %}
-  <p class="lede">What each player entered, compared with the league's player list{% if not two %} ({{ "9-Ball" if s.skill_game == "9" else "8-Ball" }} skill levels){% endif %}.</p>
+  <p class="lede">What each player entered, compared with the league's player list{% if not two %} ({{ skill_bases.get(s.skill_game, "8-Ball skill levels") }}){% endif %}.</p>
   <p><a href="{{ url_for('admin') }}">← Back to the director page</a></p>
 </header>
 

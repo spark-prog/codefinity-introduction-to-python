@@ -294,6 +294,59 @@ def register(app, h) -> dict:
             act("Score (scorekeeper)", lambda t: t.score(m.id, side, int(delta), by=name, device=h["scorer_device"]()))
         return redirect(url_for("b_entry", entry_id=entry_id))
 
+    @app.post("/t/<event>/entry/<entry_id>/unregister")
+    def b_entry_unregister(entry_id):
+        """The player (or team) takes itself out before the draw."""
+        if not session.get(f"entry_{entry_id}"):
+            flash("Enter your PIN first.", "error")
+            return redirect(url_for("b_entry", entry_id=entry_id))
+        if request.form.get("confirm") != "1":
+            flash("Tick the box to confirm you want to unregister.", "error")
+            return redirect(url_for("b_entry", entry_id=entry_id) + "#unregister")
+        name = act(f"Unregistered: {store.load().name_of(entry_id)}", lambda t: t.unregister(entry_id))
+        if not name:
+            return redirect(url_for("b_entry", entry_id=entry_id))
+        session.pop(f"entry_{entry_id}", None)
+        session.pop(f"team_{entry_id}", None)
+        flash(f"{name} is unregistered. If you change your mind, register again while there's room.", "ok")
+        return redirect(url_for("home"))
+
+    @app.route("/t/<event>/entry/<entry_id>/edit", methods=["GET", "POST"])
+    def b_entry_edit(entry_id):
+        """The player edits their own registration before the draw: skill levels, cell numbers, entry name."""
+        t, entry = entry_or_404(entry_id)
+        if not session.get(f"entry_{entry_id}"):
+            flash("Enter your PIN first.", "error")
+            return redirect(url_for("b_entry", entry_id=entry_id))
+        if t.status != SETUP:
+            flash("The bracket is drawn, so registrations can't change here. See the tournament desk.", "error")
+            return redirect(url_for("b_entry", entry_id=entry_id))
+        if request.method == "POST":
+            f = request.form
+            new = players_from_form(f, t.settings.team_size)
+            for i, p in enumerate(new):
+                old = entry.players[i] if i < len(entry.players) else None
+                if old is not None:
+                    if not p.phone:  # blank keeps the number on file (it isn't shown here)
+                        p.phone = old.phone
+                    if old.member:  # a player from the player list stays that player
+                        p.name, p.member = old.name, old.member
+            changes = []
+            for old, p in zip(entry.players, new):
+                before = (old.skill_8, old.skill_9) if asks_two_levels(t.settings) else (old.skill,)
+                after = (p.skill_8, p.skill_9) if asks_two_levels(t.settings) else (p.skill,)
+                if before != after:
+                    changes.append(f"{p.name} SL " + "/".join(str(x or "-") for x in before) + " → "
+                                   + "/".join(str(x or "-") for x in after))
+            if asks_two_levels(t.settings) and not all(p.skill_8 or p.skill_9 for p in new):
+                flash("Enter an 8-Ball or 9-Ball skill level (or both).", "error")
+            elif act("Edit registration (player)" + (f": {'; '.join(changes)}" if changes else ""),
+                     lambda t: t.update_entry(entry_id, f.get("name", ""), new)):
+                flash("Registration updated." + (" Skill level changes are noted for the director." if changes else ""),
+                      "ok")
+                return redirect(url_for("b_entry", entry_id=entry_id))
+        return render_template("b_entry_edit.html", t=t, entry=entry, two_levels=asks_two_levels(t.settings))
+
     @app.post("/t/<event>/entry/<entry_id>/keep-score")
     def b_entry_keep_score(entry_id):
         try:

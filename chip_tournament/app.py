@@ -508,6 +508,22 @@ def create_app(data_dir: str | None = None) -> Flask:
         check_pin(team)
         return redirect(url_for("team_page", team_id=team_id))
 
+    @app.post("/t/<event>/team/<team_id>/unregister")
+    def team_unregister(team_id):
+        """The team takes itself out before the start (signed in with the PIN, or a logged-in teammate)."""
+        if not session.get(f"team_{team_id}"):
+            flash("Enter your team PIN first.", "error")
+            return redirect(url_for("team_page", team_id=team_id))
+        if request.form.get("confirm") != "1":
+            flash("Tick the box to confirm you want to unregister.", "error")
+            return redirect(url_for("team_page", team_id=team_id) + "#unregister")
+        name = act(f"Unregistered: {store.load().name_of(team_id)}", lambda t: t.unregister(team_id))
+        if not name:
+            return redirect(url_for("team_page", team_id=team_id))
+        session.pop(f"team_{team_id}", None)
+        flash(f"{name} is unregistered. If you change your mind, register again while there's room.", "ok")
+        return redirect(url_for("home"))
+
     @app.post("/t/<event>/team/<team_id>/texts")
     def team_texts(team_id):
         # Only someone signed in with the team PIN can opt in, for their own number (not the director).

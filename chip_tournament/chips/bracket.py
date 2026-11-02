@@ -633,6 +633,17 @@ class BracketTournament:
         self._say(f"Removed {entry.name}.")
         self._fill_from_waitlist()
 
+    def unregister(self, entry_id: str) -> str:
+        """The player (or team) takes itself out before the draw. Its spot goes to the waiting list."""
+        entry = self.entry(entry_id)
+        if self.status != SETUP:
+            raise TournamentError("The bracket is drawn, so you can't unregister here. See the tournament desk.")
+        self._text(entry, f"{entry.name} is unregistered from {self.settings.name}. "
+                          "Changed your mind? Register again while there's room.")
+        self.remove_entry(entry_id)
+        self._say(f"{entry.name} unregistered.")
+        return entry.name
+
     def check_in_entry(self, entry_id: str) -> None:
         entry = self.entry(entry_id)
         if entry.status != REGISTERED:

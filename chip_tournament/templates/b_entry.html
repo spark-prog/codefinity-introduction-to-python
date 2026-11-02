@@ -114,6 +114,15 @@
 </section>
 {% endif %}
 
+{% if is_entry and t.status == SETUP %}
+<section class="card">
+  <h3>Your registration</h3>
+  <ul>{% for p in entry.players %}<li>{{ p.name }}{% if p.skill_8 or p.skill_9 %} · 8-Ball {{ p.skill_8 or "—" }} · 9-Ball {{ p.skill_9 or "—" }}{% elif p.skill %} · SL {{ p.skill }}{% endif %}</li>{% endfor %}</ul>
+  <a class="button secondary" href="{{ url_for('b_entry_edit', entry_id=entry.id) }}">Edit registration or skill levels</a>
+  {% set action = url_for('b_entry_unregister', entry_id=entry.id) %}{% set who = entry.name %}{% include "_unregister.html" %}
+</section>
+{% endif %}
+
 {% if history %}
 <section class="card">
   <h3>Results</h3>

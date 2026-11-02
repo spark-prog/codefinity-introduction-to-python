@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Edit registration — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+<header class="page-head">
+  <p class="eyebrow">{{ s.name }}</p>
+  <h1>Edit registration</h1>
+  <p class="lede">Change skill levels, cell numbers{% if s.team_size > 1 %} or the entry name{% endif %} until the bracket is drawn.</p>
+  <p><a href="{{ url_for('b_entry', entry_id=entry.id) }}">← Back to {{ entry.name }}</a></p>
+</header>
+<form method="post" class="card form">
+  {% if s.team_size > 1 %}<label>Entry name <input name="name" value="{{ entry.name }}"></label>{% endif %}
+  {% for p in entry.players %}{% set i = loop.index0 %}
+  <fieldset class="partner">
+    <legend>{{ "Player" if s.team_size == 1 else "Player " ~ (i + 1) }}</legend>
+    <label>Name <input name="player_name_{{ i }}" value="{{ p.name }}" required {% if p.member %}readonly{% endif %}></label>
+    {% if p.member %}<p class="muted small-note">Member {{ p.member }}</p>{% endif %}
+    {% if two_levels %}
+    <label>8-Ball skill level <input name="player_skill8_{{ i }}" type="number" min="2" max="7" inputmode="numeric" value="{{ p.skill_8 or '' }}"></label>
+    <label>9-Ball skill level <input name="player_skill9_{{ i }}" type="number" min="1" max="9" inputmode="numeric" value="{{ p.skill_9 or '' }}"></label>
+    {% else %}
+    <label>Skill level <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ p.skill or '' }}"></label>
+    {% endif %}
+    <label>Cell number {% if p.phone %}<span class="muted">(on file: ending in {{ p.phone|last4 }})</span>{% endif %}
+      <input name="player_phone_{{ i }}" type="tel" placeholder="{{ 'Leave blank to keep it' if p.phone else '904-555-0123' }}"></label>
+  </fieldset>
+  {% endfor %}
+  <p class="muted small-note">Skill level changes are noted for the director{% if s.skill_groups %}, and can move you to a different skill group{% endif %}. A new cell number needs text alerts turned on again from your page.</p>
+  <button class="button big block">Save changes</button>
+</form>
+{% endblock %}

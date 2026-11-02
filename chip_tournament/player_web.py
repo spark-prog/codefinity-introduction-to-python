@@ -84,7 +84,7 @@ def register(app, h) -> None:
                 return redirect(url_for("player_code"))
             except (LoginError, players.PlayerError) as exc:
                 flash(str(exc), "error")
-        return render_template("login.html", t=None, next=request.args.get("next", request.form.get("next", "")))
+        return render_template("player_login.html", t=None, next=request.args.get("next", request.form.get("next", "")))
 
     def find(who: str) -> dict:
         if not store.records():

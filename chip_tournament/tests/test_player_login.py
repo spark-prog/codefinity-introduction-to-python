@@ -108,3 +108,11 @@ def test_a_tampered_cookie_is_ignored(app):
     c = app.test_client()
     c.set_cookie("ct_player", "eyJtIjoiMzIyMDAwMDEiLCJ2IjoxfQ.forged.sig")
     assert c.get("/me").status_code == 302
+
+
+def test_both_login_pages_show_their_own_form(app):
+    c = app.test_client()
+    director = c.get("/admin/login").get_data(as_text=True)
+    assert 'name="password"' in director and 'name="who"' not in director
+    player = c.get("/login").get_data(as_text=True)
+    assert 'name="who"' in player and 'name="password"' not in player

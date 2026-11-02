@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Players — Control Table{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Director</p>
+  <h1>Players</h1>
+  <p class="lede">Every APA player from the office's player sheet. Control Table reads it every 15 minutes and keeps it
+    apart from the tournaments.</p>
+  <p><a href="{{ url_for('director') }}">← All tournaments</a></p>
+</header>
+
+{% if st.held %}{% set e = st.held.entry %}
+<section class="card held-sync">
+  <h2>⚠ A sync is waiting for you</h2>
+  <p>The sheet would <b>remove {{ e.removed }} players</b> at once (and add {{ e.added }}, update {{ e.updated }}).
+    That's more than usual, so it's held and the previous list is still in use. If players really left, approve it;
+    if the sheet was edited by mistake, fix it and discard this.</p>
+  {% if e.names.removed %}<p class="muted">Removed: {{ e.names.removed|join(", ") }}{% if e.removed > e.names.removed|length %} and {{ e.removed - e.names.removed|length }} more{% endif %}</p>{% endif %}
+  {% if not is_viewer %}
+  <div class="button-row">
+    <form method="post" action="{{ url_for('admin_players_held') }}" class="inline" onsubmit="return confirm('Remove {{ e.removed|int }} players from the list?')"><input type="hidden" name="action" value="approve">
+      <button class="button danger small">Approve: remove them</button></form>
+    <form method="post" action="{{ url_for('admin_players_held') }}" class="inline"><input type="hidden" name="action" value="discard">
+      <button class="button small secondary">Discard</button></form>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="section-head"><h2>Player sheet</h2>
+    {% if st.config.sheet and not is_viewer %}
+    <form method="post" action="{{ url_for('admin_players_sync') }}" class="inline"><button class="button small">Sync now</button></form>
+    {% endif %}</div>
+  {% if st.error %}<p class="backup-status bad">⚠ The last sync failed ({{ st.error.at|day }} {{ st.error.at|clock }}): {{ st.error.error }} The previous list is still in use.</p>{% endif %}
+  {% if st.count %}
+    <p class="backup-status {{ 'warn' if st.stale else 'good' }}">{{ st.count }} players · last synced {{ st.synced_at|day }} at {{ st.synced_at|clock }} from the {{ st.source }}{% if st.sheet_modified %} · sheet last edited {{ st.sheet_modified|day }}{% endif %}{% if st.stale %}. This is over 8 days old: update the sheet{% endif %}.</p>
+  {% else %}
+    <p class="muted">No players yet. Link the sheet below.</p>
+  {% endif %}
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_players_sheet') }}" class="form settings">
+    <label class="wide">Sheet link <input name="sheet" value="{{ 'https://docs.google.com/spreadsheets/d/' ~ st.config.sheet if st.config.sheet }}" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+    <p class="muted small-note wide">Reads the <b>{{ st.config.tab }}</b> tab. Keep the sheet in the shared drive{% if sa_email %} (or share it with {{ sa_email }} as Viewer){% endif %}.
+      Home phone, birth date and session defense are never copied in.</p>
+    <button class="button small">Save link and sync</button>
+  </form>
+  <details class="inline-details">
+    <summary>Or upload a CSV instead</summary>
+    <form method="post" action="{{ url_for('admin_players_upload') }}" enctype="multipart/form-data" class="reset-row">
+      <input type="file" name="file" accept=".csv,text/csv" required>
+      <button class="button small secondary">Upload</button>
+    </form>
+    <p class="muted small-note">In the sheet: File → Download → Comma-separated values. Same columns as the sheet.</p>
+  </details>
+  {% endif %}
+</section>
+
+{% if st.problems %}
+<section class="card">
+  <h2>Rows that need a look ({{ st.problems|length }})</h2>
+  <ul class="bonus-warnings">{% for p in st.problems[:100] %}<li>{{ p }}</li>{% endfor %}</ul>
+  {% if st.problems|length > 100 %}<p class="muted">…and {{ st.problems|length - 100 }} more.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Find a player</h2>
+  <form method="get" class="reset-row"><input name="q" value="{{ q }}" placeholder="Name, member number or email" autocomplete="off">
+    <button class="button small">Search</button></form>
+  {% if q %}
+    {% if results %}
+    <div class="table-wrap"><table class="grid">
+      <thead><tr><th>Player</th><th>Member #</th><th>8-Ball</th><th>9-Ball</th><th>Last played</th><th>Status</th><th>Contact</th></tr></thead>
+      {% for r in results %}
+      <tr>
+        <td><b>{{ r.first }} {{ r.last }}</b>{% if r.nickname %} <span class="muted">“{{ r.nickname }}”</span>{% endif %}{% if r.rep %}<div class="muted small-note">Division rep: {{ r.rep }}</div>{% endif %}</td>
+        <td class="nowrap">{{ r.member }}</td>
+        <td class="nowrap">{{ "SL %s"|format(r.sl8) if r.sl8 is not none else "—" }}{% if r.mp8 is not none %} · {{ r.mp8 }} matches{% endif %}</td>
+        <td class="nowrap">{{ "SL %s"|format(r.sl9) if r.sl9 is not none else "—" }}{% if r.mp9 is not none %} · {{ r.mp9 }} matches{% endif %}</td>
+        <td class="nowrap">{{ ([r.last8, r.last9]|select|max) or "—" }}</td>
+        <td>{{ r.status or "—" }}</td>
+        <td class="small-note">{{ r.email or "no email" }}{% if r.cell %}<br>{{ r.cell[:3] }}-{{ r.cell[3:6] }}-{{ r.cell[6:] }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<p class="muted">No player matches “{{ q }}”.</p>{% endif %}
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Sync log</h2>
+  {% if log %}
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>When</th><th>Result</th><th>Changes</th></tr></thead>
+    {% for e in log %}
+    <tr>
+      <td class="nowrap">{{ e.at|day }} {{ e.at|clock }}<div class="muted small-note">{{ e.by }} · {{ e.source }}</div></td>
+      <td>{{ {"synced": "Synced", "held": "Held for approval", "no changes": "No changes"}[e.status] }}{% if e.checked_at %}<div class="muted small-note">checked again {{ e.checked_at|clock }}</div>{% endif %}</td>
+      <td class="small-note">{{ e.players }} players · +{{ e.added }} / ~{{ e.updated }} / −{{ e.removed }}{% if e.problems %} · {{ e.problems }} row(s) to check{% endif %}
+        {% if e.names.added or e.names.updated or e.names.removed %}
+        <details><summary>Who</summary>
+          {% if e.names.added %}<p><b>Added:</b> {{ e.names.added|join(", ") }}</p>{% endif %}
+          {% if e.names.updated %}<p><b>Updated:</b> {{ e.names.updated|join("; ") }}</p>{% endif %}
+          {% if e.names.removed %}<p><b>Removed:</b> {{ e.names.removed|join(", ") }}</p>{% endif %}
+        </details>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted">Nothing synced yet.</p>{% endif %}
+</section>
+{% endblock %}

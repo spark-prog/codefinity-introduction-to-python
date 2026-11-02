@@ -879,3 +879,7 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 /* Creating an event from the Bonus Event form */
 .bonus-text { white-space: pre-line; }
 .bonus-warnings li { color: #ffb020; font-weight: 600; margin: 6px 0; }
+
+/* Players page */
+.held-sync { border-color: #ffb020; }
+.held-sync h2 { color: #ffb020; }

@@ -1,0 +1,30 @@
+{# My account: an upcoming event the player isn't in yet. Needs e (from public_results). #}
+<article class="card your-event">
+  <div class="your-event-when">
+    <span class="your-event-day">{{ e.date|day if e.date else "Date TBA" }}</span>
+    {% if e.time %}<span class="your-event-time">{{ e.time }}</span>{% endif %}
+  </div>
+  <div class="your-event-body">
+    <h3><a href="{{ e.home }}">{{ e.name }}</a></h3>
+    {% if e.venue %}<p class="muted">{{ e.venue }}</p>{% endif %}
+    {% if e.status in ("eligible", "check") %}
+      <p><span class="check-badge ok">You can enter</span>{% if e.status == "check" %} <span class="muted small-note">(the league office will confirm: {{ e.reasons|join("; ") }})</span>{% endif %}</p>
+      {% if not e.open %}<p class="muted small-note">{{ e.shut_note or "Registration isn't open." }}</p>
+      {% elif e.singles %}
+      <form method="post" action="{{ e.quick }}" class="quick-register">
+        {% if player.cell %}<label class="checkbox small-note"><input type="checkbox" name="sms_consent" value="1">
+          <span>Text me alerts for this tournament (table calls, results) at my cell on file. Msg &amp; data rates may apply. Reply STOP to opt out.</span></label>{% endif %}
+        <label class="checkbox small-note"><input type="checkbox" name="agree_terms" value="1" required>
+          <span>I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms</a> and <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</span></label>
+        <button class="button small">Register</button>
+      </form>
+      {% else %}
+      <a class="button small" href="{{ e.register }}">Register with a partner</a>
+      {% endif %}
+    {% else %}
+      <p><span class="check-badge not_found">Not eligible yet</span></p>
+      <ul class="small-note">{% for x in e.reasons %}<li>{{ x }}</li>{% endfor %}</ul>
+      <a class="button small secondary" href="{{ e.register }}">Ask for a review</a>
+    {% endif %}
+  </div>
+</article>

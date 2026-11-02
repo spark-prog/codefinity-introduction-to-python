@@ -116,6 +116,8 @@ class Player:
     skill_9: int = 0  # 9-Ball skill level, when asked separately
     member: str = ""  # APA member number (8 digits, 322...) when known: one player, one spot per event
     pending: str = ""  # why the member number needs the director's check ("Not in the player list"); "" = fine
+    # A partner registered by someone else confirms by email: "ask" (to email), "waiting", "confirmed", "declined"
+    confirm: str = ""
 
 
 @dataclass
@@ -952,7 +954,7 @@ class Tournament:
         for p in players:  # a number already on this team keeps the director's verdict on it
             same = next((o for o in team.players if p.member and o.member == p.member), None)
             if same is not None:
-                p.pending = same.pending
+                p.pending, p.confirm = same.pending, same.confirm
         self._check_members(players, skip=team_id)
         # The roster as it was, with corrected names applied, so a spelling fix isn't a swap.
         before = [Player(players[i].name if i in same_people else o.name, o.phone, o.skill) for i, o in enumerate(team.players)]

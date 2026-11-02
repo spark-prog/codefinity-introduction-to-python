@@ -21,6 +21,21 @@
   {% endif %}
 </section>
 
+{% set can_enter = open_events|rejectattr("status", "equalto", "no")|list %}
+{% set cannot = open_events|selectattr("status", "equalto", "no")|list %}
+<section class="your-events" id="upcoming">
+  <h2>Upcoming events</h2>
+  {% for e in can_enter %}{% include "_open_event.html" %}
+  {% else %}<div class="card"><p class="muted" style="margin: 0">Nothing else open to you right now.
+    <a href="{{ url_for('index') }}">See all tournaments</a>.</p></div>{% endfor %}
+  {% if cannot %}
+  <details class="inline-details past-events">
+    <summary>Not eligible yet ({{ cannot|length }})</summary>
+    {% for e in cannot %}{% include "_open_event.html" %}{% endfor %}
+  </details>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Skill levels</h2>
   <ul class="facts">

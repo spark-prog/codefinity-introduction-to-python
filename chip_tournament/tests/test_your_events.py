@@ -49,7 +49,8 @@ def test_your_events(app):
     assert "8-Ball <b>4</b> · 9-Ball <b>6</b> · <b>SL 6–9</b> group" in upcoming
     assert "/t/masquerade/rules" in upcoming and "/t/movin-on-up/rules" in upcoming
     assert "My team page" in upcoming and "with Bo Ray" in upcoming
-    assert "Halloween Doubles" in past and "Not Mine" not in page
+    assert "Halloween Doubles" in past and "Not Mine" not in events  # not in Your events...
+    assert "Not Mine" in page.split('id="upcoming"')[1]  # ...but offered under Upcoming events
 
 
 def test_no_events_yet(app):

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from chips import backup, eligibility, players
+from chips import backup, eligibility, players, schedule
 from chips import pending as pending_mod
 from chips import series as series_mod
 from chips.engine import Player, TournamentError
@@ -173,7 +173,9 @@ def register(app, h) -> None:
         return render_template("me.html", t=None, me=g.player, skill_for=players.skill_for,
                                has_password=accounts.has_password(g.player["member"]), fresh=fresh_code_login(),
                                upcoming=[e for e in events if e["status"] != "finished"],
-                               past=[e for e in events if e["status"] == "finished"])
+                               past=[e for e in events if e["status"] == "finished"],
+                               open_events=[r for r in app.config["public_results"](g.player["member"])
+                                            if r["status"] != "registered"])
 
     @app.post("/me/verify")
     def me_verify():
@@ -304,6 +306,8 @@ def register_registration(app) -> None:
             p.member = member
             if rec is not None and (logged_in or name_matches(p.name, rec)):
                 p.name, p.pending = full_name(rec), ""
+                if logged_in and member != g.player["member"]:
+                    p.confirm = "ask"  # a partner picked by someone else confirms by email
             elif rec is not None:
                 p.pending = f"The player list has {member} as {full_name(rec)}"
             elif store.records():
@@ -390,7 +394,10 @@ def register_registration(app) -> None:
             rules = eligibility.rules_of(s)
             row = {"name": s.name, "date": s.date, "time": s.start_time, "home": url_for("home", event=ev.id),
                    "register": url_for("register", event=ev.id), "open": t.status == "setup" and not s.registration_shut,
-                   "reasons": []}
+                   "reasons": [], "id": ev.id, "venue": s.venue,
+                   "singles": ev.kind == "bracket" and getattr(s, "team_size", 2) == 1,
+                   "quick": url_for("quick_register", event=ev.id), "shut_note": schedule.shut_message(s)
+                   if t.status == "setup" and s.registration_shut else ""}
             if t.registered_as(member) is not None:
                 row["status"] = "registered"
             elif not eligibility.any_rules(rules) or eligibility.override_for(t, member):
@@ -403,6 +410,114 @@ def register_registration(app) -> None:
                     row["reasons"] = no or review
             out.append(row)
         return sorted(out, key=lambda r: r["date"] or "9999")
+
+    app.config["public_results"] = public_results
+
+    # ------------------------------------------------ partner confirmation
+
+    confirm_signer = URLSafeTimedSerializer(app.secret_key, salt="partner-confirm")
+
+    def ask_partners(ev, gid: str) -> None:
+        """Email each newly added partner a link to confirm (or decline) being on the team."""
+        probe = (ev.store.load().teams if ev.kind == "chip" else ev.store.load().entries).get(gid)
+        if probe is None or not any(p.confirm == "ask" for p in probe.players):
+            return  # nobody to ask: don't add an undo step
+        with ev.store.lock:  # a bookkeeping save (no undo step: Undo should still take back the registration)
+            t = ev.store.load()
+            grp = (t.teams if ev.kind == "chip" else t.entries).get(gid)
+            if grp is not None:
+                asker = next((p for p in grp.players if p.confirm != "ask"), None)
+                for p in grp.players:
+                    if p.confirm != "ask":
+                        continue
+                    token = confirm_signer.dumps({"e": ev.id, "g": gid, "m": p.member})
+                    link = request.url_root.rstrip("/") + url_for("partner_confirm", event=ev.id, token=token)
+                    who = asker.name if asker else "Someone"
+                    when = ""
+                    if t.settings.date:
+                        d = datetime.strptime(t.settings.date, "%Y-%m-%d")
+                        when = f" on {d:%a, %b} {d.day}"
+                    sent = email_player(p.member, f"{t.settings.name}: are you on {grp.name}?",
+                                        f"{who} registered you as their partner on {grp.name} for {t.settings.name}{when}."
+                                        f"\n\nConfirm (or decline) here: {link}")
+                    p.confirm = "waiting" if sent else ""
+                ev.store.save(t)
+
+    app.config["ask_partners"] = ask_partners
+
+    @app.route("/t/<event>/partner/<token>", methods=["GET", "POST"])
+    def partner_confirm(token):
+        try:
+            data = confirm_signer.loads(token, max_age=60 * 86400)
+        except BadSignature:
+            data = None
+        ev = g.event
+        if not data or data.get("e") != ev.id:
+            flash("That link isn't valid any more. Contact the league office if you need help.", "error")
+            return redirect(url_for("home"))
+        t = ev.store.load()
+        grp = (t.teams if ev.kind == "chip" else t.entries).get(data["g"])
+        me = next((p for p in grp.players if p.member == data["m"]), None) if grp else None
+        if me is None:
+            flash("That registration has changed: you're not on it any more.", "error")
+            return redirect(url_for("home"))
+        if request.method == "POST":
+            yes = request.form.get("action") == "confirm"
+            with ev.store.change(f"Partner {'confirmed' if yes else 'declined'}: {me.name}") as t:
+                grp = (t.teams if ev.kind == "chip" else t.entries)[data["g"]]
+                p = next(x for x in grp.players if x.member == data["m"])
+                p.confirm = "confirmed" if yes else "declined"
+                if not yes:
+                    p.pending = f"{p.name} declined being on {grp.name}"
+                t._say(f"{p.name} {'confirmed' if yes else 'declined'} being on {grp.name}.")
+                others = [x for x in grp.players if x.member and x.member != p.member]
+            if not yes:
+                for o in others:
+                    email_player(o.member, f"{t.settings.name}: {p.name} declined",
+                                 f"{p.name} declined being your partner on {grp.name} for {t.settings.name}. "
+                                 "Update your roster with a new partner, or contact the league office.")
+            flash(f"Thanks! You're confirmed on {grp.name}." if yes else
+                  f"Got it. You're not on {grp.name}; the league office and your partner have been told.", "ok")
+            return redirect(url_for("home"))
+        return render_template("partner_confirm.html", t=t, grp=grp, me=me, token=token)
+
+    @app.post("/t/<event>/quick-register")
+    def quick_register():
+        """One-tap registration for a logged-in player in a singles event, from their player-list details."""
+        me, ev = g.get("player"), g.event
+        if not me:
+            return redirect(url_for("player_login", next=url_for("my_account")))
+        if request.form.get("agree_terms") != "1":
+            flash("Tick the box to agree to the Terms & Conditions and Privacy Policy.", "error")
+            return redirect(url_for("my_account") + "#upcoming")
+        t0 = ev.store.load()
+        if ev.kind != "bracket" or t0.settings.team_size != 1:
+            return redirect(url_for("register"))  # doubles: the register page, filled in, with the partner search
+        fill = my_prefill(t0)
+        form = {"player_member_0": me["member"]}
+        two = bool(t0.settings.skill_groups or t0.settings.race_method == "rack_chart")
+        player = Player(name=fill["name"], phone=fill["phone"], skill=0 if two else int(fill["skill"] or 0),
+                        skill_8=int(fill["skill8"] or 0) if two else 0, skill_9=int(fill["skill9"] or 0) if two else 0)
+        if request.form.get("sms_consent") == "1" and player.phone:
+            player.sms_consent, player.sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
+        try:
+            with ev.store.change(f"Registration (one tap): {fill['name']}") as t:
+                if t.settings.registration_shut:
+                    raise TournamentError(schedule.shut_message(t.settings))
+                if two and not (player.skill_8 or player.skill_9) or not two and not player.skill:
+                    raise TournamentError("Your skill level isn't in the player list yet: use the register page.")
+                plist = attach_members(form, [player], t)
+                entry = t.register_entry("", plist)
+                messages, t.outbox = list(t.outbox), []
+                for m in messages:
+                    ev.sms.send(m.to, m.body, test=t.settings.test_event)
+        except TournamentError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("my_account") + "#upcoming")
+        session[f"entry_{entry.id}"] = True
+        group = f" You're in the {entry.division} group." if entry.division else ""
+        flash(f"You're registered for {t.settings.name}!{group} Your PIN is {entry.pin}.", "ok")
+        return redirect(url_for("b_entry", entry_id=entry.id))
 
     @app.route("/eligibility", methods=["GET", "POST"])
     def eligibility_check():

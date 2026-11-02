@@ -253,6 +253,13 @@ class BracketSettings:
     member_exceptions: list[dict] = field(default_factory=list)
     require_member: bool = field(default_factory=lambda: engine.REQUIRE_MEMBER_DEFAULT)  # see engine.Settings
     eligibility: dict = field(default_factory=dict)  # who may play (see chips/eligibility.py); {} = anyone
+    # Eligibility decisions (chips/eligibility.py): overrides [{member, note, at}], players' review requests,
+    # when eligibility was locked, what the lock found [{member: {"no": [...], "review": [...]}}], and an audit log.
+    elig_overrides: list[dict] = field(default_factory=list)
+    review_requests: list[dict] = field(default_factory=list)
+    elig_locked_at: str = ""
+    elig_snapshot: dict = field(default_factory=dict)
+    elig_audit: list[dict] = field(default_factory=list)
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0

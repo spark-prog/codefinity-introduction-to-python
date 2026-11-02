@@ -2,9 +2,24 @@
 {% set me_ok = my_eligibility(t) %}
 {% if me_ok %}
 {% if me_ok.ok %}
-<p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
+<p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.override %} (approved by the league office){% elif me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
 {% else %}
 <div class="eligible-no"><b>You can't register for this event yet:</b>
-  <ul>{% for x in me_ok.no %}<li>{{ x }}</li>{% endfor %}</ul></div>
+  <ul>{% for x in me_ok.no %}<li>{{ x }}</li>{% endfor %}</ul>
+  {% set asked = me_ok.asked %}
+  {% if asked and asked.status == "open" %}
+    <p class="muted small-note">You asked the league office to review this on {{ asked.at|day }}. You'll get an email when they decide.</p>
+  {% else %}
+    {% if asked and asked.status == "declined" %}<p class="muted small-note">The league office reviewed this on {{ asked.decided_at|day }}: {{ asked.note }}</p>{% endif %}
+    <details class="inline-details">
+      <summary>Think this is wrong? Ask the league office to review it</summary>
+      <form method="post" action="{{ url_for('review_request') }}" class="form">
+        <label>Anything they should know (optional) <textarea name="message" rows="2" maxlength="500"
+          placeholder="e.g. I played on a new team Sep 15; it may not be in the report yet."></textarea></label>
+        <button class="button small">Ask for a review</button>
+      </form>
+    </details>
+  {% endif %}
+</div>
 {% endif %}
 {% endif %}

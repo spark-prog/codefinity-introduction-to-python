@@ -30,6 +30,7 @@
 
 {% include "_pending_card.html" %}
 {% include "_exceptions_card.html" %}
+{% include "_eligibility_admin_card.html" %}
 <section class="card controls" style="margin-top: 0">
   {% if t.status == SETUP %}
     <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.

@@ -250,6 +250,9 @@ def register_registration(app) -> None:
             if p.pending:  # the number itself is waiting for the director
                 recs.append(None)
                 continue
+            if p.member and eligibility.override_for(t, p.member):  # the director already said yes
+                recs.append(rec)
+                continue
             no, review = eligibility.check_player(rec, rules, start, game)
             if no:
                 raise TournamentError(f"{p.name} can't register for {t.settings.name}: " + " ".join(no))
@@ -266,11 +269,126 @@ def register_registration(app) -> None:
         rules = eligibility.rules_of(t.settings)
         if not me or not eligibility.any_rules(rules):
             return None
+        if eligibility.override_for(t, me["member"]):
+            return {"ok": True, "no": [], "review": [], "override": True}
         no, review = eligibility.check_player(me, rules, store.config()["session_start"],
                                               getattr(t.settings, "skill_game", "8"))
-        return {"ok": not no, "no": no, "review": review}
+        asked = next((r for r in reversed(t.settings.review_requests) if r["member"] == me["member"]), None)
+        return {"ok": not no, "no": no, "review": review, "asked": asked}
 
     app.jinja_env.globals["my_eligibility"] = my_eligibility
+
+    # ------------------------------------------------ Phase 7: reviews, overrides, the lock
+
+    def admin_only():
+        if not session.get("admin"):
+            flash("Only the director can do that.", "error")
+            return redirect(url_for("admin"))
+        return None
+
+    def email_player(member: str, subject: str, text: str) -> bool:
+        rec, mailer = store.get(member), backup.Mailer.from_env()
+        if not rec or not rec.get("email") or mailer is None:
+            return False
+        legal = app.jinja_env.globals["legal"]
+        try:
+            mailer.send_to(rec["email"], subject, f"Hi {rec['first']},\n\n{text}\n\n{legal['brand']}",
+                           sender=legal["brand"], reply_to=legal["email"])
+            return True
+        except backup.BackupError:
+            return False
+
+    @app.post("/t/<event>/review-request")
+    def review_request():
+        me = g.get("player")
+        if not me:
+            flash("Log in first, so the league office knows who's asking.", "error")
+            return redirect(url_for("player_login", next=url_for("register")))
+        try:
+            with g.event.store.change(f"Review requested: {full_name(me)}") as t:
+                fit = my_eligibility(t)
+                if not fit or fit["ok"]:
+                    raise TournamentError("You're eligible already: go ahead and register.")
+                eligibility.request_review(t, me["member"], full_name(me), fit["no"], request.form.get("message", ""))
+            flash("Sent to the league office. You'll get an email when they decide.", "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("register"))
+
+    @app.post("/t/<event>/admin/review/<rid>")
+    def admin_review(rid):
+        if (stop := admin_only()) is not None:
+            return stop
+        approve, note = request.form.get("action") == "approve", request.form.get("note", "")
+        try:
+            with g.event.store.change(f"Review {'approved' if approve else 'declined'}") as t:
+                req = eligibility.decide_review(t, rid, approve, note)
+                name = t.settings.name
+            link = request.url_root.rstrip("/") + url_for("register")
+            body = (f"Good news: the league office approved you for {name}. Register here: {link}"
+                    + (f"\n\nNote: {req['note']}" if req["note"] else "") if approve else
+                    f"The league office reviewed your request for {name} and couldn't approve it.\n\n{req['note']}")
+            sent = email_player(req["member"], f"{name}: your eligibility review", body)
+            flash(f"{'Approved' if approve else 'Declined'} {req['name']}."
+                  + (" They've been emailed." if sent else " (No email on file, so let them know yourself.)"), "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin") + "#eligibility")
+
+    @app.post("/t/<event>/admin/overrides")
+    def admin_overrides():
+        if (stop := admin_only()) is not None:
+            return stop
+        member = re.sub(r"\D", "", request.form.get("member", ""))
+        try:
+            if not players.MEMBER_RE.fullmatch(member):
+                raise TournamentError("Member numbers are 8 digits and start with 322.")
+            rec = store.get(member)
+            name = full_name(rec) if rec else member
+            with g.event.store.change(f"Eligibility override: {name}") as t:
+                if request.form.get("action") == "remove":
+                    eligibility.remove_override(t, member)
+                    msg = f"Removed the override for {name}."
+                else:
+                    eligibility.add_override(t, member, name, request.form.get("note", ""))
+                    msg = f"{name} is eligible for this event (override)."
+            flash(msg, "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        back = request.form.get("back", "")
+        return redirect(back if back in (url_for("admin_skill_check"),) else url_for("admin") + "#eligibility")
+
+    @app.post("/t/<event>/admin/eligibility-lock")
+    def admin_eligibility_lock():
+        if (stop := admin_only()) is not None:
+            return stop
+        with g.event.store.change("Eligibility " + ("unlocked" if request.form.get("action") == "unlock" else "locked")) as t:
+            if request.form.get("action") == "unlock":
+                eligibility.unlock(t)
+                msg = "Eligibility unlocked: the check uses the latest player list again."
+            else:
+                flagged = eligibility.lock(t, store, store.config()["session_start"])
+                msg = f"Eligibility checked and locked. {flagged} player(s) sent to Pending verification."
+        flash(msg, "ok")
+        return redirect(url_for("admin") + "#eligibility")
+
+    def lock_loop(log=None, sleep: float = 60) -> None:
+        """Background: lock an event's eligibility once its registration closes or it starts."""
+        import time as _time
+
+        while True:
+            for ev in app.config["hub"].events():
+                try:
+                    if eligibility.lock_due(ev.load()):
+                        with ev.store.change("Eligibility locked (registration closed)") as t:
+                            if eligibility.lock_due(t):
+                                eligibility.lock(t, store, store.config()["session_start"])
+                except Exception as exc:  # never stop the loop
+                    if log:
+                        log("eligibility lock failed for %s: %s", ev.id, exc)
+            _time.sleep(sleep)
+
+    app.config["eligibility_lock_loop"] = lock_loop
 
     def my_prefill(t) -> dict:
         """Partner 1 / the player: the logged-in player's own details, phone included (it's theirs)."""

@@ -211,3 +211,125 @@ def parse_form(f, current: dict) -> dict:
         "list_members": members,
         "review": [x.strip() for x in (f.get("elig_review") or "").splitlines() if x.strip()],
     }
+
+
+# ------------------------------------------------------------ decisions (Phase 7)
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def audit(t, what: str, member: str = "", name: str = "", note: str = "") -> None:
+    """Every eligibility decision, with when and why (also in the event log)."""
+    t.settings.elig_audit.append({"at": _now(), "what": what, "member": member, "name": name, "note": note})
+    t._say(f"Eligibility: {what}{' ' + name if name else ''}{f' ({member})' if member else ''}{': ' + note if note else ''}.")
+
+
+def override_for(t, member: str) -> dict | None:
+    return next((x for x in t.settings.elig_overrides if x["member"] == member), None)
+
+
+def add_override(t, member: str, name: str, note: str) -> None:
+    from .engine import TournamentError
+
+    note = (note or "").strip()
+    if not note:
+        raise TournamentError("Add a note saying why (it's kept with the override).")
+    if override_for(t, member):
+        raise TournamentError(f"{name or member} already has an override.")
+    t.settings.elig_overrides.append({"member": member, "name": name, "note": note, "at": _now()})
+    audit(t, "override added for", member, name, note)
+    for g in (t.teams if hasattr(t, "teams") else t.entries).values():  # it settles any eligibility question
+        for p in g.players:
+            if p.member == member and p.pending.startswith(("Eligibility", "Not eligible")):
+                p.pending = ""
+
+
+def remove_override(t, member: str) -> None:
+    from .engine import TournamentError
+
+    x = override_for(t, member)
+    if x is None:
+        raise TournamentError("That override isn't there any more.")
+    t.settings.elig_overrides.remove(x)
+    audit(t, "override removed for", member, x.get("name", ""))
+
+
+def request_review(t, member: str, name: str, reasons: list[str], message: str) -> dict:
+    """A refused player asks the league office to take another look (one open request each)."""
+    from .engine import TournamentError
+
+    if any(r["member"] == member and r["status"] == "open" for r in t.settings.review_requests):
+        raise TournamentError("Your request is already with the league office. You'll get an email when they decide.")
+    req = {"id": f"r{len(t.settings.review_requests) + 1}", "member": member, "name": name, "reasons": reasons,
+           "message": (message or "").strip()[:500], "at": _now(), "status": "open", "decided_at": "", "note": ""}
+    t.settings.review_requests.append(req)
+    audit(t, "review requested by", member, name, req["message"])
+    return req
+
+
+def decide_review(t, req_id: str, approve: bool, note: str) -> dict:
+    from .engine import TournamentError
+
+    req = next((r for r in t.settings.review_requests if r["id"] == req_id), None)
+    if req is None or req["status"] != "open":
+        raise TournamentError("That request has already been decided.")
+    note = (note or "").strip()
+    if approve:
+        if not override_for(t, req["member"]):
+            add_override(t, req["member"], req["name"], note or "Approved on review")
+    elif not note:
+        raise TournamentError("Add a note saying why (the player sees it in the email).")
+    req.update(status="approved" if approve else "declined", decided_at=_now(), note=note)
+    audit(t, f"review {req['status']} for", req["member"], req["name"], note)
+    return req
+
+
+def open_reviews(t) -> list[dict]:
+    return [r for r in t.settings.review_requests if r["status"] == "open"]
+
+
+def lock(t, store, session_start: str) -> int:
+    """Registration closed: check everyone once, keep what it found, and stop later sheet syncs changing it.
+    Anyone not eligible goes to Pending verification for the director (nobody is removed). Returns how many."""
+    rules = rules_of(t.settings)
+    game = getattr(t.settings, "skill_game", "8")
+    snapshot, flagged = {}, 0
+    for g in (t.teams if hasattr(t, "teams") else t.entries).values():
+        if g.status == "no_show":
+            continue
+        for p in g.players:
+            if not p.member:
+                continue
+            if override_for(t, p.member):
+                snapshot[p.member] = {"no": [], "review": [], "override": True}
+                continue
+            no, review = check_player(store.get(p.member), rules, session_start, game)
+            snapshot[p.member] = {"no": no, "review": review}
+            if (no or review) and not p.pending:
+                p.pending = ("Not eligible when registration closed: " + " ".join(no)) if no else \
+                    ("Eligibility: " + "; ".join(review))
+                flagged += 1
+    t.settings.elig_snapshot, t.settings.elig_locked_at = snapshot, _now()
+    audit(t, "locked", note=f"{len(snapshot)} player(s) checked, {flagged} sent to Pending verification")
+    return flagged
+
+
+def unlock(t) -> None:
+    t.settings.elig_snapshot, t.settings.elig_locked_at = {}, ""
+    audit(t, "unlocked")
+
+
+def lock_due(t, at: datetime | None = None) -> bool:
+    """Lock once registration has closed (its closing time passed) or the event has started."""
+    from .schedule import parse_when
+
+    if t.settings.elig_locked_at or not any_rules(rules_of(t.settings)):
+        return False
+    if t.status != "setup":
+        return True
+    try:
+        closes = parse_when(t.settings.registration_closes)
+    except Exception:
+        return False
+    return bool(closes) and (at or datetime.now()) >= closes

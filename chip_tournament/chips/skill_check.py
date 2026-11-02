@@ -77,10 +77,18 @@ def check_event(t, store: PlayerStore, two_levels: bool) -> list[dict]:
         rows = [check_player(p, store, index, game, two_levels) for p in g.players]
         team_no = []
         if checking:
+            from .eligibility import override_for
+            locked = t.settings.elig_snapshot
             for r in rows:
                 rec = store.get(r["member"]) if r["member"] and r["status"] not in (NOT_FOUND, AMBIGUOUS) else None
-                no, review = eligible(rec, rules, start, game)
-                r["elig"] = {"no": no, "review": review}
+                ov = override_for(t, r["member"]) if r["member"] else None
+                if ov:
+                    r["elig"] = {"no": [], "review": [], "override": ov["note"]}
+                elif r["member"] in locked:  # what the lock found: later sheet syncs don't change it
+                    r["elig"] = {**locked[r["member"]], "locked": True}
+                else:
+                    no, review = eligible(rec, rules, start, game)
+                    r["elig"] = {"no": no, "review": review}
             team_no = check_team([store.get(r["member"]) if r["member"] else None for r in rows], rules)
         out.append({"id": g.id, "name": g.name, "status": g.status, "players": rows, "team_no": team_no,
                     "ineligible": any(r.get("elig", {}).get("no") for r in rows) or bool(team_no),

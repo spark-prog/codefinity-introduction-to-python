@@ -1,0 +1,52 @@
+{# Director: eligibility reviews, overrides and the lock. Needs t. #}
+{% set s = t.settings %}
+{% set reviews = s.review_requests|selectattr("status", "equalto", "open")|list %}
+{% if elig_describe(elig_rules(s)) or s.elig_overrides or reviews %}
+<section class="card jump-target{% if reviews %} pending-card{% endif %}" id="eligibility">
+  <div class="section-head"><h3>Eligibility{% if reviews %} · {{ reviews|length }} review request{{ "s" if reviews|length != 1 }}{% endif %}</h3>
+    <a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a></div>
+
+  {% for r in reviews %}
+  <div class="pending-row">
+    <div><b>{{ r.name }}</b> <span class="muted">· {{ r.member }} · asked {{ r.at|day }}</span><br>
+      <span class="pending-reason">{{ r.reasons|join(" ") }}</span>
+      {% if r.message %}<br><span class="muted">“{{ r.message }}”</span>{% endif %}</div>
+    {% if not is_viewer %}
+    <form method="post" action="{{ url_for('admin_review', rid=r.id) }}" class="inline correct-form">
+      <input name="note" placeholder="Note (required to decline)" aria-label="Note">
+      <button class="button small" name="action" value="approve">Approve</button>
+      <button class="button small danger" name="action" value="decline">Decline</button></form>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <p class="muted small-note" style="margin-top: 12px">
+    {% if s.elig_locked_at %}<b>Locked {{ s.elig_locked_at|day }} at {{ s.elig_locked_at|clock }}:</b> later player-list syncs don't change anyone's eligibility for this event.
+    {% else %}Eligibility locks when registration closes{% if s.registration_closes %} ({{ s.registration_closes|day }}){% endif %} or the event starts: everyone is checked once, and anyone not eligible goes to Pending verification.{% endif %}</p>
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_eligibility_lock') }}" class="inline">
+    <input type="hidden" name="action" value="{{ 'unlock' if s.elig_locked_at else 'lock' }}">
+    <button class="button small secondary">{{ "Unlock" if s.elig_locked_at else "Check everyone and lock now" }}</button></form>
+  {% endif %}
+
+  <h4 style="margin-top: 16px">Overrides{% if s.elig_overrides %} ({{ s.elig_overrides|length }}){% endif %}</h4>
+  {% for o in s.elig_overrides %}
+  <div class="pending-row">
+    <div><b>{{ o.name or o.member }}</b> <span class="muted">· {{ o.member }} · {{ o.at|day }}</span><br><span class="muted small-note">“{{ o.note }}”</span></div>
+    {% if not is_viewer %}
+    <form method="post" action="{{ url_for('admin_overrides') }}" class="inline" onsubmit="return confirm('Remove this override?')">
+      <input type="hidden" name="action" value="remove"><input type="hidden" name="member" value="{{ o.member }}">
+      <button class="button small secondary">Remove</button></form>
+    {% endif %}
+  </div>
+  {% else %}<p class="muted small-note">None. An override lets a player in whatever the rules say.</p>{% endfor %}
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_overrides') }}" class="form exception-form">
+    <input type="hidden" name="action" value="add">
+    <label>Member number <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
+    <label class="wide">Why <input name="note" required placeholder="Medical leave last session, approved by the LO"></label>
+    <button class="button small">Override: eligible</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}

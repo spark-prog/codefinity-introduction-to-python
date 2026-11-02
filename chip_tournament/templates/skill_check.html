@@ -42,9 +42,15 @@
       <td class="nowrap">{% if two %}8-Ball {{ r.entered.skill8 or "—" }} · 9-Ball {{ r.entered.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.entered.skill) if r.entered.skill else "—" }}{% endif %}</td>
       <td class="nowrap">{% if r.list %}{% if two %}8-Ball {{ r.list.skill8 or "—" }} · 9-Ball {{ r.list.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.list.skill) if r.list.skill else "—" }}{% if r.how and r.how != "rated" %}<div class="muted small-note">{{ r.how }}</div>{% endif %}{% endif %}{% else %}—{% endif %}</td>
       <td><span class="check-badge {{ r.status }}">{{ labels[r.status] }}</span></td>
-      {% if checking %}<td class="small-note">{% if r.elig and r.elig.no %}<span class="check-badge not_found">Not eligible</span><br>{{ r.elig.no|join(" ") }}
+      {% if checking %}<td class="small-note">{% if r.elig and r.elig.override %}<span class="check-badge ok">Eligible (override)</span><br>“{{ r.elig.override }}”
+        {% elif r.elig and r.elig.no %}<span class="check-badge not_found">Not eligible</span><br>{{ r.elig.no|join(" ") }}
+          {% if r.member and not is_viewer %}
+          <form method="post" action="{{ url_for('admin_overrides') }}" class="correct-form" style="margin-top: 6px">
+            <input type="hidden" name="member" value="{{ r.member }}"><input type="hidden" name="back" value="{{ url_for('admin_skill_check') }}">
+            <input name="note" required placeholder="Why" aria-label="Why"><button class="button small secondary">Override</button></form>{% endif %}
         {% elif r.elig and r.elig.review %}<span class="check-badge differs">Check</span><br>{{ r.elig.review|join("; ") }}
         {% elif r.elig %}<span class="check-badge ok">Eligible</span>{% else %}—{% endif %}
+        {% if r.elig and r.elig.locked %}<br><span class="muted">as of the lock</span>{% endif %}
         {% if loop.last and grp.team_no %}<br><span class="check-badge not_found">Team</span> {{ grp.team_no|join(" ") }}{% endif %}</td>{% endif %}
     </tr>
     {% endfor %}{% else %}
@@ -52,5 +58,17 @@
     {% endfor %}
   </table></div>
 </section>
+{% if s.elig_audit %}
+<section class="card">
+  <h2>Eligibility decisions</h2>
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>When</th><th>What</th><th>Player</th><th>Note</th></tr></thead>
+    {% for a in s.elig_audit|reverse %}
+    <tr><td class="nowrap">{{ a.at|day }} {{ a.at|clock }}</td><td>{{ a.what|capitalize }}</td>
+      <td>{{ a.name }}{% if a.member %} <span class="muted">{{ a.member }}</span>{% endif %}</td><td>{{ a.note }}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endif %}
 {% endif %}
 {% endblock %}

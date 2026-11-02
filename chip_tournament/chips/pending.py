@@ -62,3 +62,32 @@ def remove(t, gid: str) -> str:
         t._text(g, body)
     t._say(f"Removed {g.name}: member number not verified.")
     return g.name
+
+
+# ------------------------------------------------------------ director's exceptions
+
+def allow_twice(t, member: str, note: str) -> None:
+    """Director: this member number may be on more than one team in this event (with a reason)."""
+    from datetime import datetime
+
+    note = (note or "").strip()
+    if not note:
+        raise TournamentError("Add a note saying why (it's kept with the exception).")
+    if any(x["member"] == member for x in t.settings.member_exceptions):
+        raise TournamentError(f"{member} already has an exception.")
+    t.settings.member_exceptions.append({"member": member, "note": note,
+                                         "at": datetime.now().isoformat(timespec="seconds")})
+    t._say(f"Director allowed {member} on more than one team: {note}")
+
+
+def remove_exception(t, member: str) -> None:
+    before = len(t.settings.member_exceptions)
+    t.settings.member_exceptions = [x for x in t.settings.member_exceptions if x["member"] != member]
+    if len(t.settings.member_exceptions) == before:
+        raise TournamentError("That exception isn't there any more.")
+    t._say(f"Director removed the exception for {member} (registrations already made stay).")
+
+
+def on_teams(t, member: str) -> list[str]:
+    """The teams or entries a member number is on in this event."""
+    return [g.name for g in groups(t).values() if g.status != "no_show" and any(p.member == member for p in g.players)]

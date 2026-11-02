@@ -183,8 +183,8 @@ def register_registration(app) -> None:
     def my_registration(t):
         """The team or entry the logged-in player is on in this event: (id, name), or None."""
         me = g.get("player")
-        if not me:
-            return None
+        if not me or me["member"] in {x["member"] for x in t.settings.member_exceptions}:
+            return None  # no player, or the director allowed them more than one spot
         found = t.registered_as(me["member"])
         if found is None:  # registered before member numbers: match their name instead (display only)
             want = full_name(me).lower()
@@ -285,6 +285,38 @@ def register_registration(app) -> None:
             flash(str(exc), "error")
         return redirect(url_for("admin") + "#pending")
 
+    def exception_rows(t) -> list[dict]:
+        rows = []
+        for x in t.settings.member_exceptions:
+            rec = store.get(x["member"])
+            rows.append({**x, "name": full_name(rec) if rec else "", "teams": pending_mod.on_teams(t, x["member"])})
+        return rows
+
+    app.jinja_env.globals["exception_rows"] = exception_rows
+
+    @app.post("/t/<event>/admin/exceptions")
+    def admin_exceptions():
+        if not session.get("admin"):
+            flash("Only the director can add exceptions.", "error")
+            return redirect(url_for("admin"))
+        f = request.form
+        member = re.sub(r"\D", "", f.get("member", ""))
+        try:
+            if not players.MEMBER_RE.fullmatch(member):
+                raise TournamentError("Member numbers are 8 digits and start with 322.")
+            with g.event.store.change(f"Exception for {member}: {f.get('action', '')}") as t:
+                if f.get("action") == "remove":
+                    pending_mod.remove_exception(t, member)
+                    msg = f"Removed the exception for {member}. Registrations already made stay."
+                else:
+                    pending_mod.allow_twice(t, member, f.get("note", ""))
+                    rec = store.get(member)
+                    msg = f"{full_name(rec) if rec else member} may now be on more than one team in this event."
+            flash(msg, "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin") + "#exceptions")
+
     app.config["attach_members"] = attach_members
     app.jinja_env.globals["my_registration"] = my_registration
     app.jinja_env.globals["my_prefill"] = my_prefill
@@ -301,6 +333,7 @@ def register_registration(app) -> None:
         out = []
         for rec in store.search(q, limit=8):
             item = fill_for(rec, t)
-            item["registered"] = t.registered_as(rec["member"]) is not None
+            item["registered"] = (t.registered_as(rec["member"]) is not None and rec["member"] not in
+                                  {x["member"] for x in t.settings.member_exceptions})
             out.append(item)
         return jsonify(out)

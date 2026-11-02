@@ -1,0 +1,29 @@
+{# Director: exceptions to one player, one spot. Needs t. #}
+{% set rows = exception_rows(t) %}
+{% if rows or not is_viewer %}
+<details class="card exceptions-card jump-target" id="exceptions" {% if rows %}open{% endif %}>
+  <summary><h3 style="display: inline">Exceptions{% if rows %} ({{ rows|length }}){% endif %}</h3>
+    <span class="muted small-note"> · let a player be on more than one team</span></summary>
+  {% for r in rows %}
+  <div class="pending-row">
+    <div><b>{{ r.name or r.member }}</b>{% if r.name %} <span class="muted">· {{ r.member }}</span>{% endif %}<br>
+      <span class="muted small-note">“{{ r.note }}” · {{ r.at|day }}{% if r.teams %} · on {{ r.teams|join(", ") }}{% endif %}</span></div>
+    {% if not is_viewer %}
+    <form method="post" action="{{ url_for('admin_exceptions') }}" class="inline"
+          onsubmit="return confirm('Remove this exception? Registrations already made stay.')">
+      <input type="hidden" name="action" value="remove"><input type="hidden" name="member" value="{{ r.member }}">
+      <button class="button small secondary">Remove</button></form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_exceptions') }}" class="form exception-form">
+    <input type="hidden" name="action" value="add">
+    <label>Member number <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
+    <label class="wide">Why (kept with the exception) <input name="note" required placeholder="Filling in for Sharks, approved by the LO"></label>
+    <button class="button small">Allow on more than one team</button>
+  </form>
+  <p class="muted small-note">Never twice on the same team. Removing an exception doesn't remove registrations already made.</p>
+  {% endif %}
+</details>
+{% endif %}

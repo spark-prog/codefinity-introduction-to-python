@@ -248,6 +248,8 @@ class BracketSettings:
     call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
     test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
+    # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
+    member_exceptions: list[dict] = field(default_factory=list)
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
@@ -526,10 +528,10 @@ class BracketTournament:
                 raise TournamentError(f"{p.name} is listed twice. Each partner is a different player.")
             seen.add(p.member)
             other = self.registered_as(p.member, skip)
-            if other is not None:
+            if other is not None and p.member not in {x["member"] for x in self.settings.member_exceptions}:
                 where = f" ({other.name})" if other.name != p.name else ""
                 raise TournamentError(f"{p.name} is already registered for {self.settings.name}{where}. "
-                                      "A player can only enter once.")
+                                      "A player can only enter once. If that's on purpose, ask the director to allow it.")
 
     def preview_division(self, entry: Entry) -> str:
         """The skill group an entry would play in, before any small groups merge at the draw."""

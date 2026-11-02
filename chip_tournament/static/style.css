@@ -922,3 +922,9 @@ tr.check-ok td { opacity: .75; }
   border-radius: var(--radius-sm); font: inherit; color: var(--ink); background: rgba(0, 0, 0, .28); }
 .correct-form input:focus { outline: none; border-color: var(--accent); }
 .pending-notice { border-color: #ffb020; }
+
+/* Director's exceptions */
+.exceptions-card summary { cursor: pointer; list-style: none; }
+.exceptions-card summary::-webkit-details-marker { display: none; }
+.exception-form { margin-top: 12px; display: grid; gap: 8px; grid-template-columns: minmax(140px, 1fr) 2fr auto; align-items: end; }
+@media (max-width: 640px) { .exception-form { grid-template-columns: 1fr; } }

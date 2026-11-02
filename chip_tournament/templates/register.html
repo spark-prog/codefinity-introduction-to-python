@@ -32,6 +32,7 @@
   {% if my_registration(t) %}
   <div class="card">{% include "_already_registered.html" %}</div>
   {% elif t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}
+  {% if player %}{% include "_my_eligibility.html" %}{% endif %}
   <form method="post" class="card form">
     {% set v = {"name": form.get("name", ""), "players": players} %}
     {% set cap = s.registration_cap %}

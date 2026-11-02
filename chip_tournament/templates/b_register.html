@@ -18,6 +18,7 @@
   {% elif t.status != SETUP %}
   <div class="card"><p>Registration is closed: the bracket is drawn. <a href="{{ url_for('home') }}">Follow it here.</a></p></div>
   {% else %}
+  {% if player %}{% include "_my_eligibility.html" %}{% endif %}
   <form method="post" class="card form">
     {% include "_login_nudge.html" %}
     {% if s.team_size > 1 %}<label>Team name (optional) <input name="name" value="{{ form.get('name', '') }}" placeholder="We'll use your names if blank"></label>{% endif %}

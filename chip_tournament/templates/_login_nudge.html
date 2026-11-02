@@ -1,5 +1,7 @@
-{# Registration: logged-in players get their details filled in; others are offered the login. #}
-{% if player %}{% include "_my_eligibility.html" %}
+{# Registration: logged-in players get their details filled in; others are offered the login. Goes inside the
+   registration form, so it holds no forms of its own: the eligibility box (review request, push) is
+   _my_eligibility.html, placed before the form. #}
+{% if player %}
 <p class="login-nudge">Filled in for <b>{{ player.first }} {{ player.last }}</b> from the league's player list.
   {% if (t.settings.team_size if t.settings.team_size is defined else TEAM_SIZE) > 1 %}Start typing your partner's name to find them.{% endif %}</p>
 {% else %}

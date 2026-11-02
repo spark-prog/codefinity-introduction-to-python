@@ -117,6 +117,26 @@
   tick(); setInterval(tick, 1000);
 })();
 (function () {
+  // Forms marked data-once send once: a second tap while the first is still on its way (an email being sent
+  // can take a few seconds) would cancel the first page and show the second's answer instead.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.hasAttribute || !form.hasAttribute("data-once")) return;
+    if (form.dataset.sent) { e.preventDefault(); return; }
+    form.dataset.sent = "1";
+    var btn = e.submitter;
+    setTimeout(function () {  // after the form's data (including the tapped button's value) has been taken
+      if (btn) { btn.dataset.label = btn.textContent; btn.textContent = btn.dataset.busy || "Sending…"; btn.disabled = true; }
+    }, 0);
+  }, true);
+  window.addEventListener("pageshow", function () {  // back button: the page comes back usable
+    document.querySelectorAll("form[data-once]").forEach(function (form) {
+      delete form.dataset.sent;
+      form.querySelectorAll("button[disabled][data-label]").forEach(function (b) { b.disabled = false; b.textContent = b.dataset.label; });
+    });
+  });
+})();
+(function () {
   // Live pages reload on a timer, but never while someone is using them: a field in focus, anything
   // typed or changed and not yet sent, an open pop-up, or an open button menu (Forfeit, Edit, ...).
   var meta = document.querySelector('meta[name="auto-refresh"]');

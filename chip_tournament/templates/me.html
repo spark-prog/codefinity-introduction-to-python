@@ -84,7 +84,7 @@
   {% endif %}
   {% endif %}
   {% if not fresh %}
-  <form method="post" action="{{ url_for('me_verify') }}" class="inline" style="margin-top: 8px">
+  <form method="post" action="{{ url_for('me_verify') }}" class="inline" style="margin-top: 8px" data-once>
     <button class="button secondary small">{{ "Forgot it? Confirm with an emailed code" if has_password else "Set a password: confirm with an emailed code first" }}</button></form>
   {% endif %}
 </section>

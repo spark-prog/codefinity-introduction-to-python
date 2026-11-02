@@ -31,6 +31,10 @@ class LoginError(Exception):
     pass
 
 
+class CodeJustSent(LoginError):
+    """A code went out less than a minute ago: use that one (usually a second tap while the first was sending)."""
+
+
 def mask_email(email: str) -> str:
     """'annlee@gmail.com' -> 'a•••••@gmail.com' (enough to know which inbox to check)."""
     name, _, domain = (email or "").partition("@")
@@ -66,7 +70,7 @@ class Accounts:
             data = self._load()
             old = data["codes"].get(member)
             if old and (at - datetime.fromisoformat(old["sent"])).total_seconds() < RESEND_SECONDS:
-                raise LoginError("A code was just sent. Check your email (and spam), or wait a minute to get a new one.")
+                raise CodeJustSent("A code was just sent. Check your email (and spam), or wait a minute to get a new one.")
             code = f"{secrets.randbelow(1_000_000):06d}"
             data["codes"][member] = {"hash": self._hash(member, code), "sent": at.isoformat(timespec="seconds"),
                                      "expires": (at + timedelta(minutes=CODE_MINUTES)).isoformat(timespec="seconds"),

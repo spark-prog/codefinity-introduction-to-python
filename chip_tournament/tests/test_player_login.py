@@ -70,8 +70,24 @@ def test_log_in_with_email_and_the_refusals(app):
                          ("32200002", "no email on file")):
         page = app.test_client().post("/login", data={"who": who}, follow_redirects=True).get_data(as_text=True)
         assert message in page, who
-    page = c.post("/login", data={"who": "32200001"}, follow_redirects=True).get_data(as_text=True)
-    assert "A code was just sent" in page  # no new code within a minute
+    sent = len(mail.sent)
+    r = c.post("/login", data={"who": "32200001"})  # again within a minute: no new code, go enter the first one
+    assert r.headers["Location"].endswith("/login/code") and len(mail.sent) == sent
+    assert "emailed you a code a moment ago" in c.get("/login/code").get_data(as_text=True)
+
+
+def test_a_second_tap_while_the_code_is_sending_still_reaches_the_code_box(app):
+    """The second tap's page is the one the player sees; it must not be an error that hides the code box."""
+    mail = app.config["mail"]
+    phone = app.test_client()
+    phone.post("/login", data={"who": "32200001", "action": "code"})  # the first tap: its page never shows
+    r = phone.post("/login", data={"who": "32200001", "action": "code"}, follow_redirects=True)
+    page = r.get_data(as_text=True)
+    assert r.request.path == "/login/code" and 'name="code"' in page and len(mail.sent) == 1
+    r = phone.post("/login/code", data={"code": mail.code()})
+    assert r.status_code == 302 and "/login" not in r.headers["Location"]  # logged in with the first email's code
+    assert "Ann" in phone.get("/me").get_data(as_text=True)
+    assert "data-once" in app.test_client().get("/login").get_data(as_text=True)  # and the button sends once
 
 
 def test_codes_expire_and_run_out_of_tries(tmp_path):

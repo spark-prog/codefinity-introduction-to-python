@@ -19,7 +19,7 @@ from chips import series as series_mod
 from chips import waitlist as waitlist_mod
 from chips import history as history_mod
 from chips.engine import Player, TournamentError
-from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
+from chips.accounts import LOGIN_DAYS, Accounts, CodeJustSent, LoginError, mask_email
 from chips.throttle import Throttle
 
 COOKIE = "ct_player"
@@ -123,6 +123,13 @@ def register(app, h) -> None:
                 session["login_member"] = rec["member"]
                 session["login_next"] = nxt
                 return redirect(url_for("player_code"))
+            except CodeJustSent:
+                # A second tap while the first was still sending (or a quick retry): the code from a moment ago is
+                # on its way, so go to where it's entered instead of stopping on an error.
+                session["login_member"] = rec["member"]
+                session["login_next"] = nxt
+                flash("We emailed you a code a moment ago. Enter it below (check spam if it isn't there yet).", "ok")
+                return redirect(url_for("player_code"))
             except (LoginError, players.PlayerError) as exc:
                 flash(str(exc), "error")
         return render_template("player_login.html", t=None, next=request.args.get("next", request.form.get("next", "")))
@@ -196,6 +203,8 @@ def register(app, h) -> None:
             mailer.send_to(g.player["email"], f"Your Control Table code: {code}",
                            f"Hi {g.player['first']},\n\nYour code is {code}. It works for 10 minutes.\n\n{legal['brand']}",
                            sender=legal["brand"], reply_to=legal["email"])
+        except CodeJustSent:
+            flash("We emailed you a code a moment ago. Enter it below (check spam if it isn't there yet).", "ok")
         except (LoginError, backup.BackupError) as exc:
             flash(str(exc) if isinstance(exc, LoginError) else "The code email couldn't be sent. Try again in a minute.",
                   "error")

@@ -116,3 +116,38 @@ def test_director_lock_and_override_from_the_check_page(app):
     declined = app.test_client()
     declined.post("/t/singles/admin/overrides", data={"member": "32200001", "note": "x"})  # not signed in
     assert len(ev.load().settings.elig_overrides) == 1
+
+
+def nested_forms(html: str) -> list[str]:
+    """Forms inside forms: browsers drop the inner <form> and its </form> ends the outer one early."""
+    from html.parser import HTMLParser
+    found, depth = [], [0]
+
+    class P(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            if tag == "form":
+                if depth[0]:
+                    found.append(dict(attrs).get("action", "?"))
+                depth[0] += 1
+
+        def handle_endtag(self, tag):
+            if tag == "form":
+                depth[0] = max(0, depth[0] - 1)
+    P().feed(html)
+    return found
+
+
+def test_the_review_request_box_is_its_own_form_not_inside_registration(app):
+    """The review box sat inside the registration form: its button did nothing useful and the fields below fell
+    out of the form's layout. It now comes before the form, and the request goes in from the page itself."""
+    cy = Clients(app).logged_in("32200003")
+    page = cy.get("/t/singles/register").get_data(as_text=True)
+    assert nested_forms(page) == []
+    assert page.index("Ask for a review") < page.index('name="player_name_0"')  # above the registration form
+    action = page.split("Ask for a review", 1)[1].split('action="', 1)[1].split('"', 1)[0]
+    assert action == "/t/singles/review-request"
+    cy.post(action, data={"message": "Played on a new team"})
+    assert app.config["hub"].get("singles").load().settings.review_requests[0]["message"] == "Played on a new team"
+    ann = Clients(app).logged_in("32200001")  # an eligible player: no empty box, no nested forms
+    page = ann.get("/t/singles/register").get_data(as_text=True)
+    assert nested_forms(page) == [] and "You can&#39;t register" not in page

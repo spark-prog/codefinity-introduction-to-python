@@ -1,6 +1,8 @@
-{# Register page, logged in: does this player qualify? Needs t. #}
+{# Register page, logged in: does this player qualify? Needs t. Has its own forms (review request, push),
+   so it goes before the registration form, never inside it. #}
 {% set me_ok = my_eligibility(t) %}
 {% if me_ok %}
+<div class="card my-eligibility">
 {% if me_ok.ok %}
 <p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.override %} (approved by the league office){% elif me_ok.grace %} (your one-time grace entry){% elif me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
 {% if me_ok.can_push %}{% set push_url = url_for('push_eligibility') %}{% set series_name = t.settings.series %}{% include "_push_box.html" %}{% endif %}
@@ -13,7 +15,7 @@
   {% else %}
     {% if asked and asked.status == "declined" %}<p class="muted small-note">The league office reviewed this on {{ asked.decided_at|day }}: {{ asked.note }}</p>{% endif %}
     <details class="inline-details">
-      <summary>Think this is wrong? Ask the league office to review it</summary>
+      <summary class="button secondary small">Think this is wrong? Ask for a review</summary>
       <form method="post" action="{{ url_for('review_request') }}" class="form">
         <label>Anything they should know (optional) <textarea name="message" rows="2" maxlength="500"
           placeholder="e.g. I played on a new team Sep 15; it may not be in the report yet."></textarea></label>
@@ -23,4 +25,5 @@
   {% endif %}
 </div>
 {% endif %}
+</div>
 {% endif %}

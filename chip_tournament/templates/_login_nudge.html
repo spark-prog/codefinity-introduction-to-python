@@ -1,0 +1,7 @@
+{# Registration: logged-in players get their details filled in; others are offered the login. #}
+{% if player %}
+<p class="login-nudge">Filled in for <b>{{ player.first }} {{ player.last }}</b> from the league's player list.
+  {% if (t.settings.team_size if t.settings.team_size is defined else TEAM_SIZE) > 1 %}Start typing your partner's name to find them.{% endif %}</p>
+{% else %}
+<p class="login-nudge"><a href="{{ url_for('player_login', next=request.path) }}">Log in</a> with your APA member number and we'll fill this in for you, and find your partner.</p>
+{% endif %}

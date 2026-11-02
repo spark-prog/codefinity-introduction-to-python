@@ -155,6 +155,12 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
     if cap:
         s["field_cap"] = cap
 
+    basis = (elig.get("skill_level_basis") or "").lower()
+    if "9-ball" in basis or "9 ball" in basis:
+        s["skill_game"] = "9"
+    elif "8-ball" in basis or "8 ball" in basis:
+        s["skill_game"] = "8"
+
     # Format
     per = _int(fmt.get("players_per_entry"), 2 if kind == CHIP else 1)
     racks = _int(fmt.get("maximum_racks"))

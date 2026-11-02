@@ -7,7 +7,8 @@
     <h1>{{ s.name }}</h1>
     {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
     <div class="button-row actions-row">
-      {% if t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}<a class="button big" href="{{ url_for('register') }}">Register a team</a>{% endif %}
+      {% if my_registration(t) %}{% include "_already_registered.html" %}
+      {% elif t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}<a class="button big" href="{{ url_for('register') }}">Register a team</a>{% endif %}
       {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
     </div>
     {% if not t.entries_locked and not t.last_call %}{% include "_reg_window.html" %}{% endif %}

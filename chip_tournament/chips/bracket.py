@@ -247,6 +247,7 @@ class BracketSettings:
     auto_call: bool = True  # no longer used: see call_mode
     call_mode: str = DIRECTOR_CALLS  # DIRECTOR_CALLS: tables are set, the director presses Call match; CONTINUOUS: called at once
     test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
+    skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
@@ -506,7 +507,29 @@ class BracketTournament:
         """A copy of a player from a form, with its skill set from the 8-Ball and 9-Ball levels if given."""
         skill = max(p.skill_8, p.skill_9) or p.skill
         return Player(name=p.name.strip(), phone=p.phone.strip(), skill=skill, skill_8=p.skill_8, skill_9=p.skill_9,
-                      sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at)
+                      sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at, member=p.member)
+
+    def registered_as(self, member: str, skip: str | None = None) -> Entry | None:
+        """The entry a member number is already in (no-shows don't count)."""
+        if not member:
+            return None
+        return next((e for e in self.entries.values() if e.id != skip and e.status != NO_SHOW
+                     and any(p.member == member for p in e.players)), None)
+
+    def _check_members(self, players: list[Player], skip: str | None = None) -> None:
+        """One player, one spot: the same member number can't be in two entries, or twice in one."""
+        seen = set()
+        for p in players:
+            if not p.member:
+                continue
+            if p.member in seen:
+                raise TournamentError(f"{p.name} is listed twice. Each partner is a different player.")
+            seen.add(p.member)
+            other = self.registered_as(p.member, skip)
+            if other is not None:
+                where = f" ({other.name})" if other.name != p.name else ""
+                raise TournamentError(f"{p.name} is already registered for {self.settings.name}{where}. "
+                                      "A player can only enter once.")
 
     def preview_division(self, entry: Entry) -> str:
         """The skill group an entry would play in, before any small groups merge at the draw."""
@@ -531,6 +554,7 @@ class BracketTournament:
             raise TournamentError("Registration is closed: the bracket is already drawn.")
         players = [self._clean(p) for p in players]
         self._check_players(players)
+        self._check_members(players)
         name = (name or "").strip() or " & ".join(p.name for p in players)
         self._unique_name(name)
         entry = Entry(id=uuid.uuid4().hex[:8], name=name, players=players, pin=self._new_pin())
@@ -561,9 +585,13 @@ class BracketTournament:
     def update_entry(self, entry_id: str, name: str | None, players: list[Player]) -> Entry:
         entry = self.entry(entry_id)
         players = [self._clean(p) for p in players]
-        for p in players:
+        for i, p in enumerate(players):
             p.sms_consent, p.sms_consent_at = False, None
+            if not p.member:  # the same person keeps their member number
+                old = next((o for o in entry.players if o.name.lower() == p.name.lower()), None)
+                p.member = old.member if old else ""
         self._check_players(players)
+        self._check_members(players, skip=entry.id)
         if self.status != SETUP and [p.name.lower() for p in players] != [p.name.lower() for p in entry.players]:
             raise TournamentError("Players can't change once the bracket is drawn (only cell numbers and the entry name).")
         name = (name or "").strip() or entry.name

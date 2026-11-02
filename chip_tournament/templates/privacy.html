@@ -15,17 +15,29 @@
     <li><b>Registration details:</b> team name, each player's name and APA skill level, and the cell phone numbers you enter.</li>
     <li><b>Text alert consent:</b> whether each player agreed to receive text alerts, and when.</li>
     <li><b>Tournament activity:</b> check-ins, scores, match results, chip counts and payouts.</li>
-    <li><b>Technical data:</b> a cookie that keeps you signed in to your team page or the director page. We don't use advertising or tracking cookies.</li>
+    <li><b>League player records:</b> to check who can enter each tournament, fill in registrations and let players log in, we use
+      records from the league office's membership list: APA member number, name and nickname, 8-Ball and 9-Ball skill levels,
+      matches played (lifetime and the last date played), membership status, division rep, gender, email address and cell phone.
+      We don't keep home phone numbers or birth dates from those records.</li>
+    <li><b>Player accounts:</b> if you log in, the 6-digit codes we email you (stored only in scrambled form, and they expire after
+      10 minutes) and, if you choose to set one, your password (stored only as a scrambled hash: nobody, including us, can read it).</li>
+    <li><b>Eligibility decisions:</b> review requests you send, and the league office's decisions and notes.</li>
+    <li><b>Technical data:</b> cookies that keep you signed in to your team page, your player account (for 90 days on that device)
+      or the director page. We don't use advertising or tracking cookies.</li>
   </ul>
 
   <h2>How we use it</h2>
   <ul>
     <li>To run the tournament: registration, the waiting list, pairings, table assignments, scoring, chip counts and payouts.</li>
     <li>To send tournament text alerts to players who agreed to receive them (see the <a href="{{ url_for('terms') }}">Terms &amp; Conditions</a>).</li>
+    <li>To check eligibility for each tournament, fill in your registration, and let you see your events and skill levels.</li>
+    <li>To email you login codes and the league office's answers to eligibility review requests.</li>
     <li>To answer your questions and keep accurate tournament records.</li>
   </ul>
   <p>Team names, player names, skill levels, chip counts and results are shown on the public tournament pages. Phone numbers are never shown publicly;
-    only the tournament director can see them.</p>
+    only the tournament director can see them. Your player account page shows your own records only to you. The public
+    "Am I eligible?" check shows only whether a member number can enter each tournament: never a name, contact details, skill
+    levels or the reasons.</p>
 
   <h2>Text messaging and your phone number</h2>
   <p><b>We do not sell or share your SMS opt-in data or personal information with third parties for marketing purposes.</b>
@@ -34,14 +46,19 @@
   <p>You can stop text alerts at any time by replying <b>STOP</b>. Reply <b>HELP</b> for help.</p>
 
   <h2>Service providers</h2>
-  <p>This website is hosted by Render, and text messages are delivered by Twilio. They process information only to provide those services to us.</p>
+  <p>This website is hosted by Render, and text messages are delivered by Twilio. The league's player records are kept in Google
+    Workspace (Google Sheets), nightly backups are stored in Google Drive, and emails are sent through Gmail. They process
+    information only to provide those services to us.</p>
 
   <h2>How long we keep it</h2>
-  <p>We keep a tournament's information while it's running and for as long as needed to settle payouts and records afterward, then delete it.</p>
+  <p>We keep a tournament's information while it's running and for as long as needed to settle payouts and records afterward, then delete it.
+    Player records are replaced each time the league office updates its membership list. Your player account stays until you ask us to
+    delete it. Backups are kept for about 60 nights.</p>
 
   <h2>Your choices</h2>
   <p>You can update your roster and cell number on your team page with your team PIN, or ask us to correct or delete your information by
-    contacting us below.</p>
+    contacting us below. On your player account you can log out on all devices, and set, change or remove your password. If your league
+    records are wrong (a skill level, matches played or membership status), contact the league office and they'll correct them at the source.</p>
 
   <h2>Contact us</h2>
   <p>{{ legal.brand }} ({{ legal.company }})<br>

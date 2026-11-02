@@ -115,4 +115,59 @@ def test_both_login_pages_show_their_own_form(app):
     director = c.get("/admin/login").get_data(as_text=True)
     assert 'name="password"' in director and 'name="who"' not in director
     player = c.get("/login").get_data(as_text=True)
-    assert 'name="who"' in player and 'name="password"' not in player
+    assert 'name="who"' in player and 'value="code"' in player and 'name="who"' not in director
+
+
+
+def test_optional_password(app):
+    import time
+    c, mail = app.test_client(), app.config["mail"]
+    accounts = app.config["accounts"]
+    page = c.post("/login", data={"who": "32200001", "action": "password", "password": "whatever1"},
+                  follow_redirects=True).get_data(as_text=True)
+    assert "haven&#39;t set a password" in page
+    # Log in with a code, then set a password right away (a fresh code login).
+    c.post("/login", data={"who": "32200001", "action": "code"})
+    c.post("/login/code", data={"code": mail.code()})
+    assert "Set password" in c.get("/me").get_data(as_text=True)
+    r = c.post("/me/password", data={"action": "set", "password": "password1", "confirm": "password1"},
+               follow_redirects=True)
+    assert "too easy to guess" in r.get_data(as_text=True)
+    r = c.post("/me/password", data={"action": "set", "password": "corner pocket 9", "confirm": "corner pocket 9"},
+               follow_redirects=True)
+    assert "Password saved" in r.get_data(as_text=True) and c.get("/me").status_code == 200  # this device stays in
+    assert "corner pocket 9" not in (app.config["data_dir"] / "players" / "accounts.json").read_text()
+
+    other = app.test_client()
+    r = other.post("/login", data={"who": "ann@example.com", "action": "password", "password": "nope nope 1"},
+                   follow_redirects=True)
+    assert "isn&#39;t right" in r.get_data(as_text=True)
+    other.post("/login", data={"who": "ann@example.com", "action": "password", "password": "corner pocket 9"})
+    assert other.get("/me").status_code == 200
+    # Without a fresh code, changing it needs the current password.
+    page = other.get("/me").get_data(as_text=True)
+    assert "Current password" in page
+    r = other.post("/me/password", data={"action": "set", "current": "wrong", "password": "eight ball run",
+                                         "confirm": "eight ball run"}, follow_redirects=True)
+    assert "confirm with an emailed code first" in r.get_data(as_text=True)
+    other.post("/me/password", data={"action": "set", "current": "corner pocket 9", "password": "eight ball run",
+                                     "confirm": "eight ball run"})
+    assert accounts.check_password("32200001", "eight ball run")
+    assert c.get("/me").status_code == 302  # the change logged the first device out
+
+
+def test_setting_a_password_needs_a_fresh_code(app, monkeypatch):
+    c, mail = app.test_client(), app.config["mail"]
+    c.post("/login", data={"who": "32200001", "action": "code"})
+    c.post("/login/code", data={"code": mail.code()})
+    import time as _time
+    real = _time.time
+    monkeypatch.setattr(_time, "time", lambda: real() + 3600)  # an hour later: no longer fresh
+    page = c.get("/me").get_data(as_text=True)
+    assert "Set a password: confirm with an emailed code first" in page and "Set password</button>" not in page
+    r = c.post("/me/password", data={"action": "set", "password": "corner pocket 9", "confirm": "corner pocket 9"},
+               follow_redirects=True)
+    assert "confirm with an emailed code first" in r.get_data(as_text=True)
+    monkeypatch.setattr(_time, "time", real)
+    c.post("/me/verify")
+    assert mail.sent[-1]["to"] == "ann@example.com"

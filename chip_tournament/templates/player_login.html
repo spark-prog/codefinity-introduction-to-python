@@ -5,12 +5,18 @@
 <header class="page-head">
   <p class="eyebrow">Players</p>
   <h1>Log in</h1>
-  <p class="lede">Enter your APA member number or your email. We'll email you a 6-digit code: no password needed.</p>
+  <p class="lede">Enter your APA member number or your email. We'll email you a 6-digit code, or use your password if you've set one.</p>
 </header>
 <form method="post" class="card form">
   <input type="hidden" name="next" value="{{ next }}">
   <label>Member number or email <input name="who" required autofocus autocomplete="username" placeholder="322… or you@example.com"></label>
-  <button class="button big block">Email me a code</button>
+  <button class="button big block" name="action" value="code" formnovalidate>Email me a code</button>
+  <details class="inline-details" {% if request.form.get("action") == "password" %}open{% endif %}>
+    <summary>Log in with a password instead</summary>
+    <label>Password <input name="password" type="password" autocomplete="current-password"></label>
+    <button class="button block" name="action" value="password">Log in</button>
+    <p class="muted small-note">Forgot it? Use "Email me a code". You can set or change a password on My account.</p>
+  </details>
   <p class="muted small-note">Your member number is 8 digits starting with 322. Codes come from the league's email address; check your spam folder if it doesn't arrive.</p>
 </form>
 </div>

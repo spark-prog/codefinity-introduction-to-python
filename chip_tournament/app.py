@@ -198,7 +198,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         "brand": os.environ.get("BRAND_NAME", "First Coast APA"),
         "email": os.environ.get("SUPPORT_EMAIL", "firstcoast@apaleagues.com"),
         "phone": os.environ.get("SUPPORT_PHONE", "904-528-7657"),
-        "updated": "October 22, 2026",
+        "updated": "November 2, 2026",
     }
 
     # Background photo: the director can upload their own; otherwise the bundled billiard room.

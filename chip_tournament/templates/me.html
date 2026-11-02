@@ -34,6 +34,30 @@
   </ul>
   <p class="muted small-note">This comes from the league office's records. If something's wrong, contact {{ legal.email }}.</p>
 </section>
+<section class="card" id="password">
+  <h2>Password</h2>
+  {% if has_password %}<p class="muted">You can log in with your password or an emailed code.</p>
+  {% else %}<p class="muted">Optional. Without one, you log in with an emailed code (you stay logged in for 90 days anyway).</p>{% endif %}
+  {% if fresh or has_password %}
+  <form method="post" action="{{ url_for('me_password') }}" class="form narrow">
+    {% if has_password and not fresh %}<label>Current password <input name="current" type="password" autocomplete="current-password" required></label>{% endif %}
+    <label>{{ "New password" if has_password else "Password" }} <input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Type it again <input name="confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+    <p class="muted small-note">At least 8 characters. A short phrase works well ("corner pocket nine"). Saving logs you out on your other devices.</p>
+    <button class="button" name="action" value="set">{{ "Change password" if has_password else "Set password" }}</button>
+  </form>
+  {% if has_password %}
+  <form method="post" action="{{ url_for('me_password') }}" class="inline" style="margin-top: 8px">
+    {% if not fresh %}<input type="hidden" name="current" value="">{% endif %}
+    <button class="link" name="action" value="remove" {% if not fresh %}disabled title="Confirm with an emailed code first"{% endif %}>Remove my password</button></form>
+  {% endif %}
+  {% endif %}
+  {% if not fresh %}
+  <form method="post" action="{{ url_for('me_verify') }}" class="inline" style="margin-top: 8px">
+    <button class="button secondary small">{{ "Forgot it? Confirm with an emailed code" if has_password else "Set a password: confirm with an emailed code first" }}</button></form>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Log out</h2>
   <p class="muted">You stay logged in on this device for 90 days.</p>

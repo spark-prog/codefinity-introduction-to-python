@@ -437,7 +437,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                     raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
-                players = players_from_form(f)[:1 if solo else TEAM_SIZE]
+                players = app.config["attach_members"](f, players_from_form(f)[:1 if solo else TEAM_SIZE])
                 if f.get("sms_consent") == "1" and players[0].phone:  # the person registering, for their own number
                     players[0].sms_consent, players[0].sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
                 return t.register_team(f.get("name", ""), players, list_seeking=f.get("list_seeking") == "1")
@@ -449,9 +449,13 @@ def create_app(data_dir: str | None = None) -> Flask:
                 return redirect(url_for("team_page", team_id=team.id))
         players = [
             Player(name=request.form.get(f"player_name_{i}", ""), phone=request.form.get(f"player_phone_{i}", ""),
-                   skill=int(request.form[f"player_skill_{i}"]) if request.form.get(f"player_skill_{i}", "").isdigit() else 0)
+                   skill=int(request.form[f"player_skill_{i}"]) if request.form.get(f"player_skill_{i}", "").isdigit() else 0,
+                   member=request.form.get(f"player_member_{i}", "") if g.get("player") else "")
             for i in range(TEAM_SIZE)
         ]
+        if request.method == "GET" and g.get("player"):  # logged in: Partner 1 is them
+            me = app.jinja_env.globals["my_prefill"](t)
+            players[0] = Player(name=me["name"], phone=me["phone"], skill=me["skill"] or 0, member=me["member"])
         return render_template("register.html", t=t, form=request.form, players=players)
 
     @app.get("/favicon.ico")
@@ -651,6 +655,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if f.get("skill_game") in ("8", "9"):
+                s.skill_game = f["skill_game"]
             if "registration_opens" in f:
                 s.registration_opens, s.registration_closes = schedule.check_times(
                     f.get("registration_opens", ""), f.get("registration_closes", ""))
@@ -1415,6 +1421,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         "scorer_device": scorer_device,
     })
     player_web.register(app, {"device_id": device_id})
+    player_web.register_registration(app)
 
     @app.before_request
     def dispatch_by_kind():

@@ -93,7 +93,7 @@ def register(app, h) -> dict:
                     raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
-                players = players_from_form(f, size)
+                players = app.config["attach_members"](f, players_from_form(f, size))
                 if asks_two_levels(t.settings) and not (players[0].skill_8 or players[0].skill_9):
                     raise TournamentError("Enter your 8-Ball or 9-Ball skill level (or both).")
                 if f.get("sms_consent") == "1" and players[0].phone:
@@ -106,7 +106,12 @@ def register(app, h) -> dict:
                 group = f" You're in the {entry.division} group." if entry.division else ""
                 flash(f"{entry.name} is registered!{group} Your PIN is {entry.pin}. Keep it to enter scores.", "ok")
                 return redirect(url_for("b_entry", entry_id=entry.id))
-        return render_template("b_register.html", t=t, form=request.form, size=size)
+        form = request.form
+        if request.method == "GET" and g.get("player"):  # logged in: the first player is them
+            me = app.jinja_env.globals["my_prefill"](t)
+            form = {"player_name_0": me["name"], "player_phone_0": me["phone"], "player_member_0": me["member"],
+                    "player_skill_0": me["skill"], "player_skill8_0": me["skill8"], "player_skill9_0": me["skill9"]}
+        return render_template("b_register.html", t=t, form=form, size=size)
 
     def admin():
         t = store.load()
@@ -137,6 +142,8 @@ def register(app, h) -> dict:
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if f.get("skill_game") in ("8", "9"):
+                s.skill_game = f["skill_game"]
             if "registration_opens" in f:
                 s.registration_opens, s.registration_closes = schedule.check_times(
                     f.get("registration_opens", ""), f.get("registration_closes", ""))

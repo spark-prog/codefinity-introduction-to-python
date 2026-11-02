@@ -1,0 +1,9 @@
+{# A logged-in player who's already in this event: no second registration, a way to their page instead. #}
+{% set reg = my_registration(t) %}
+{% if reg %}
+<div class="already-registered">
+  <span class="button big disabled" aria-disabled="true">Registered</span>
+  <p>You're already registered{% if reg.name and reg.name != player.first ~ " " ~ player.last %} as <b>{{ reg.name }}</b>{% endif %}.
+    Edit your registration <a href="{{ url_for('team_page', team_id=reg.id) if event.kind == CHIP else url_for('b_entry', entry_id=reg.id) }}">here</a>.</p>
+</div>
+{% endif %}

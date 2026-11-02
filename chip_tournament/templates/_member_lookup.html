@@ -1,0 +1,50 @@
+{# Partner search for logged-in players: names and skill levels only (never phones or emails). #}
+<script>
+(function () {
+  var url = {{ url_for('player_lookup')|tojson }};
+  document.querySelectorAll("input[data-lookup]").forEach(function (input) {
+    var i = input.dataset.lookup, form = input.form, timer = null;
+    var member = form.querySelector("input[name=player_member_" + i + "]");
+    var list = document.createElement("ul");
+    list.className = "lookup-list"; list.hidden = true;
+    var note = document.createElement("p");
+    note.className = "muted small-note lookup-note";
+    input.parentNode.insertAdjacentElement("afterend", note);
+    note.insertAdjacentElement("beforebegin", list);
+    function show(m) {
+      note.textContent = m ? "Member " + m.member + (m.how && m.how !== "rated" ? " · " + m.how : "") : "";
+    }
+    function pick(m) {
+      input.value = m.name; member.value = m.member; list.hidden = true; show(m);
+      [["player_skill_", m.skill], ["player_skill8_", m.skill8], ["player_skill9_", m.skill9]].forEach(function (f) {
+        var el = form.querySelector("input[name=" + f[0] + i + "]");
+        if (el && f[1] !== "") { el.value = f[1]; el.dispatchEvent(new Event("input", { bubbles: true })); }
+      });
+    }
+    if (member.value) note.textContent = "Member " + member.value;
+    input.addEventListener("input", function () {
+      if (member.value) { member.value = ""; show(null); }  // typed over a picked player: it's someone else now
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { list.hidden = true; return; }
+      timer = setTimeout(function () {
+        fetch(url + "?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (rows) {
+            list.innerHTML = "";
+            rows.forEach(function (m) {
+              var li = document.createElement("li"), b = document.createElement("button");
+              b.type = "button"; b.className = "lookup-pick";
+              b.textContent = m.name + (m.skill !== "" ? " · SL " + m.skill : "") + (m.registered ? " · already registered" : "");
+              b.disabled = m.registered;
+              b.addEventListener("click", function () { pick(m); });
+              li.appendChild(b); list.appendChild(li);
+            });
+            list.hidden = !rows.length;
+          });
+      }, 250);
+    });
+    input.addEventListener("blur", function () { setTimeout(function () { list.hidden = true; }, 200); });
+  });
+})();
+</script>

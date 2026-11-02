@@ -9,10 +9,11 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from flask import flash, g, redirect, render_template, request, session, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from chips import backup, players
+from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
 from chips.throttle import Throttle
 
@@ -150,3 +151,90 @@ def register(app, h) -> None:
         resp.delete_cookie(COOKIE)
         flash("You're logged out on every device.", "ok")
         return resp
+
+
+def full_name(rec: dict) -> str:
+    return f"{rec['first']} {rec['last']}".strip()
+
+
+def fill_for(rec: dict, t) -> dict:
+    """What a registration form gets for this player in this event (never their phone or email)."""
+    game = getattr(t.settings, "skill_game", "8")
+    skill, how = players.skill_for(rec, game)
+    return {"member": rec["member"], "name": full_name(rec), "skill": skill or "", "how": how,
+            "skill8": rec.get("sl8") or "", "skill9": rec.get("sl9") or ""}
+
+
+def register_registration(app) -> None:
+    """Autofill for registration forms, and knowing who's already registered."""
+    store: players.PlayerStore = app.config["players"]
+
+    def my_registration(t):
+        """The team or entry the logged-in player is on in this event: (id, name), or None."""
+        me = g.get("player")
+        if not me:
+            return None
+        found = t.registered_as(me["member"])
+        if found is None:  # registered before member numbers: match their name instead (display only)
+            want = full_name(me).lower()
+            people = t.teams.values() if hasattr(t, "teams") else t.entries.values()
+            found = next((x for x in people if getattr(x, "status", "") != "no_show"
+                          and any(" ".join(p.name.lower().split()) == want for p in x.players)), None)
+        return found
+
+    def attach_members(form, plist: list[Player]) -> list[Player]:
+        """Member numbers picked on the form (logged-in players only): checked, and the name from the player list."""
+        if not g.get("player"):
+            return plist
+        for i, p in enumerate(plist):
+            member = re.sub(r"\D", "", form.get(f"player_member_{i}", ""))
+            if not member:
+                continue
+            rec = store.get(member)
+            if rec is None or not players.MEMBER_RE.fullmatch(member):
+                raise TournamentError(f"Member number {member} isn't in the player list.")
+            p.member, p.name = member, full_name(rec)
+        return plist
+
+    def my_prefill(t) -> dict:
+        """Partner 1 / the player: the logged-in player's own details, phone included (it's theirs)."""
+        me = g.get("player")
+        if not me:
+            return {}
+        fill = fill_for(me, t)
+        cell = me.get("cell") or ""
+        fill["phone"] = f"{cell[:3]}-{cell[3:6]}-{cell[6:]}" if len(cell) == 10 else ""
+        return fill
+
+    @app.before_request
+    def roster_member_opens_team_page():
+        """A logged-in player on a team's roster (by member number) doesn't need the team PIN."""
+        me, ev, args = g.get("player"), g.get("event"), request.view_args or {}
+        team_id = args.get("team_id") or args.get("entry_id")
+        if not (me and ev and team_id):
+            return
+        t = ev.store.load()
+        found = (getattr(t, "teams", None) or getattr(t, "entries", None) or {}).get(team_id)
+        if found is not None and any(p.member == me["member"] for p in found.players):
+            session[f"team_{team_id}"] = True
+            session[f"entry_{team_id}"] = True
+
+    app.config["attach_members"] = attach_members
+    app.jinja_env.globals["my_registration"] = my_registration
+    app.jinja_env.globals["my_prefill"] = my_prefill
+
+    @app.get("/t/<event>/player-lookup")
+    def player_lookup():
+        """Partner search for logged-in players: names and skill levels only."""
+        if not g.get("player"):
+            abort(403)
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:
+            return jsonify([])
+        t = g.event.store.load()
+        out = []
+        for rec in store.search(q, limit=8):
+            item = fill_for(rec, t)
+            item["registered"] = t.registered_as(rec["member"]) is not None
+            out.append(item)
+        return jsonify(out)

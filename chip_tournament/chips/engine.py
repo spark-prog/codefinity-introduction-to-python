@@ -111,6 +111,7 @@ class Player:
     sms_consent_at: str | None = None
     skill_8: int = 0  # 8-Ball skill level, when asked separately
     skill_9: int = 0  # 9-Ball skill level, when asked separately
+    member: str = ""  # APA member number (8 digits, 322...) when known: one player, one spot per event
 
 
 @dataclass
@@ -240,6 +241,7 @@ class Settings:
     # them and start the clock. CONTINUOUS: matches are called the moment a table is free.
     call_mode: str = DIRECTOR_CALLS
     test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
+    skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them
@@ -775,8 +777,30 @@ class Tournament:
         if not any(p.phone for p in players):
             raise TournamentError("Enter at least one cell number for text alerts.")
 
+    def registered_as(self, member: str, skip: str | None = None) -> Team | None:
+        """The team a member number is already on in this tournament (no-shows don't count)."""
+        if not member:
+            return None
+        return next((t for t in self.teams.values() if t.id != skip and t.status != NO_SHOW
+                     and any(p.member == member for p in t.players)), None)
+
+    def _check_members(self, players: list[Player], skip: str | None = None) -> None:
+        """One player, one spot: the same member number can't be on two teams, or twice on one."""
+        seen = set()
+        for p in players:
+            if not p.member:
+                continue
+            if p.member in seen:
+                raise TournamentError(f"{p.name} is listed twice. Each partner is a different player.")
+            seen.add(p.member)
+            other = self.registered_as(p.member, skip)
+            if other is not None:
+                raise TournamentError(f"{p.name} is already registered for {self.settings.name} (team {other.name}). "
+                                      "A player can only be on one team.")
+
     def register_team(self, name: str, players: list[Player], list_seeking: bool = False) -> Team:
         """Register a team. With just one player, the team holds a spot until it adds a partner."""
+        self._check_members(players)
         name = name.strip()
         if not name:  # no team name: the players' first names ("Ann & Bob"), numbered if that's taken
             base = " & ".join(p.name.strip().split()[0] for p in players if p.name.strip())
@@ -902,6 +926,13 @@ class Tournament:
         """
         team = self.team(team_id)
         same_people = {i for i in same_people if i < min(len(players), len(team.players))}
+        for i, p in enumerate(players):  # the same person keeps their member number
+            if not p.member:
+                old = team.players[i] if i in same_people else next(
+                    (o for o in team.players if self._names([o]) == self._names([p])), None)
+                if old is not None:
+                    p.member = old.member
+        self._check_members(players, skip=team_id)
         # The roster as it was, with corrected names applied, so a spelling fix isn't a swap.
         before = [Player(players[i].name if i in same_people else o.name, o.phone, o.skill) for i, o in enumerate(team.players)]
         was_solo, solo = team.needs_partner, len(players) == 1

@@ -886,3 +886,16 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 
 /* Narrow phones: "All Events" becomes "Events" so the event menu stays on one row */
 @media (max-width: 400px) { .hide-xs { display: none; } .nav a, .nav .link { letter-spacing: .03em; } }
+
+/* Registration: filled in from the player list, and the partner search */
+.login-nudge { margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+.lookup-list { list-style: none; margin: -4px 0 8px; padding: 4px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); background: rgba(var(--bg-rgb), .95); }
+.lookup-pick { display: block; width: 100%; text-align: left; padding: 10px; background: none; border: 0;
+  color: inherit; font: inherit; cursor: pointer; border-radius: 6px; }
+.lookup-pick:hover, .lookup-pick:focus { background: rgba(255, 255, 255, .08); }
+.lookup-pick:disabled { opacity: .5; cursor: not-allowed; }
+.lookup-note { margin: -4px 0 6px; }
+.already-registered { display: grid; gap: 8px; justify-items: start; }
+.already-registered p { margin: 0; }
+.button.disabled { opacity: .45; pointer-events: none; filter: grayscale(.6); }

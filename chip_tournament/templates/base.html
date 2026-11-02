@@ -90,6 +90,56 @@
     <a href="mailto:{{ legal.email }}">{{ legal.email }}</a>
   </footer>
 <script>
+// Pages that update themselves (the TV board, live pages, countdowns) never navigate away to refresh. They fetch
+// the fresh page first and only then put it in place of the old one. During a deploy (a minute or so) the
+// fetch fails, so the page stays as it was, says it's reconnecting, and updates as soon as the site is back.
+// (A plain reload would land on the host's error page, which never reloads again: a TV would stay stuck on it.)
+window.ctSafeReload = (function () {
+  var busy = false, tries = 0, note = null;
+  function say(text) {
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "reconnecting";
+      note.setAttribute("role", "status");
+      document.body.appendChild(note);
+    }
+    note.textContent = text;
+  }
+  function retry() {
+    tries += 1;
+    say("Reconnecting… this page will update when the site is back.");
+    setTimeout(check, Math.min(5000 * tries, 20000));  // 5 s, 10 s, 15 s, then every 20 s
+  }
+  function swapIn(html) {
+    var y = window.scrollY;
+    var last = setTimeout(function () {}, 0);  // stop this page's timers (the new page starts its own)
+    for (var i = 0; i <= last; i++) { clearTimeout(i); clearInterval(i); }
+    document.open();  // also drops this page's event listeners
+    document.write(html);
+    document.close();
+    if (y) window.addEventListener("load", function () { window.scrollTo(0, y); });
+  }
+  function check() {
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
+    fetch(location.href, { cache: "no-store", credentials: "same-origin", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.redirected) { location.href = r.url; return; }  // e.g. logged out: the site is up, go there
+        if (r.status >= 400 && r.status < 500) { location.reload(); return; }  // gone: show the real page
+        if (!r.ok || (r.headers.get("Content-Type") || "").indexOf("text/html") < 0) throw new Error("not ready");
+        return r.text().then(swapIn);
+      })
+      .catch(function () { if (timer) clearTimeout(timer); retry(); });
+  }
+  return function () {
+    if (busy) return;
+    busy = true;
+    check();
+  };
+})();
+</script>
+<script>
 // Live countdowns: <span class="countdown" data-at="ISO time">, and match timers on the director page.
 (function () {
   var els = document.querySelectorAll(".countdown[data-at]"), reloading = false;
@@ -116,7 +166,7 @@
         el.textContent = "(in " + Math.floor(diff / 60) + ":" + String(diff % 60).padStart(2, "0") + ")";
       } else {
         el.textContent = "(now)";
-        if (el.dataset.reload && !reloading && diff < -2) { reloading = true; setTimeout(function () { location.reload(); }, 15000); }
+        if (el.dataset.reload && !reloading && diff < -2) { reloading = true; setTimeout(window.ctSafeReload, 15000); }
       }
     });
   }
@@ -158,7 +208,7 @@
   }
   setInterval(function () {
     idle = busy() ? 0 : idle + 1;
-    if (idle >= secs) location.reload();
+    if (idle >= secs) window.ctSafeReload();
   }, 1000);
 })();
 </script>
@@ -181,7 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (el.dataset.label === "Opens in") { el.textContent = "· Opening now…"; opened = true; }
       else { el.textContent = "· Registration has closed."; }
     });
-    if (opened) setTimeout(() => location.reload(), 2000);  // show the Register button
+    if (opened) setTimeout(window.ctSafeReload, 2000);  // show the Register button
     else if (pending) setTimeout(tick, 1000);
   };
   tick();

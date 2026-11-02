@@ -198,3 +198,19 @@ def test_undo_still_works_after_the_safe_write(app):
     assert len(ev.load().teams) == 2
     assert ev.store.undo() == "Add a team"
     assert len(ev.load().teams) == 1 and not ev.store.path.with_suffix(".tmp").exists()
+
+
+def test_live_pages_refresh_without_leaving_the_page(app):
+    """A refresh fetches the fresh page first and only then shows it: during a deploy the page stays put
+    (saying it's reconnecting) instead of landing on the host's error page, which never reloads."""
+    ev = chip_event(app)
+    import re
+    for path in (f"/t/{ev.id}/board", f"/t/{ev.id}/", "/"):
+        html = app.test_client().get(path).get_data(as_text=True)
+        assert "window.ctSafeReload = " in html and "Reconnecting…" in html, path
+        scripts = "".join(re.findall(r"<script>(.*?)</script>", html, re.S))
+        helper = scripts.split("window.ctSafeReload = ", 1)[1].split("})();", 1)[0]
+        # the only direct reloads are inside the helper, once the site has answered
+        assert scripts.count("location.reload()") == helper.count("location.reload()") == 1, path
+    board = app.test_client().get(f"/t/{ev.id}/board").get_data(as_text=True)
+    assert 'name="auto-refresh"' in board and "window.ctSafeReload()" in board

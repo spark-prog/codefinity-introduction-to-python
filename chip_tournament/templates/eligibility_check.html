@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Am I eligible? — Control Table{% endblock %}
+{% block content %}
+<div class="narrow-wide">
+<header class="page-head">
+  <p class="eyebrow">Players</p>
+  <h1>Am I eligible?</h1>
+  <p class="lede">Enter an APA member number to see which upcoming tournaments that player can enter.</p>
+</header>
+<form method="post" class="card form reset-row">
+  <input name="member" value="{{ member }}" inputmode="numeric" maxlength="10" placeholder="322…" required aria-label="Member number" autocomplete="off">
+  <button class="button">Check</button>
+</form>
+{% if results is not none %}
+<section class="your-events">
+  <h2>{% if mine %}Your events{% else %}Member {{ member }}{% endif %}</h2>
+  {% if not known %}<p class="banner">That member number isn't in the league's player list (it may be new). You can still register: the league office will check it.</p>{% endif %}
+  {% for e in results %}
+  <article class="card your-event">
+    <div class="your-event-when">
+      <span class="your-event-day">{{ e.date|day if e.date else "Date TBA" }}</span>
+      {% if e.time %}<span class="your-event-time">{{ e.time }}</span>{% endif %}
+    </div>
+    <div class="your-event-body">
+      <h3><a href="{{ e.home }}">{{ e.name }}</a></h3>
+      {% if e.status == "registered" %}<p><span class="check-badge ok">Registered</span></p>
+      {% elif e.status == "eligible" %}<p><span class="check-badge ok">Eligible ✓</span></p>
+        {% if e.open %}<a class="button small" href="{{ e.register }}">Register</a>{% endif %}
+      {% elif e.status == "check" %}<p><span class="check-badge differs">The league office will check</span></p>
+        {% if e.reasons %}<p class="muted small-note">{{ e.reasons|join("; ") }}</p>{% endif %}
+        {% if e.open %}<a class="button small" href="{{ e.register }}">Register</a>{% endif %}
+      {% else %}<p><span class="check-badge not_found">Not eligible</span></p>
+        {% if e.reasons %}<ul class="small-note">{% for x in e.reasons %}<li>{{ x }}</li>{% endfor %}</ul>
+          <a class="button small secondary" href="{{ e.register }}">Ask for a review</a>
+        {% elif not mine %}<p class="muted small-note">The reasons are private. <a href="{{ url_for('player_login', next=url_for('eligibility_check')) }}">Log in</a> as this player to see why.</p>{% endif %}
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">No upcoming tournaments right now.</p></div>
+  {% endfor %}
+</section>
+{% endif %}
+</div>
+{% endblock %}

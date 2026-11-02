@@ -25,6 +25,7 @@ def register(app, h) -> None:
     store: players.PlayerStore = app.config["players"]
     accounts = Accounts(app.config["data_dir"], app.secret_key)
     app.config["accounts"] = accounts
+    app.config["device_id"] = h["device_id"]
     signer = URLSafeTimedSerializer(app.secret_key, salt="player-login")
     sends_by_ip = Throttle(limit=30, window=3600)
     sends_by_member = Throttle(limit=5, window=3600)
@@ -277,6 +278,61 @@ def register_registration(app) -> None:
         return {"ok": not no, "no": no, "review": review, "asked": asked}
 
     app.jinja_env.globals["my_eligibility"] = my_eligibility
+
+    # ------------------------------------------------ Phase 8: the public eligibility check
+
+    lookups_by_ip = Throttle(limit=40, window=3600)
+    lookups_by_device = Throttle(limit=20, window=3600)
+
+    def public_results(member: str) -> list[dict]:
+        """Upcoming events and whether this member can play: a status only, never the reasons (anyone can type
+        anyone's number). The reasons are for the player themself, logged in."""
+        rec, start = store.get(member), store.config()["session_start"]
+        mine = bool(g.get("player")) and g.player["member"] == member
+        out = []
+        for ev in app.config["hub"].events():
+            t = ev.load()
+            s = t.settings
+            if t.status == "finished" or s.test_event:
+                continue
+            rules = eligibility.rules_of(s)
+            row = {"name": s.name, "date": s.date, "time": s.start_time, "home": url_for("home", event=ev.id),
+                   "register": url_for("register", event=ev.id), "open": t.status == "setup" and not s.registration_shut,
+                   "reasons": []}
+            if t.registered_as(member) is not None:
+                row["status"] = "registered"
+            elif not eligibility.any_rules(rules) or eligibility.override_for(t, member):
+                row["status"] = "eligible"
+            else:
+                no, review = eligibility.check_player(rec, rules, start, getattr(s, "skill_game", "8"))
+                row["status"] = "no" if no else ("check" if review else "eligible")
+                if mine:
+                    row["reasons"] = no or review
+            out.append(row)
+        return sorted(out, key=lambda r: r["date"] or "9999")
+
+    @app.route("/eligibility", methods=["GET", "POST"])
+    def eligibility_check():
+        results, member, known = None, "", True
+        if request.method == "POST":
+            member = re.sub(r"\D", "", request.form.get("member", ""))
+            ip, device = request.remote_addr or "?", app.config["device_id"]()
+            if lookups_by_ip.wait(ip) or lookups_by_device.wait(device):
+                flash("That's a lot of lookups. Try again in an hour.", "error")
+            elif not players.MEMBER_RE.fullmatch(member):
+                flash("Member numbers are 8 digits and start with 322.", "error")
+            elif not store.records():
+                flash("Eligibility checks aren't available yet.", "error")
+            else:
+                lookups_by_ip.fail(ip)
+                lookups_by_device.fail(device)
+                known = store.get(member) is not None
+                results = public_results(member)
+        elif g.get("player"):  # logged in: their own results straight away
+            member = g.player["member"]
+            results = public_results(member)
+        return render_template("eligibility_check.html", t=None, results=results, member=member, known=known,
+                               mine=bool(g.get("player")) and g.player["member"] == member)
 
     # ------------------------------------------------ Phase 7: reviews, overrides, the lock
 

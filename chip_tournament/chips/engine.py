@@ -1007,6 +1007,17 @@ class Tournament:
         self._say(f"Removed {team.name}.")
         self._fill_from_waitlist()
 
+    def unregister(self, team_id: str) -> str:
+        """The team takes itself out before the tournament starts. Its spot goes to the waiting list."""
+        team = self.team(team_id)
+        if self.status != SETUP and team.status != WAITLISTED:
+            raise TournamentError("The tournament has started, so you can't unregister here. See the tournament desk.")
+        self._text_team(team, f"{team.name} is unregistered from {self.settings.name}. "
+                              "Changed your mind? Register again while there's room.")
+        self.remove_team(team_id)
+        self._say(f"{team.name} unregistered itself.")
+        return team.name
+
     # ------------------------------------------------------------ event check-in
 
     @property

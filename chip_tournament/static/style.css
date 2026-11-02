@@ -899,3 +899,8 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 .already-registered { display: grid; gap: 8px; justify-items: start; }
 .already-registered p { margin: 0; }
 .button.disabled { opacity: .45; pointer-events: none; filter: grayscale(.6); }
+
+/* Unregister: tucked away, with a tick box to confirm */
+.unregister { margin-top: 14px; }
+.unregister summary { cursor: pointer; color: var(--ink-2); text-decoration: underline; }
+.unregister .form { margin-top: 10px; }

@@ -1,0 +1,10 @@
+{# Unregister before the start. Needs: action (URL), who (team or entry name). #}
+<details class="inline-details unregister" id="unregister">
+  <summary>Unregister</summary>
+  <form method="post" action="{{ action }}" class="form">
+    <p>This takes <b>{{ who }}</b> out of {{ t.settings.name }}{% if t.waitlist %}, and your spot goes to the next on the waiting list{% endif %}.
+      You can register again later while there's room.</p>
+    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Yes, unregister {{ who }}</label>
+    <button class="button danger">Unregister</button>
+  </form>
+</details>

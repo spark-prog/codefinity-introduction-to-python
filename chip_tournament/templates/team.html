@@ -120,7 +120,10 @@
           {% if chips %}<p>Combined skill {{ team.combined_skill }} → starts with <b>{{ chips }} chips</b>.</p>
           {% else %}<p class="banner danger">Combined skill {{ team.combined_skill }} is over {{ t.max_skill }}. You need a new partner before the tournament starts.</p>{% endif %}
         {% endif %}
-        <a class="button" href="{{ url_for('roster', team_id=team.id) }}">Update roster</a>
+        <a class="button" href="{{ url_for('roster', team_id=team.id) }}">Update roster or skill levels</a>
+        {% if is_team and (t.status == SETUP or team.status == "waitlisted") %}
+        {% set action = url_for('team_unregister', team_id=team.id) %}{% set who = team.name %}{% include "_unregister.html" %}
+        {% endif %}
       </div>
     {% endif %}
   </div>

@@ -161,5 +161,16 @@ document.addEventListener("DOMContentLoaded", () => {
   tick();
 });
 </script>
+<script>
+// "Are you sure?" for forms with data-dialog-title on pages without the director's dialog (team pages).
+document.addEventListener("DOMContentLoaded", () => {
+  if (document.getElementById("confirm-title")) return;
+  document.querySelectorAll("form[data-dialog-title]").forEach((f) => {
+    f.addEventListener("submit", (e) => {
+      if (!window.confirm(f.dataset.dialogTitle + "\n\n" + (f.dataset.dialogText || ""))) e.preventDefault();
+    });
+  });
+});
+</script>
 </body>
 </html>

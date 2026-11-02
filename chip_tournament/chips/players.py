@@ -195,6 +195,29 @@ def skill_for(rec: dict, game: str) -> tuple[int | None, str]:
     return None, "needs review"
 
 
+SKILL_BASES = {"8": "8-Ball skill levels", "9": "9-Ball skill levels",
+               "high": "Highest of 8-Ball & 9-Ball (no cap)", "high7": "Highest of 8-Ball & 9-Ball (cap at 7)"}
+
+
+def basis_label(basis: str) -> str:
+    """How an event's skill level is described in messages: '8-Ball', '9-Ball' or 'highest'."""
+    return {"8": "8-Ball", "9": "9-Ball"}.get(basis, "highest")
+
+
+def event_skill(rec: dict, basis: str) -> tuple[int | None, str]:
+    """The skill level a player plays at in an event, by its basis: '8', '9' (with the conversion rule),
+    'high' (the higher of their 8-Ball and 9-Ball levels) or 'high7' (the higher, capped at 7)."""
+    if basis in ("8", "9"):
+        return skill_for(rec, basis)
+    levels = [x for x in (rec.get("sl8"), rec.get("sl9")) if x is not None]
+    if not levels:
+        return None, "needs review"
+    top = max(levels)
+    if basis == "high7" and top > 7:
+        return 7, f"highest of 8-Ball & 9-Ball, capped at 7 (SL {top})"
+    return top, "highest of 8-Ball & 9-Ball"
+
+
 def rows_from_csv(raw: bytes) -> list[list[str]]:
     """A CSV download of the sheet (File > Download > CSV), in UTF-8 or Windows encoding."""
     for enc in ("utf-8-sig", "cp1252"):
@@ -276,15 +299,17 @@ class PlayerStore:
 
     # settings ------------------------------------------------------------
     def config(self) -> dict:
-        return {"sheet": "", "tab": TAB, "session_start": SESSION_START, **self._read("config.json", {})}
+        return {"sheet": "", "tab": TAB, "session_start": SESSION_START, "session_name": "Fall",
+                **self._read("config.json", {})}
 
-    def set_session_start(self, value: str) -> str:
+    def set_session_start(self, value: str, name: str = "") -> str:
         try:
             day = datetime.strptime((value or "").strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
         except ValueError:
             raise PlayerError("Enter the session's start date.")
+        name = name if name in ("Spring", "Summer", "Fall") else self.config()["session_name"]
         with self.lock:
-            self._write("config.json", {**self.config(), "session_start": day})
+            self._write("config.json", {**self.config(), "session_start": day, "session_name": name})
         return day
 
     def extra_columns(self) -> list[str]:

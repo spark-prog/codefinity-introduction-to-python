@@ -174,7 +174,7 @@ def name_matches(typed: str, rec: dict) -> bool:
 def fill_for(rec: dict, t) -> dict:
     """What a registration form gets for this player in this event (never their phone or email)."""
     game = getattr(t.settings, "skill_game", "8")
-    skill, how = players.skill_for(rec, game)
+    skill, how = players.event_skill(rec, game)
     return {"member": rec["member"], "name": full_name(rec), "skill": skill or "", "how": how,
             "skill8": rec.get("sl8") or "", "skill9": rec.get("sl9") or ""}
 

@@ -11,8 +11,10 @@
   <option value="either" {% if r.matches_game == "either" %}selected{% endif %}>8-Ball or 9-Ball</option>
   <option value="8" {% if r.matches_game == "8" %}selected{% endif %}>8-Ball</option>
   <option value="9" {% if r.matches_game == "9" %}selected{% endif %}>9-Ball</option></select></label>
-<label class="checkbox wide"><input type="checkbox" name="elig_played_session" value="1" {% if r.played_session %}checked{% endif %}>
-  Played at least one match this session (since {{ session_start()|day }}; change it on the Players page)</label>
+<label class="checkbox"><input type="checkbox" name="elig_played_session" value="1" {% if r.played_session %}checked{% endif %}>
+  Played at least one match since…</label>
+<label>…this date <input type="date" name="elig_played_since" value="{{ r.played_since or session_start() }}">
+  <span class="muted small-note">Starts on the current session start date (Players page).</span></label>
 <label>Must be active in <select name="elig_active_in">
   <option value="" {% if not r.active_in %}selected{% endif %}>Either format</option>
   <option value="8" {% if r.active_in == "8" %}selected{% endif %}>8-Ball</option>

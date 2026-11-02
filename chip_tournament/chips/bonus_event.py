@@ -161,7 +161,11 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
         s["eligibility"] = who_can_play
     warnings += elig_notes
     basis = (elig.get("skill_level_basis") or "").lower()
-    if "9-ball" in basis or "9 ball" in basis:
+    if "high" in basis and "7" in basis:
+        s["skill_game"] = "high7"
+    elif "high" in basis:
+        s["skill_game"] = "high"
+    elif "9-ball" in basis or "9 ball" in basis:
         s["skill_game"] = "9"
     elif "8-ball" in basis or "8 ball" in basis:
         s["skill_game"] = "8"

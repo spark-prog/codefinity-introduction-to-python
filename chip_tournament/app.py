@@ -181,6 +181,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
     app.jinja_env.globals["skill_for"] = players.skill_for
+    app.jinja_env.globals["skill_bases"] = players.SKILL_BASES
     app.jinja_env.globals["elig_rules"] = eligibility.rules_of
     app.jinja_env.globals["elig_describe"] = eligibility.describe
     app.jinja_env.globals["elig_genders"] = eligibility.GENDERS
@@ -733,7 +734,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
                 s.eligibility = eligibility.parse_form(f, s.eligibility)
-            if f.get("skill_game") in ("8", "9"):
+            if f.get("skill_game") in ("8", "9", "high", "high7"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:
                 s.registration_opens, s.registration_closes = schedule.check_times(
@@ -1286,8 +1287,9 @@ def create_app(data_dir: str | None = None) -> Flask:
     @admin_required
     def admin_players_session():
         try:
-            day = player_store.set_session_start(request.form.get("session_start", ""))
-            flash(f"Current session starts {day}.", "ok")
+            day = player_store.set_session_start(request.form.get("session_start", ""),
+                                                 request.form.get("session_name", ""))
+            flash(f"The {player_store.config()['session_name']} session started {day}.", "ok")
         except players.PlayerError as exc:
             flash(str(exc), "error")
         return redirect(url_for("admin_players"))

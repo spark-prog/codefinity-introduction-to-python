@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Log in — Control Table{% endblock %}
+{% block content %}
+<div class="narrow">
+<header class="page-head">
+  <p class="eyebrow">Players</p>
+  <h1>Log in</h1>
+  <p class="lede">Enter your APA member number or your email. We'll email you a 6-digit code: no password needed.</p>
+</header>
+<form method="post" class="card form">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Member number or email <input name="who" required autofocus autocomplete="username" placeholder="322… or you@example.com"></label>
+  <button class="button big block">Email me a code</button>
+  <p class="muted small-note">Your member number is 8 digits starting with 322. Codes come from the league's email address; check your spam folder if it doesn't arrive.</p>
+</form>
+</div>
+{% endblock %}

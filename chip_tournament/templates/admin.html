@@ -65,7 +65,8 @@
     <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
     {% endif %}
     <div class="button-row">
-    <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('Start the tournament and call the first matches?')">
+    {% set waiting = pending_rows(t)|length %}
+    <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Start the tournament and call the first matches?')">
       <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first"{% endif %}>Start tournament</button></form>
     {% if s.require_checkin and unchecked %}
     <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"

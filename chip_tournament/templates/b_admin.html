@@ -50,7 +50,8 @@
   <div class="button-row">
     {% if setup %}
     <form method="post" action="{{ url_for('admin_start') }}" class="inline"
-          data-dialog-title="Draw the bracket?" data-dialog-text="Registration closes, the bracket is drawn and the first matches are called to tables (and texted)." data-dialog-ok="Draw it">
+          {% set waiting = pending_rows(t)|length %}
+          data-dialog-title="Draw the bracket?" data-dialog-text="{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Registration closes, the bracket is drawn and the first matches are called to tables (and texted)." data-dialog-ok="Draw it">
       <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first"{% endif %}>Draw the bracket &amp; start</button></form>
     {% endif %}
     <form method="post" action="{{ url_for('admin_undo') }}" class="inline"

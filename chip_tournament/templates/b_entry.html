@@ -9,6 +9,7 @@
 </header>
 
 {% if is_entry and entry.awaiting_texts %}
+{% set players = entry.players %}{% include "_pending_notice.html" %}
 <section class="card">
   <h3>Get tournament texts</h3>
   {% include "_save_contact.html" %}

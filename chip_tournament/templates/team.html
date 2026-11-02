@@ -18,6 +18,7 @@
   {% else %}finish your current match. The match after it is your last, then you're cashed in automatically.{% endif %}</div>
 {% endif %}
 {% if team.status == ACTIVE and t.cash_in_open %}<div class="banner">Cash-in is open. See the desk to cash in for {{ t.payout_for(team)|money }}, or keep playing.</div>{% endif %}
+{% set players = team.players %}{% include "_pending_notice.html" %}
 {% if team.awaiting_texts %}{% include "_text_alerts.html" %}{% endif %}
 
 <div class="split">

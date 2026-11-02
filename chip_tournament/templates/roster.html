@@ -39,7 +39,7 @@
     {% set solo_checked = team.needs_partner %}
     {% set list_checked = team.list_seeking %}
     {% set solo_label = none if team.needs_partner else "My partner dropped out. Hold our spot while I find a new one." %}
-    {% include "_roster_fields.html" %}
+    {% set member_field = true %}{% include "_roster_fields.html" %}
     <div class="button-row">
       <button class="button big">Save roster</button>
       <a class="button big secondary" href="{{ url_for('team_page', team_id=team.id) }}">Cancel</a>

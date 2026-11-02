@@ -1,0 +1,5 @@
+{# Team / entry page: a member number the league office is still checking. Needs players. #}
+{% for p in players if p.pending %}
+<p class="banner pending-notice">Pending verification: the league office is checking member number {{ p.member }} for {{ p.name }}.
+  You keep your spot meanwhile. If the number's wrong, fix it when you update your registration.</p>
+{% endfor %}

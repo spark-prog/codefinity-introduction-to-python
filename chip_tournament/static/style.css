@@ -912,3 +912,13 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 .check-badge.differs, .check-badge.missing { background: rgba(255, 176, 32, .15); color: #ffb020; }
 .check-badge.not_found, .check-badge.ambiguous, .check-badge.review { background: rgba(255, 107, 118, .15); color: #ff6b76; }
 tr.check-ok td { opacity: .75; }
+
+/* Pending verification */
+.pending-card { border-color: #ffb020; }
+.pending-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--line); }
+.pending-reason { color: #ffb020; font-weight: 600; }
+.correct-form input { width: 9.5em; padding: 0 10px; min-height: 36px; border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm); font: inherit; color: var(--ink); background: rgba(0, 0, 0, .28); }
+.correct-form input:focus { outline: none; border-color: var(--accent); }
+.pending-notice { border-color: #ffb020; }

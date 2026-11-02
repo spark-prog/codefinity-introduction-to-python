@@ -15,15 +15,14 @@
       note.textContent = m ? "Member " + m.member + (m.how && m.how !== "rated" ? " · " + m.how : "") : "";
     }
     function pick(m) {
-      input.value = m.name; member.value = m.member; list.hidden = true; show(m);
+      input.value = m.name; member.value = m.member; member.dataset.picked = "1"; list.hidden = true; show(m);
       [["player_skill_", m.skill], ["player_skill8_", m.skill8], ["player_skill9_", m.skill9]].forEach(function (f) {
         var el = form.querySelector("input[name=" + f[0] + i + "]");
         if (el && f[1] !== "") { el.value = f[1]; el.dispatchEvent(new Event("input", { bubbles: true })); }
       });
     }
-    if (member.value) note.textContent = "Member " + member.value;
     input.addEventListener("input", function () {
-      if (member.value) { member.value = ""; show(null); }  // typed over a picked player: it's someone else now
+      if (member.dataset.picked) { member.value = ""; delete member.dataset.picked; show(null); }  // typed over a picked player
       clearTimeout(timer);
       var q = input.value.trim();
       if (q.length < 2) { list.hidden = true; return; }

@@ -259,13 +259,23 @@ def full_name(rec: dict) -> str:
 
 
 def name_matches(typed: str, rec: dict) -> bool:
-    """'ann lee', 'Annie Lee' (nickname) or 'Ann M. Lee' all match Ann Lee (first or nickname, and last name)."""
+    """Does the typed name fit the player list's record for that member number?
+    'Ann Lee', 'Annie Lee' (nickname), 'Ann M. Lee' all match Ann Lee; so does just a first name ('Ann'), as
+    long as it's their first name, nickname, or a short form of 3+ letters ('Angel' for Angelica). A different
+    last name (a married name, a typo, someone else's number) still goes to the director to check."""
     words = (typed or "").lower().replace(".", " ").split()
-    last_words = (rec.get("last") or "").lower().split()
-    if len(words) < 2 or not last_words:
+    if not words:
         return False
-    firsts = {w for w in ((rec.get("first") or "").lower().split()[:1] + [(rec.get("nickname") or "").lower()]) if w}
-    return words[-1] == last_words[-1] and words[0] in firsts
+    first = ((rec.get("first") or "").lower().split() or [""])[0]
+    nickname = (rec.get("nickname") or "").lower().strip()
+
+    def first_fits(word: str) -> bool:
+        return word in {first, nickname} - {""} or (len(word) >= 3 and bool(first) and first.startswith(word))
+
+    if len(words) == 1:
+        return first_fits(words[0])
+    last_words = (rec.get("last") or "").lower().split()
+    return bool(last_words) and words[-1] == last_words[-1] and first_fits(words[0])
 
 
 def fill_for(rec: dict, t) -> dict:
@@ -963,7 +973,10 @@ def register_registration(app) -> None:
         try:
             with store_ev.change(f"Pending verification: {action}") as t:
                 if action == "verify":
-                    who = pending_mod.verify(t, gid, i)
+                    # The player list's name for that number, unless the director keeps what was typed.
+                    p = next((p for grp, j, p in pending_mod.pending(t) if grp.id == gid and j == i), None)
+                    rec = store.get(p.member) if p is not None and request.form.get("keep") != "1" else None
+                    who = pending_mod.verify(t, gid, i, name=full_name(rec) if rec else None)
                     msg = f"Verified {who}."
                 elif action == "correct":
                     member = re.sub(r"\D", "", request.form.get("member", ""))

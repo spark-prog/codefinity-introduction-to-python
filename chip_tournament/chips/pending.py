@@ -42,7 +42,11 @@ def verify(t, gid: str, i: int, member: str | None = None, name: str | None = No
             p.name = name
         t._say(f"Director corrected {p.name}'s member number on {g.name}: {old} → {member}.")
     else:
-        t._say(f"Director verified {p.name} ({p.member}) on {g.name}: {p.pending}.")
+        typed = p.name
+        if name and name != p.name:  # the player list's name for that number (they typed "Angel": Angelica McCain)
+            p.name = name
+        t._say(f"Director verified {p.name} ({p.member}) on {g.name}: {p.pending}"
+               + (f" (registered as {typed})." if p.name != typed else "."))
     p.pending = ""
     return p.name
 

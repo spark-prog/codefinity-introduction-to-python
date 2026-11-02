@@ -16,7 +16,7 @@
   {% set p = v.players[i] if v.players and i < v.players|length else none %}
   <fieldset class="partner{% if i %} partner-extra{% endif %}">
     <legend>Partner {{ i + 1 }}</legend>
-    <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if autofill %}data-lookup="{{ i }}" autocomplete="off"{% endif %}
+    <label>Full name (first and last) <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if autofill %}data-lookup="{{ i }}" autocomplete="off"{% endif %}
       {% if original_names and p %}data-original="{{ p.name }}"{% endif %} {% if locked and not (original_names and p) %}readonly{% endif %}></label>
     {% if original_names and p %}
     <label class="checkbox name-fix" hidden><input type="checkbox" name="same_person_{{ i }}" value="1">

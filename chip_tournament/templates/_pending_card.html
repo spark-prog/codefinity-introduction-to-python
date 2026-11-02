@@ -3,8 +3,9 @@
 {% if rows %}
 <section class="card pending-card jump-target" id="pending">
   <h3>Pending verification ({{ rows|length }})</h3>
-  <p class="muted small-note">These players keep their spot while you check. Verify accepts the number as entered (a new member, say);
-    Correct sets the right number from the player list; Remove takes the registration out and texts them why.</p>
+  <p class="muted small-note">These players keep their spot while you check. Verify accepts the number as entered, with the player
+    list's name when the number is in it (Keep uses the name as typed, a married name, say); Correct sets the right number
+    from the player list; Remove takes the registration out and texts them why.</p>
   {% for r in rows %}
   <div class="pending-row">
     <div><b>{{ r.name }}</b> <span class="muted">· {{ r.group }}</span><br>
@@ -13,7 +14,12 @@
     {% if not is_viewer %}
     <div class="button-row">
       <form method="post" action="{{ url_for('admin_pending', gid=r.gid, i=r.i) }}" class="inline">
-        <input type="hidden" name="action" value="verify"><button class="button small">{{ "Verify (now in the list)" if r.now_ok else "Verify" }}</button></form>
+        <input type="hidden" name="action" value="verify"><button class="button small">{{ ("Verify as " ~ r.list_name) if r.list_name else "Verify" }}</button></form>
+      {% if r.list_name and r.list_name != r.name %}
+      <form method="post" action="{{ url_for('admin_pending', gid=r.gid, i=r.i) }}" class="inline">
+        <input type="hidden" name="action" value="verify"><input type="hidden" name="keep" value="1">
+        <button class="button small secondary" title="Verify the number but keep the name as typed">Keep &ldquo;{{ r.name }}&rdquo;</button></form>
+      {% endif %}
       <form method="post" action="{{ url_for('admin_pending', gid=r.gid, i=r.i) }}" class="inline correct-form">
         <input type="hidden" name="action" value="correct">
         <input name="member" inputmode="numeric" maxlength="10" placeholder="Right number" aria-label="Right member number" required>

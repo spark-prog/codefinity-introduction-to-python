@@ -11,56 +11,39 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
-    <a class="button secondary" href="{{ url_for('board') }}">Board</a>
+    <a class="button secondary" href="{{ url_for('board') }}" target="_blank" rel="noopener">Board ↗</a>
+    <a class="button secondary" href="{{ url_for('home') }}" target="_blank" rel="noopener">View as player ↗</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. Phone numbers, PINs and texts are hidden.</p>{% endif %}
+{% set unchecked = t.not_checked_in if setup else [] %}
+{% set waiting = pending_rows(t)|length %}
 <nav class="jump-nav" aria-label="Director sections">
-  <a href="#summary">Summary</a>
-  {% if t.status == RUNNING %}<a href="#tables">Tables</a>{% endif %}
-  <a href="#entries">Entries</a>
-  {% if not setup %}<a href="#results">Results</a>{% endif %}
-  <a href="#texts">Texts &amp; log</a>
-  <a href="#settings">Settings</a>
-  <a href="#new-tournament">Start over</a>
-</nav>
-
-<div id="summary" class="jump-target">
-<div class="stats">
-  <div class="stat"><span class="label">Entries</span><span class="value">{{ t.field_entries|length }}{% if s.field_cap %} / {{ s.field_cap }}{% endif %}</span></div>
-  <div class="stat highlight"><span class="label">Pot</span><span class="value">{{ t.projected_pot_cents|money }}</span></div>
-  {% if not setup %}
-  <div class="stat"><span class="label">Still in</span><span class="value">{{ t.entries.values()|selectattr("status", "equalto", "active")|list|length }}</span></div>
-  <div class="stat"><span class="label">Matches left</span><span class="value">{{ t.matches|selectattr("status", "in", ["pending", "ready", "called"])|rejectattr("is_bye")|list|length }}</span></div>
-  {% endif %}
-</div>
-{% include "_pending_card.html" %}
-{% include "_exceptions_card.html" %}
-{% include "_eligibility_admin_card.html" %}
-<section class="card controls" style="margin-top: 0">
-  {% if setup %}
-  {% set unchecked = t.not_checked_in %}
-  <p>{{ t.field_entries|length }} entr{{ "y" if t.field_entries|length == 1 else "ies" }} in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
-    Drawing the bracket {{ "shuffles the entries randomly" if s.seeding == "random" else "seeds them in the order shown under Entries" }},
-    builds the {{ t.format_name|lower }} and calls the first matches to tables {{ s.tables|join(", ") }}.</p>
-  <p class="muted">Check-in: {{ t.field_entries|selectattr("checked_in_at")|list|length }} of {{ t.field_entries|length }}{% if s.require_checkin %} (required before the draw){% endif %}.</p>
-  {% endif %}
-  {% if t.status == FINISHED %}<p class="banner">Finished. Payouts are under Results.</p>{% endif %}
-  <div class="button-row">
+  {% if not is_viewer %}
+  <span class="jump-actions">
     {% if setup %}
     <form method="post" action="{{ url_for('admin_start') }}" class="inline"
-          {% set waiting = pending_rows(t)|length %}
           data-dialog-title="Draw the bracket?" data-dialog-text="{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Registration closes, the bracket is drawn and the first matches are called to tables (and texted)." data-dialog-ok="Draw it">
-      <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first"{% endif %}>Draw the bracket &amp; start</button></form>
+      <button class="button small" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first (Entries)"{% endif %}>Draw the bracket &amp; start</button></form>
     {% endif %}
     <form method="post" action="{{ url_for('admin_undo') }}" class="inline"
           data-dialog-title="Undo: {{ undo_label }}?" data-dialog-text="Undo takes back the most recent action, for everyone. Texts already sent can't be recalled." data-dialog-ok="Undo">
       <input type="hidden" name="step" value="{{ undo_step }}">
-      <button class="button secondary" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
-  </div>
-</section>
-</div>
+      <button class="button small secondary undo-button" {% if not undo_label %}disabled{% endif %} title="{{ ('Undo: ' ~ undo_label) if undo_label else 'Nothing to undo' }}">Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+  </span>
+  {% endif %}
+  {% if waiting %}<a href="#summary" class="jump-alert">Pending ({{ waiting }})</a>{% endif %}
+  {% if t.status == RUNNING %}<a href="#tables">Tables</a>{% endif %}
+  <a href="#entries">Entries</a>
+  {% if not setup %}<a href="#results">Results</a>{% endif %}
+  <a href="#photos">Photos</a>
+  <a href="#texts">Texts &amp; log</a>
+  <a href="#settings">Settings</a>
+  <a href="#new-tournament">Start over</a>
+  <a href="#summary">Summary</a>
+</nav>
+
 
 {% if t.status == RUNNING %}
 <section id="tables" class="jump-target">
@@ -365,7 +348,8 @@
 {% endif %}
 
 <section id="texts" class="card jump-target">
-  <h2>Texts &amp; log</h2>
+  <details class="fold-section"><summary class="fold-head"><h2>Texts &amp; log</h2><span class="muted">Text every entry · recent texts · log</span></summary>
+  <div class="fold-body">
   {% if not is_viewer %}
   <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
     <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="300"></textarea></label>
@@ -384,6 +368,7 @@
     <pre class="log">{% for line in t.log|reverse %}{{ line }}
 {% endfor %}</pre>
   </details>
+</div></details>
 </section>
 
 {% include "_photos_card.html" %}
@@ -392,7 +377,15 @@
   <h2>Settings</h2>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
     {% if not is_viewer %}<div class="button-row wide settings-save-top"><button class="button">Save settings</button></div>{% endif %}
-    <div class="settings-group">Event</div>
+    <div class="settings-tools wide" data-no-dirty data-viewer-ok>
+      <input type="search" class="settings-find" placeholder="Find a setting (fee, waiting list, race…)" aria-label="Find a setting" autocomplete="off">
+      <button type="button" class="button small secondary" data-settings="open">Open all</button>
+      <button type="button" class="button small secondary" data-settings="close">Close all</button>
+      <span class="muted small-note settings-find-note" aria-live="polite"></span>
+    </div>
+    <details class="settings-section" data-key="event">
+      <summary><span class="settings-title">Event details</span><span class="settings-sum">{{ s.date|day if s.date else "No date yet" }}{% if s.start_time %} · {{ s.start_time }}{% endif %}{% if s.venue %} · {{ s.venue }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
     <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
@@ -400,15 +393,15 @@
     <label>Venue <input name="venue" value="{{ s.venue }}"></label>
     <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+      </div>
+    </details>
+    <details class="settings-section" data-key="registration">
+      <summary><span class="settings-title">Registration</span><span class="settings-sum">{% set st, when = reg_window(s) %}{{ {"open": "Open", "before": "Not open yet", "after": "Closed", "closed": "Closed"}[st] }}{% if s.require_member %} · member numbers required{% endif %}{% if s.waitlist_offer_hours %} · waiting-list offers {{ s.waitlist_offer_hours }} h{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
     <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
       Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
-    {% include "_eligibility_settings.html" %}
-    <label>Skill levels from the player list
-      <select name="skill_game">
-        {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
     <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
       <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
       <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
@@ -416,6 +409,22 @@
     <label>Online registration closes (blank = stays open) <input type="datetime-local" name="registration_closes" value="{{ s.registration_closes }}"></label>
     {% set st, when = reg_window(s) %}
     <p class="muted small-note wide">Right now: <b>{{ {"open": "open", "before": "not open yet", "after": "closed (past the closing time)", "closed": "closed (box above)"}[st] }}</b>{% if when %} · {{ "opens" if st == "before" else "closes" if st == "open" else "closed" }} {{ reg_when(when) }}{% endif %}. Times are venue time. You can always add teams yourself.</p>
+
+      </div>
+    </details>
+    <details class="settings-section" data-key="who">
+      <summary><span class="settings-title">Who can play</span><span class="settings-sum">{% set who = elig_describe(elig_rules(s)) %}{{ who|join(" · ") if who else "Open to everyone" }}</span></summary>
+      <div class="settings section-fields">
+    {% include "_eligibility_settings.html" %}
+    <label>Skill levels from the player list
+      <select name="skill_game">
+        {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
+      </div>
+    </details>
+    <details class="settings-section" data-key="rules">
+      <summary><span class="settings-title">Rules</span><span class="settings-sum">{{ (rule_choices()|selectattr("id", "equalto", s.rule_set)|map(attribute="title")|first) or "Not chosen yet" }}{% if s.event_rules %} · event rules added{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Rules this event plays by
       <select name="rule_set">
         <option value="">Not chosen yet</option>
@@ -423,8 +432,11 @@
       </select></label>
     <label class="wide">Tournament rules approved by APA for this event only (shown at the top of its Rules page)
       <textarea name="event_rules" rows="3" placeholder="e.g. One timeout per team per rack. No sudden death.">{{ s.event_rules }}</textarea></label>
-
-    <div class="settings-group">Format{% if not setup %} (set at the draw){% endif %}</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="format">
+      <summary><span class="settings-title">Format{% if not setup %} (set at the draw){% endif %}</span><span class="settings-sum">{{ t.format_name }} · {{ t.entries_label }}{% if s.skill_groups %} · skill groups {{ skill_groups_text(s.skill_groups) }}{% endif %}{% if s.max_player_skill %} · SL {{ s.max_player_skill }} max{% endif %}{% if s.team_skill_cap %} · cap {{ s.team_skill_cap }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Bracket
       <select name="format" {% if not setup %}disabled{% endif %}>
         {% for key, name in formats %}<option value="{{ key }}" {% if s.format == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -455,7 +467,11 @@
       <input name="skill_groups" value="{{ skill_groups_text(s.skill_groups) }}" placeholder="1-3, 4, 5, 6, 7-9" {% if not setup %}disabled{% endif %}>
       <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. At the draw, a group too small for the format joins whichever neighboring group has fewer players.</span></label>
 
-    <div class="settings-group">Races</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="races">
+      <summary><span class="settings-title">Races</span><span class="settings-sum">{% if s.race_method == RACK_CHART %}Rack race chart{% else %}Race to {{ s.race_winners }}{% if s.race_losers != s.race_winners %} · losers {{ s.race_losers }}{% endif %}{% if s.race_finals != s.race_winners %} · finals {{ s.race_finals }}{% endif %}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label class="wide">How races are set
       <select name="race_method" {% if not setup %}disabled{% endif %}>
         <option value="straight" {% if s.race_method != RACK_CHART %}selected{% endif %}>Straight race: the numbers below</option>
@@ -467,7 +483,11 @@
     <label>Final(s) race to <input name="race_finals" type="number" min="1" value="{{ s.race_finals }}"></label>
     {% if not setup %}<p class="muted wide">A new race applies to matches that haven't been called to a table yet.</p>{% endif %}
 
-    <div class="settings-group">Money &amp; field</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="money">
+      <summary><span class="settings-title">Money &amp; field</span><span class="settings-sum">{{ s.entry_fee_cents|money if s.entry_fee_cents else "Free" }}{% if s.added_money_cents %} + {{ s.added_money_cents|money }} added{% endif %} · {{ ("field of " ~ s.field_cap) if s.field_cap else "no field cap" }}{% if s.payouts %} · payouts {{ s.payouts|join("/") }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Entry fee <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if not setup %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if not setup %}disabled{% endif %}></label>
     <label>Payouts, % of the pot by place <input name="payouts" value="{{ s.payouts|join(', ') }}" placeholder="50, 30, 20"></label>
@@ -475,7 +495,11 @@
     <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if not setup %}disabled{% endif %}>
       Every entry must be checked in (or marked a no-show) before the draw</label>
 
-    <div class="settings-group">Tables</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="tables">
+      <summary><span class="settings-title">Tables</span><span class="settings-sum">{{ s.tables|length }} table{{ "s" if s.tables|length != 1 }}{% if s.tables %} ({{ s.tables|join(", ") }}){% endif %} · {{ "Continuous Play" if s.call_mode == CONTINUOUS else "Director Calls" }}</span></summary>
+      <div class="settings section-fields">
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
     <label class="wide">Calling matches
       <select name="call_mode">
@@ -486,7 +510,11 @@
     <label>Card turns amber after (min) <input name="match_minutes" type="number" min="1" value="{{ s.match_minutes }}"></label>
     <label>Card turns red after (min) <input name="long_match_minutes" type="number" min="1" value="{{ s.long_match_minutes }}"></label>
 
-    <div class="settings-group">Texts &amp; look</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="texts">
+      <summary><span class="settings-title">Texts &amp; look</span><span class="settings-sum">{{ "Test event: no texts" if s.test_event else "Texts on" }}{% if s.sms_name %} · from {{ s.sms_name }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label class="checkbox"><input type="hidden" name="test_event_shown" value="1"><input type="checkbox" name="test_event" value="1" {% if s.test_event %}checked{% endif %}>
       Test event: never send texts (they're only logged below) and hide it from All Events. Players can still use a direct link.</label>
     <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
@@ -496,13 +524,15 @@
         {% for key, name, g, sw in THEMES %}<option value="{{ key }}" {% if theme_key(s.theme) == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
       </select></label>
     <p class="clock-check wide muted">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.</p>
+      </div>
+    </details>
     <button class="button big">Save settings</button>
   </form>
 </section>
 
 <section class="card jump-target" id="new-tournament">
-  <p class="eyebrow">Danger zone</p>
-  <h2>Start this tournament over</h2>
+  <details class="fold-section"><summary class="fold-head"><h2>Start over</h2><span class="muted">Danger zone: archive or delete this tournament</span></summary>
+  <div class="fold-body">
   <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
     Starting over clears this one: <b>Archive</b> keeps a copy below; <b>Delete permanently</b> erases it with its rosters and texts.</p>
   <form method="post" action="{{ url_for('admin_reset') }}" class="reset-row">
@@ -519,6 +549,31 @@
     {% endfor %}
   </table>
   {% endif %}
+</div></details>
 </section>
+<div id="summary" class="jump-target summary-bottom">
+<h2 class="summary-title">Summary</h2>
+<div class="stats">
+  <div class="stat"><span class="label">Entries</span><span class="value">{{ t.field_entries|length }}{% if s.field_cap %} / {{ s.field_cap }}{% endif %}</span></div>
+  <div class="stat highlight"><span class="label">Pot</span><span class="value">{{ t.projected_pot_cents|money }}</span></div>
+  {% if not setup %}
+  <div class="stat"><span class="label">Still in</span><span class="value">{{ t.entries.values()|selectattr("status", "equalto", "active")|list|length }}</span></div>
+  <div class="stat"><span class="label">Matches left</span><span class="value">{{ t.matches|selectattr("status", "in", ["pending", "ready", "called"])|rejectattr("is_bye")|list|length }}</span></div>
+  {% endif %}
+</div>
+{% include "_pending_card.html" %}
+{% include "_exceptions_card.html" %}
+{% include "_eligibility_admin_card.html" %}
+<section class="card controls" style="margin-top: 0">
+  {% if setup %}
+  <p>{{ t.field_entries|length }} entr{{ "y" if t.field_entries|length == 1 else "ies" }} in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
+    Drawing the bracket {{ "shuffles the entries randomly" if s.seeding == "random" else "seeds them in the order shown under Entries" }},
+    builds the {{ t.format_name|lower }} and calls the first matches to tables {{ s.tables|join(", ") }}.</p>
+  <p class="muted">Check-in: {{ t.field_entries|selectattr("checked_in_at")|list|length }} of {{ t.field_entries|length }}{% if s.require_checkin %} (required before the draw){% endif %}.</p>
+  {% endif %}
+  {% if t.status == FINISHED %}<p class="banner">Finished. Payouts are under Results.</p>{% endif %}
+</section>
+</div>
 {% include "_director_js.html" %}
+{% include "_director_sections.html" %}
 {% endblock %}

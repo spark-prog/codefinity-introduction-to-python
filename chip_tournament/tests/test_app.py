@@ -767,8 +767,12 @@ def test_event_menu_order(client):
     assert f'<div class="brand show-sm"><a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page  # title by the logo on phones
     assert "Open the board" not in page  # only once play starts
     client.post("/admin/login", data={"password": "secret"})
-    nav = client.get("/").get_data(as_text=True).split('<nav class="nav')[1].split("</nav>")[0]
-    assert re.findall(r">([^<>]+)</a>", nav)[-1] == "Director"
+    page = client.get("/").get_data(as_text=True)
+    nav = page.split('<nav class="nav')[1].split("</nav>")[0]
+    # Signed in as director: the director's own menu, no player screens
+    assert re.findall(r">([^<>]+)</a>", nav) == ["Events", "Chip Tournament", "Board ↗", "Players", "Rules", "Backups"]
+    assert 'target="_blank"' in nav.split("Board ↗")[0].rsplit("<a ", 1)[1]  # the board opens in a new tab
+    assert "You're viewing the player page" in page and f'href="/t/{ChipEventClient.event_id}/admin">Back to director' in page
 
 
 def test_players_reach_their_scoring_page_from_home_and_board(client):

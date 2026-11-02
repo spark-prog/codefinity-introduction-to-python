@@ -8,6 +8,7 @@
     <p class="lede">Every tournament, each with its own registration, tables, texts and undo. Open one to run it.</p>
   </div>
   <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('index', view='player') }}" target="_blank" rel="noopener">View as player ↗</a>
     <a class="button secondary" href="{{ url_for('admin_players') }}">Players</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
   </div>
@@ -36,8 +37,8 @@
       <td>{{ r.count }}</td>
       <td class="nowrap">
         <a class="button small" href="{{ url_for('admin', event=r.event.id) }}">Run it</a>
-        <a class="button small secondary" href="{{ url_for('home', event=r.event.id) }}">Public page</a>
-        <a class="button small secondary" href="{{ url_for('board', event=r.event.id) }}">Board</a>
+        <a class="button small secondary" href="{{ url_for('home', event=r.event.id) }}" target="_blank" rel="noopener">Public page ↗</a>
+        <a class="button small secondary" href="{{ url_for('board', event=r.event.id) }}" target="_blank" rel="noopener">Board ↗</a>
         {% if not is_viewer %}<a class="button small secondary" href="{{ url_for('copy_event', event_id=r.event.id) }}">Copy</a>{% endif %}
       </td>
     </tr>

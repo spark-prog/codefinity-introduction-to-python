@@ -10,101 +10,55 @@
   </div>
   <div class="button-row" style="justify-content: flex-end">
     <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
-    <a class="button secondary" href="{{ url_for('board') }}">Board</a>
+    <a class="button secondary" href="{{ url_for('board') }}" target="_blank" rel="noopener">Board ↗</a>
+    <a class="button secondary" href="{{ url_for('home') }}" target="_blank" rel="noopener">View as player ↗</a>
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
     {% if t.status == SETUP and not is_viewer %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. You can look around, but buttons are turned off, and phone numbers, team PINs and text messages are hidden.</p>{% endif %}
+{% set unchecked = t.not_checked_in if t.status == SETUP else [] %}
+{% set waiting = pending_rows(t)|length %}
 <nav class="jump-nav" aria-label="Director sections">
-  <a href="#summary">Summary</a>
-  {% if t.status == RUNNING %}<a href="#matches">Tables</a>{% endif %}
-  <a href="#teams">Teams &amp; chips</a>
-  <a href="#texts">Texts &amp; log</a>
-  <a href="#settings">Settings</a>
-  <a href="#new-tournament">Start over</a>
-</nav>
-<div id="summary" class="jump-target">
-{% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
-
-{% include "_pending_card.html" %}
-{% include "_exceptions_card.html" %}
-{% include "_eligibility_admin_card.html" %}
-<section class="card controls" style="margin-top: 0">
+  {% if not is_viewer %}
+  <span class="jump-actions">
   {% if t.status == SETUP %}
-    <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
-      {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
-      {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw the first matches.</p>
-    {% set unchecked = t.not_checked_in %}
-    {% set checked = t.field_teams|selectattr("checked_in_at")|list|length %}
-    <p class="checkin-summary"><b>Check-in{% if s.checkin_by %} (by {{ s.checkin_by }}){% endif %}:</b>
-      {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
-      {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
-      Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
-    {% set solos = t.teams_needing_partner %}
-    {% if solos or t.partner_deadline is none %}
-    <p class="checkin-summary"><b>Partner deadline{% if t.partner_deadline %} ({{ t.partner_deadline_text() }}){% endif %}:</b>
-      {% if t.partner_deadline is none %}<span class="warn">set the tournament date and start time in Settings (e.g. 9:00 PM) so it can be enforced.</span>
-      {% else %}{{ solos|length }} team(s) still need a partner: {{ solos|map(attribute="name")|join(", ") }}.
-        {% if t.partner_deadline_paused and t.solo_teams_in_field %}The automatic move is paused because you pressed Undo.
-        {% elif t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
-    {% endif %}
-    {% if t.partner_deadline_paused and t.solo_teams_in_field %}
-    <div class="banner">
-      <p style="margin: 0 0 12px"><b>Partner deadline paused:</b> {{ t.solo_teams_in_field|map(attribute="name")|join(", ") }}
-        {{ "is" if t.solo_teams_in_field|length == 1 else "are" }} still in the field without a partner. The app won't move them again on its own.</p>
-      <form method="post" action="{{ url_for('admin_partner_deadline') }}" class="inline"
-            data-dialog-title="Move to the waiting list?"
-            data-dialog-text="{{ t.solo_teams_in_field|map(attribute='name')|join(', ') }} will go to the end of the waiting list and be texted. Teams on the waiting list move into their spots."
-            data-dialog-ok="Move them">
-        <button class="button small">Move them to the waiting list now</button></form>
-    </div>
-    {% endif %}
-    {% if s.require_checkin and unchecked %}
-    <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
-    {% endif %}
-    <div class="button-row">
-    {% set waiting = pending_rows(t)|length %}
     <form method="post" action="{{ url_for('admin_start') }}" class="inline" onsubmit="return confirm('{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Start the tournament and call the first matches?')">
-      <button class="button big" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first"{% endif %}>Start tournament</button></form>
-    {% if s.require_checkin and unchecked %}
-    <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"
-          onsubmit="return confirm('Mark all {{ unchecked|length }} team(s) that haven\'t checked in as no-shows? Waiting-list teams will move up and get a text.')">
-      <button class="button big danger-outline">Mark all {{ unchecked|length }} not checked in as no-shows</button></form>
-    {% endif %}
+      <button class="button small" {% if s.require_checkin and unchecked %}disabled title="Every team must be checked in or marked a no-show first (Teams &amp; chips)"{% endif %}>Start tournament</button></form>
   {% elif t.status == RUNNING %}
-    {% if not t.entries_locked and not t.last_call %}
-    <p class="banner">Late entries are open and money settings can still change until every team has completed a match
-      ({{ t.teams_yet_to_play|length }} team(s) still to finish their first: {{ t.teams_yet_to_play|map(attribute="name")|join(", ") }}).</p>
-    {% elif t.entries_locked %}<p class="muted">Entries and money settings are locked: every team has completed a match.</p>{% endif %}
-    <div class="button-row">
     {% if not t.cash_in_open %}
     <form method="post" action="{{ url_for('admin_open_cash_in') }}" class="inline" onsubmit="return confirm('Open cash-in and text every team?')">
-      <button class="button">Open cash-in{% if s.cash_in_time %} (scheduled {{ s.cash_in_time }}){% endif %}</button></form>
+      <button class="button small">Open cash-in{% if s.cash_in_time %} ({{ s.cash_in_time }}){% endif %}</button></form>
     {% endif %}
     {% if not t.last_call %}
     <form method="post" action="{{ url_for('admin_last_call') }}" class="inline"
           onsubmit="return confirm('LAST CALL: every team\'s next match will be its last, and teams are cashed in automatically when it ends. Matches on a table now finish first, then those teams play one more. Text every team?')">
-      <button class="button danger">Last call{% if s.last_call_time %} (scheduled {{ s.last_call_time }}){% endif %}</button></form>
+      <button class="button small danger">Last call{% if s.last_call_time %} ({{ s.last_call_time }}){% endif %}</button></form>
     {% else %}
-    <span class="muted">Last call is on — {{ t.active_teams|length }} team(s) still to finish.</span>
+    <span class="muted small-note">Last call on · {{ t.active_teams|length }} to finish</span>
     {% endif %}
     <form method="post" action="{{ url_for('admin_end_now') }}" class="inline"
           onsubmit="return confirm('End the tournament NOW? All matches stop and every team is cashed in at the current chip value.')">
-      <button class="button danger-outline">End now — cash everyone out</button></form>
+      <button class="button small danger-outline">End now</button></form>
   {% endif %}
-  {% if t.status == FINISHED %}<div class="button-row">{% endif %}
   <form method="post" action="{{ url_for('admin_undo') }}" class="inline"
         data-dialog-title="Undo: {{ undo_label }}?"
         data-dialog-text="Undo takes back the most recent action, for everyone.{% if undo_label and undo_label.startswith('Registration:') %} This removes that team's registration, even if a player registered themselves (they were already texted their PIN). To take out one team without undoing anything else, use Remove next to it instead.{% endif %} Texts already sent can't be recalled."
         data-dialog-ok="Undo">
     <input type="hidden" name="step" value="{{ undo_step }}">
-    <button class="button secondary{% if t.status == SETUP %} big{% endif %}" {% if not undo_label %}disabled{% endif %}>Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
-  </div>
-</section>
-
-</div>
+    <button class="button small secondary undo-button" {% if not undo_label %}disabled{% endif %} title="{{ ('Undo: ' ~ undo_label) if undo_label else 'Nothing to undo' }}">Undo{% if undo_label %}: {{ undo_label }}{% endif %}</button></form>
+  </span>
+  {% endif %}
+  {% if waiting %}<a href="#summary" class="jump-alert">Pending ({{ waiting }})</a>{% endif %}
+  {% if t.status == RUNNING %}<a href="#matches">Tables</a>{% endif %}
+  <a href="#teams">Teams &amp; chips</a>
+  <a href="#photos">Photos</a>
+  <a href="#texts">Texts &amp; log</a>
+  <a href="#settings">Settings</a>
+  <a href="#new-tournament">Start over</a>
+  <a href="#summary">Summary</a>
+</nav>
 
 {% if t.status == RUNNING %}
 <section id="matches" class="jump-target">
@@ -319,7 +273,12 @@
 
 <section id="teams" class="jump-target">
   <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span>
-    {% if not is_viewer and t.teams %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download teams (CSV)</a>{% endif %}{% if t.teams %}<a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a>{% endif %}</div>
+    {% if not is_viewer and t.teams %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download teams (CSV)</a>{% endif %}{% if t.teams %}<a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a>{% endif %}
+    {% if s.require_checkin and unchecked and not is_viewer %}
+    <form method="post" action="{{ url_for('admin_no_show_rest') }}" class="inline"
+          onsubmit="return confirm('Mark all {{ unchecked|length }} team(s) that haven\'t checked in as no-shows? Waiting-list teams will move up and get a text.')">
+      <button class="button small danger-outline">Mark all {{ unchecked|length }} not checked in as no-shows</button></form>
+    {% endif %}</div>
   {% if t.teams %}
   <div class="team-search">
     <input type="search" id="team-search" placeholder="Search a team, player{% if not is_viewer %} or last 4 of a cell{% endif %}" aria-label="Search teams" autocomplete="off">
@@ -422,7 +381,9 @@
   {% endif %}
 </section>
 
-<section class="split jump-target" id="texts">
+<section class="jump-target" id="texts">
+<details class="fold-section"><summary class="fold-head"><h2>Texts &amp; log</h2><span class="muted">Text every team · recent texts · chip ledger · log</span></summary>
+<div class="split fold-body">
 <div class="card">
   <h2>Text alerts</h2>
   {% if not sms_enabled %}<p class="banner">Texting is not set up, so alerts are only logged below. See the README to connect Twilio.</p>{% endif %}
@@ -454,6 +415,7 @@
   </details>
 </div>
 
+</div></details>
 </section>
 
 {% set money_locked = t.entries_locked or t.status == FINISHED %}
@@ -461,7 +423,9 @@
 
 <section class="card jump-target" id="settings">
   <h2>Tournament details & settings</h2>
-  <div class="settings-group" style="margin-top: 8px">Background photo</div>
+  <details class="settings-section" data-key="background">
+    <summary><span class="settings-title">Background photo &amp; clock</span><span class="settings-sum">{{ "Your own photo" if has_custom_background else "Default background" }} · the app thinks it's {{ server_time|clock }}</span></summary>
+    <div class="section-fields">
   <div class="photo-row">
     <div class="photo-preview" style="background-image: url('{{ background_url }}')"></div>
     <div>
@@ -477,13 +441,23 @@
       {% endif %}
     </div>
   </div>
-  <div class="settings-group" style="margin-top: 32px">Clock</div>
+  <p class="settings-sub">Clock</p>
   <p class="clock-check">Clock check: the app thinks it's <b>{{ server_time|clock }}</b>{% if tz_name %} ({{ tz_name }}){% endif %}.
     If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
     Check-in, grace and start times all use this clock.</p>
+    </div>
+  </details>
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
     {% if not is_viewer %}<div class="button-row wide settings-save-top"><button class="button">Save settings</button></div>{% endif %}
-    <div class="settings-group">Theme</div>
+    <div class="settings-tools wide" data-no-dirty data-viewer-ok>
+      <input type="search" class="settings-find" placeholder="Find a setting (fee, waiting list, race…)" aria-label="Find a setting" autocomplete="off">
+      <button type="button" class="button small secondary" data-settings="open">Open all</button>
+      <button type="button" class="button small secondary" data-settings="close">Close all</button>
+      <span class="muted small-note settings-find-note" aria-live="polite"></span>
+    </div>
+    <details class="settings-section" data-key="look">
+      <summary><span class="settings-title">Look</span><span class="settings-sum">{{ (THEMES|selectattr(0, "equalto", theme_key(s.theme))|map(attribute=1)|first) or "Default colors" }}</span></summary>
+      <div class="settings section-fields">
     <label class="wide">Colors for this tournament's pages
       <select name="theme" id="theme-pick">
         {% for group in ("Everyday", "Holidays") %}
@@ -512,22 +486,26 @@
     </script>
     <p class="muted wide">Changing the menu previews the theme on this page right away; press <b>Save settings</b> to use it everywhere.
       The default background picks up the theme's color; your own venue photo keeps its colors.</p>
-    <div class="settings-group">Event</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="event">
+      <summary><span class="settings-title">Event details</span><span class="settings-sum">{{ s.date|day if s.date else "No date yet" }}{% if s.start_time %} · {{ s.start_time }}{% endif %}{% if s.venue %} · {{ s.venue }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
     <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
     <label>Venue <input name="venue" value="{{ s.venue }}" placeholder="Corner Pocket Billiards"></label>
     <label class="wide">Address <input name="address" value="{{ s.address }}"></label>
     <label class="wide">Details shown to players <textarea name="details" rows="3">{{ s.details }}</textarea></label>
+      </div>
+    </details>
+    <details class="settings-section" data-key="registration">
+      <summary><span class="settings-title">Registration</span><span class="settings-sum">{% set st, when = reg_window(s) %}{{ {"open": "Open", "before": "Not open yet", "after": "Closed", "closed": "Closed"}[st] }}{% if s.require_member %} · member numbers required{% endif %}{% if s.waitlist_offer_hours %} · waiting-list offers {{ s.waitlist_offer_hours }} h{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
     <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
       Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
-    {% include "_eligibility_settings.html" %}
-    <label>Skill levels from the player list
-      <select name="skill_game">
-        {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
     <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
       <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
       <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
@@ -535,6 +513,21 @@
     <label>Online registration closes (blank = stays open) <input type="datetime-local" name="registration_closes" value="{{ s.registration_closes }}"></label>
     {% set st, when = reg_window(s) %}
     <p class="muted small-note wide">Right now: <b>{{ {"open": "open", "before": "not open yet", "after": "closed (past the closing time)", "closed": "closed (box above)"}[st] }}</b>{% if when %} · {{ "opens" if st == "before" else "closes" if st == "open" else "closed" }} {{ reg_when(when) }}{% endif %}. Times are venue time. You can always add teams yourself.</p>
+      </div>
+    </details>
+    <details class="settings-section" data-key="who">
+      <summary><span class="settings-title">Who can play</span><span class="settings-sum">{% set who = elig_describe(elig_rules(s)) %}{{ who|join(" · ") if who else "Open to everyone" }}</span></summary>
+      <div class="settings section-fields">
+    {% include "_eligibility_settings.html" %}
+    <label>Skill levels from the player list
+      <select name="skill_game">
+        {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
+      </div>
+    </details>
+    <details class="settings-section" data-key="rules">
+      <summary><span class="settings-title">Rules</span><span class="settings-sum">{{ (rule_choices()|selectattr("id", "equalto", s.rule_set)|map(attribute="title")|first) or "Not chosen yet" }}{% if s.event_rules %} · event rules added{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label>Rules this event plays by
       <select name="rule_set">
         <option value="">Not chosen yet</option>
@@ -542,11 +535,19 @@
       </select></label>
     <label class="wide">Tournament rules approved by APA for this event only (shown at the top of its Rules page)
       <textarea name="event_rules" rows="3" placeholder="e.g. One timeout per team per rack. No sudden death.">{{ s.event_rules }}</textarea></label>
-    <div class="settings-group">Money &amp; field</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="money">
+      <summary><span class="settings-title">Money &amp; field</span><span class="settings-sum">{{ s.entry_fee_cents|money if s.entry_fee_cents else "Free" }} a team{% if s.added_money_cents %} + {{ s.added_money_cents|money }} added{% endif %} · {{ ("field of " ~ s.field_cap) if s.field_cap else "no field cap" }}</span></summary>
+      <div class="settings section-fields">
     <label>Entry fee per team <input name="entry_fee" value="{{ '%.2f'|format(s.entry_fee_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
     <label>Added money <input name="added_money" value="{{ '%.2f'|format(s.added_money_cents / 100) }}" {% if money_locked %}disabled{% endif %}></label>
     <label>Field cap (most teams; 0 = no limit) <input name="field_cap" type="number" min="0" value="{{ s.field_cap }}"></label>
-    <div class="settings-group">Tables &amp; timing</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="tables">
+      <summary><span class="settings-title">Tables &amp; timing</span><span class="settings-sum">Race to {{ s.race_to }} · {{ s.tables|length }} table{{ "s" if s.tables|length != 1 }} · {{ "Continuous Play" if s.call_mode == CONTINUOUS else "Director Calls" }}</span></summary>
+      <div class="settings section-fields">
     <label class="wide">Calling matches
       <select name="call_mode">
         <option value="director" {% if s.call_mode != CONTINUOUS %}selected{% endif %}>Director Calls: the app sets each table; you press Call match to text the teams</option>
@@ -558,7 +559,11 @@
     <label>Catch-up: move a team up when it's this many matches behind <input name="catchup_matches" type="number" min="1" value="{{ s.catchup_matches }}"></label>
     <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
-    <div class="settings-group">Texts &amp; check-in</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="texts">
+      <summary><span class="settings-title">Texts &amp; check-in</span><span class="settings-sum">{{ "Test event: no texts" if s.test_event else "Texts on" }}{% if s.checkin_by %} · check in by {{ s.checkin_by }}{% endif %}{% if s.cash_in_time %} · cash-in {{ s.cash_in_time }}{% endif %}{% if s.last_call_time %} · last call {{ s.last_call_time }}{% endif %}</span></summary>
+      <div class="settings section-fields">
     <label class="checkbox"><input type="hidden" name="test_event_shown" value="1"><input type="checkbox" name="test_event" value="1" {% if s.test_event %}checked{% endif %}>
       Test event: never send texts (they're only logged below) and hide it from All Events. Players can still use a direct link.</label>
     <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
@@ -568,7 +573,11 @@
       Every team must be checked in (or marked a no-show) before the start</label>
     <label>Cash-in opens at <input name="cash_in_time" value="{{ s.cash_in_time }}" placeholder="10:30 PM"></label>
     <label>Last call at <input name="last_call_time" value="{{ s.last_call_time }}" placeholder="12:30 AM"></label>
-    <div class="settings-group">Chips &amp; skill levels</div>
+      </div>
+    </details>
+    <details class="settings-section" data-key="chips">
+      <summary><span class="settings-title">Chips &amp; skill levels</span><span class="settings-sum">Registration cap {{ s.registration_cap }}</span></summary>
+      <div class="settings section-fields">
     <label class="wide">Starting chips by combined skill — one bracket per line, <code>highest combined skill = chips</code>
       (e.g. <code>8 = 4</code> means 7–8 starts with 4 chips). Anything above the last line needs a new partner.
       <textarea name="chip_brackets" rows="5" {% if money_locked %}disabled{% endif %}>{{ bracket_text }}</textarea></label>
@@ -576,13 +585,15 @@
       <input name="registration_cap" type="number" min="1" value="{{ s.registration_cap }}" {% if money_locked %}disabled{% endif %}></label>
     {% if money_locked %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap are locked{% if t.entries_locked %}: every team has completed a match{% endif %}.</p>
     {% elif t.status == RUNNING %}<p class="muted wide">Entry fee, added money, chip brackets and the registration cap can still change until every team has completed a match. Changes adjust the pot and teams' chips (shown in the chip ledger).</p>{% endif %}
+      </div>
+    </details>
     <button class="button big">Save settings</button>
   </form>
 </section>
 
 <section class="card jump-target" id="new-tournament">
-  <p class="eyebrow">Danger zone</p>
-  <h2>Start this tournament over</h2>
+  <details class="fold-section"><summary class="fold-head"><h2>Start over</h2><span class="muted">Danger zone: archive or delete this tournament</span></summary>
+  <div class="fold-body">
   <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
     Starting over clears this one. <b>Archive</b> keeps this one under Past tournaments (you can delete it later).
     <b>Delete permanently</b> erases it now, with its rosters, phone numbers and texts. Deleting can't be undone.</p>
@@ -591,6 +602,7 @@
     <button class="button secondary" name="mode" value="archive">Archive and start over</button>
     <button class="button danger" name="mode" value="delete">Delete permanently and start over</button>
   </form>
+</div></details>
 </section>
 
 <section class="card jump-target" id="past">
@@ -616,11 +628,62 @@
   <p class="muted">None saved. Nothing from earlier tournaments is being kept.</p>
   {% endif %}
 </section>
+<div id="summary" class="jump-target summary-bottom">
+<h2 class="summary-title">Summary</h2>
+{% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
+
+{% include "_pending_card.html" %}
+{% include "_exceptions_card.html" %}
+{% include "_eligibility_admin_card.html" %}
+<section class="card controls" style="margin-top: 0">
+  {% if t.status == SETUP %}
+    <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.
+      {% if not s.field_cap %}<b>Set the field cap in Settings below.</b>{% endif %} Starting will collect {{ s.entry_fee_cents|money }} × {{ t.field_teams|length }}
+      {% if s.added_money_cents %}+ {{ s.added_money_cents|money }} added{% endif %}, hand out chips by combined skill level, and randomly draw the first matches.</p>
+    {% set checked = t.field_teams|selectattr("checked_in_at")|list|length %}
+    <p class="checkin-summary"><b>Check-in{% if s.checkin_by %} (by {{ s.checkin_by }}){% endif %}:</b>
+      {{ checked }} of {{ t.field_teams|length }} teams in the field checked in
+      {%- set no_shows = t.teams.values()|selectattr("status", "equalto", "no_show")|list|length %}{% if no_shows %} · {{ no_shows }} no-show(s){% endif %}.
+      Use <b>Check in</b> / <b>No-show</b> in the team list below.</p>
+    {% set solos = t.teams_needing_partner %}
+    {% if solos or t.partner_deadline is none %}
+    <p class="checkin-summary"><b>Partner deadline{% if t.partner_deadline %} ({{ t.partner_deadline_text() }}){% endif %}:</b>
+      {% if t.partner_deadline is none %}<span class="warn">set the tournament date and start time in Settings (e.g. 9:00 PM) so it can be enforced.</span>
+      {% else %}{{ solos|length }} team(s) still need a partner: {{ solos|map(attribute="name")|join(", ") }}.
+        {% if t.partner_deadline_paused and t.solo_teams_in_field %}The automatic move is paused because you pressed Undo.
+        {% elif t.partner_deadline_passed() %}The deadline has passed, so they're on the waiting list.{% else %}At the deadline, they move to the waiting list automatically.{% endif %}{% endif %}</p>
+    {% endif %}
+    {% if t.partner_deadline_paused and t.solo_teams_in_field %}
+    <div class="banner">
+      <p style="margin: 0 0 12px"><b>Partner deadline paused:</b> {{ t.solo_teams_in_field|map(attribute="name")|join(", ") }}
+        {{ "is" if t.solo_teams_in_field|length == 1 else "are" }} still in the field without a partner. The app won't move them again on its own.</p>
+      <form method="post" action="{{ url_for('admin_partner_deadline') }}" class="inline"
+            data-dialog-title="Move to the waiting list?"
+            data-dialog-text="{{ t.solo_teams_in_field|map(attribute='name')|join(', ') }} will go to the end of the waiting list and be texted. Teams on the waiting list move into their spots."
+            data-dialog-ok="Move them">
+        <button class="button small">Move them to the waiting list now</button></form>
+    </div>
+    {% endif %}
+    {% if s.require_checkin and unchecked %}
+    <p class="banner">Not checked in yet: {{ unchecked|map(attribute="name")|join(", ") }}. Check them in or mark them as no-shows before starting.</p>
+    {% endif %}
+  {% elif t.status == RUNNING %}
+    {% if not t.entries_locked and not t.last_call %}
+    <p class="banner">Late entries are open and money settings can still change until every team has completed a match
+      ({{ t.teams_yet_to_play|length }} team(s) still to finish their first: {{ t.teams_yet_to_play|map(attribute="name")|join(", ") }}).</p>
+    {% elif t.entries_locked %}<p class="muted">Entries and money settings are locked: every team has completed a match.</p>{% endif %}
+  {% endif %}
+</section>
+</div>
+
+{% include "_director_sections.html" %}
 {% if is_viewer %}
 <script>
 // View-only login: turn every control off (the server refuses changes either way).
 document.querySelectorAll("main form").forEach(function (f) {
-  f.querySelectorAll("button, input, select, textarea").forEach(function (el) { el.disabled = true; });
+  f.querySelectorAll("button, input, select, textarea").forEach(function (el) {
+    if (!el.closest("[data-viewer-ok]")) el.disabled = true;  // finding and opening settings still works
+  });
 });
 </script>
 {% endif %}

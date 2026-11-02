@@ -45,8 +45,9 @@
         <a class="league-logo" href="https://firstcoast.poolplayers.com/" target="_blank" rel="noopener"
            title="APA Pool Leagues – First Coast (opens in a new tab)">
           <img src="{{ url_for('static', filename='img/apa-first-coast-logo.png') }}" alt="APA Pool Leagues – First Coast" width="83" height="50"></a>
-        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('index') }}">Control Table</a></div>
-        {% elif t %}<div class="brand show-sm"><a class="brand-name" href="{{ url_for('home') }}">{{ t.settings.name }}</a></div>{% endif %}
+        {% set director_mode = is_admin or is_viewer %}
+        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('director') if director_mode else url_for('index') }}">Control Table</a></div>
+        {% elif t %}<div class="brand show-sm"><a class="brand-name" href="{{ url_for('admin') if director_mode else url_for('home') }}">{{ t.settings.name }}</a></div>{% endif %}
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline show-sm logout-icon">
           <button class="link" title="Log out" aria-label="Log out">
@@ -56,7 +57,16 @@
         {% endif %}
       </div>
       <nav class="nav{% if is_admin or is_viewer %} signed-in{% endif %}">
+        {% if is_admin or is_viewer %}{# the director's own menu: no player screens (View as player opens those) #}
+        <a href="{{ url_for('director') }}" class="{{ 'active' if ep in ('director', 'copy_event') }}">Events</a>
         {% if event %}
+        <a href="{{ url_for('admin') }}" class="nav-title hide-sm {{ 'active' if ep.startswith('admin') or ep == 'guide' }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
+        <a href="{{ url_for('board') }}" target="_blank" rel="noopener" title="Opens in a new tab">{{ "Bracket" if event.kind == BRACKET else "Board" }} ↗</a>
+        {% endif %}
+        <a href="{{ url_for('admin_players') }}" class="{{ 'active' if ep.startswith('admin_players') }}">Players</a>
+        {% if is_admin %}<a href="{{ url_for('admin_rules') }}" class="hide-xs {{ 'active' if ep.startswith('admin_rules') }}">Rules</a>{% endif %}
+        <a href="{{ url_for('admin_backups') }}" class="hide-xs {{ 'active' if ep.startswith('admin_backup') }}">Backups</a>
+        {% elif event %}
         <a href="{{ url_for('index') }}"><span class="hide-xs">All </span>Events</a>
         <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
@@ -77,6 +87,11 @@
     </div>
   </header>
   <main>
+    {% set director_page = ep == "director" or ep.startswith("admin") or ep in ("guide", "copy_event") %}
+    {% if (is_admin or is_viewer) and not director_page and ep not in ("board", "pool_board", "static", "event_photo_file") %}
+    <div class="player-view-bar">You're viewing the player page ·
+      <a href="{{ url_for('admin') if event else url_for('director') }}">Back to director</a></div>
+    {% endif %}
     {% if t and t.settings.test_event %}<div class="test-banner">TEST EVENT: practice only. No texts are sent, and it isn't listed on All Events.</div>{% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
@@ -198,8 +213,9 @@ window.ctSafeReload = (function () {
   var meta = document.querySelector('meta[name="auto-refresh"]');
   if (!meta) return;
   var secs = +meta.content || 15, idle = 0, dirty = false;
-  document.addEventListener("input", function () { dirty = true; }, true);
-  document.addEventListener("change", function () { dirty = true; }, true);
+  function edited(e) { if (!(e.target.closest && e.target.closest("[data-no-dirty]"))) dirty = true; }  // a search box isn't an edit
+  document.addEventListener("input", edited, true);
+  document.addEventListener("change", edited, true);
   function busy() {
     var a = document.activeElement;
     if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return true;

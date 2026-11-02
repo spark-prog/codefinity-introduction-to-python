@@ -174,8 +174,8 @@ def skill_for(rec: dict, game: str) -> tuple[int | None, str]:
 
     - their own skill level in that format: (sl, "rated")
     - not active in it, but established (10+ matches) in the other format: they convert at their
-      current skill level there: (sl, "converted from 9-Ball") — unless that number doesn't exist in this
-      format (a 9-Ball SL 1, 8 or 9 playing 8-Ball), which needs review
+      current skill level there: (sl, "converted from 9-Ball"). 8-Ball only has 2 to 7, so a 9-Ball
+      SL 1 converts to 2 and an SL 8 or 9 to 7: (7, "converted from 9-Ball SL 9")
     - otherwise: (None, "needs review")
     """
     own = rec.get(f"sl{game}")
@@ -185,8 +185,8 @@ def skill_for(rec: dict, game: str) -> tuple[int | None, str]:
     sl = rec.get(f"sl{other}")
     if sl is not None and established(rec, other):
         lo, hi = RANGES[game]
-        if lo <= sl <= hi:
-            return sl, f"converted from {other}-Ball"
+        played = min(max(sl, lo), hi)
+        return played, f"converted from {other}-Ball" + (f" SL {sl}" if played != sl else "")
     return None, "needs review"
 
 

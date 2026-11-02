@@ -212,4 +212,6 @@ def test_zero_means_not_active_and_conversion():
     assert ann["sl8"] is None and players.skill_for(ann, "9") == (6, "rated")
     assert players.skill_for(ann, "8") == (6, "converted from 9-Ball")  # established in 9-Ball: converts
     assert players.skill_for(bo, "9") == (None, "needs review")  # only 6 8-Ball matches: not established
-    assert players.skill_for(cy, "8") == (None, "needs review")  # SL 9 doesn't exist in 8-Ball
+    assert players.skill_for(cy, "8") == (7, "converted from 9-Ball SL 9")  # 8-Ball tops out at 7
+    low = {**cy, "sl9": 1}
+    assert players.skill_for(low, "8") == (2, "converted from 9-Ball SL 1")  # and starts at 2

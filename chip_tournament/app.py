@@ -1317,7 +1317,11 @@ def create_app(data_dir: str | None = None) -> Flask:
             tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
             events = [e for e in request.form.getlist("events") if hub.get(e)]
             pool_mod.check_no_clash(hub, events)
-            pool = pools.save(f.get("pool_id") or None, f.get("name", ""), tables, events)
+            try:
+                hours = max(0.0, float(f.get("hours") or pool_mod.DEFAULT_HOURS))
+            except ValueError:
+                raise TournamentError("Hours per tournament should be a number, like 4.")
+            pool = pools.save(f.get("pool_id") or None, f.get("name", ""), tables, events, hours)
             sync_pool_tables(pool)
             flash(f"Saved {pool['name']}: {len(events)} event(s) share tables {', '.join(tables)}.", "ok")
             return redirect(url_for("admin_pool", pool_id=pool["id"]))

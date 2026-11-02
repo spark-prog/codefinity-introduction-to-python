@@ -14,6 +14,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from chips import backup, eligibility, players, schedule
 from chips import pending as pending_mod
+from chips import pool as pool_mod
 from chips import series as series_mod
 from chips import waitlist as waitlist_mod
 from chips import history as history_mod
@@ -328,6 +329,9 @@ def register_registration(app) -> None:
                                           "with 322). It's on their APA card and in the APA app.")
         if t is not None and not session.get("admin"):
             check_eligibility(t, plist, existing)
+            already = {o.member for o in existing if o.member}
+            pool_mod.check_times(app.config["hub"], app.config["pools"], g.event.id, t,
+                                 [p for p in plist if p.member not in already])
         return plist
 
     def check_eligibility(t, plist: list[Player], existing=()) -> None:

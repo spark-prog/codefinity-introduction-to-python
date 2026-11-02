@@ -16,7 +16,9 @@ import re
 import threading
 from pathlib import Path
 
-from .engine import TournamentError
+from .engine import TournamentError, start_of
+
+DEFAULT_HOURS = 4  # how long a mini-tournament takes
 
 _locks: dict[str, threading.RLock] = {}
 _locks_guard = threading.Lock()
@@ -49,7 +51,8 @@ class Pools:
     def of_event(self, event_id: str) -> dict | None:
         return next((p for p in self.all() if event_id in p["events"]), None)
 
-    def save(self, pool_id: str | None, name: str, tables: list[str], events: list[str]) -> dict:
+    def save(self, pool_id: str | None, name: str, tables: list[str], events: list[str],
+             hours: float = DEFAULT_HOURS) -> dict:
         name = " ".join((name or "").split())
         if not name:
             raise TournamentError("Give the shared tables a name (like Mini-Mania).")
@@ -73,7 +76,7 @@ class Pools:
                     pool_id, n = f"{base}-{n}", n + 1
                 row = {"id": pool_id}
                 rows.append(row)
-            row.update(name=name, tables=tables, events=events)
+            row.update(name=name, tables=tables, events=events, hours=hours)
             self._save(rows)
             return row
 
@@ -126,6 +129,43 @@ def check_no_clash(hub, events: list[str]) -> None:
                     f"Table {table} is in use in both {seen[table]} and {t.settings.name}. Move one of those "
                     "matches to another table (or finish it), then share the tables.")
             seen[table] = t.settings.name
+
+
+def hours_of(pool: dict) -> float:
+    return float(pool.get("hours", DEFAULT_HOURS) or 0)
+
+
+def _when(start) -> str:
+    return f"{start:%a} at {start:%I:%M %p}".replace(" at 0", " at ")
+
+
+def check_times(hub, pools: Pools, event_id: str, t, players) -> None:
+    """A player can't enter a shared-tables event that starts within a tournament's length (the pool's
+    hours, 4 by default) of another shared-tables event they're already in, across every pool (Mini-Mania's
+    8-foot and 9-foot tables are two pools, one day)."""
+    mine = pools.of_event(event_id)
+    start = start_of(t.settings)
+    members = {p.member: p.name for p in players if p.member}
+    if mine is None or start is None or not members:
+        return
+    for pool in pools.all():
+        hours = max(hours_of(mine), hours_of(pool))
+        if hours <= 0:
+            continue
+        for other in pool["events"]:
+            ev = hub.get(other) if other != event_id else None
+            if ev is None:
+                continue
+            o = ev.load()
+            when = start_of(o.settings)
+            if o.status == "finished" or when is None or abs((when - start).total_seconds()) >= hours * 3600:
+                continue
+            for member, name in members.items():
+                if o.registered_as(member) is not None:
+                    h = f"{hours:g} hour{'s' if hours != 1 else ''}"
+                    raise TournamentError(
+                        f"{name} is already in {o.settings.name}, which starts {_when(when)}. Each tournament "
+                        f"takes about {h}, so a player can't enter two that start within {h} of each other.")
 
 
 def inform(t, hub, pool: dict | None, event_id: str) -> None:

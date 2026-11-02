@@ -138,3 +138,44 @@ def test_running_events_with_the_same_table_cant_share(app):
                    follow_redirects=True)
     assert "is in use in both Early A and Early B" in r.get_data(as_text=True)
     assert app.config["pools"].get("late") is None
+
+
+def test_a_player_cant_enter_minis_within_four_hours(app):
+    """Mini-Mania: each mini takes about 4 hours, across both table groups (8-foot and 9-foot)."""
+    hub = app.config["hub"]
+    made = {}
+    for name, start in (("8B Singles 10am", "10:00 AM"), ("9B Singles 1pm", "1:00 PM"), ("8B Singles 2pm", "2:00 PM")):
+        ev = hub.create(name, "bracket", format="single")
+        t = ev.load()
+        t.settings.team_size, t.settings.date, t.settings.start_time = 1, "2027-02-21", start
+        ev.store.save(t)
+        made[name] = ev
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    admin.post("/admin/pools", data={"name": "Eight foot", "tables": "1, 2",
+                                     "events": [made["8B Singles 10am"].id, made["8B Singles 2pm"].id]})
+    admin.post("/admin/pools", data={"name": "Nine foot", "tables": "17, 18", "events": [made["9B Singles 1pm"].id]})
+    assert app.config["pools"].get("eight-foot")["hours"] == 4
+
+    def enter(name, member_no):
+        c = app.test_client()
+        return c.post(f"/t/{made[name].id}/register", data={
+            "player_name_0": f"Pat Example{member_no[-1]}", "player_phone_0": f"904555010{member_no[-1]}", "player_skill_0": "4",
+            "player_member_0": member_no, "agree_terms": "1"}, follow_redirects=True).get_data(as_text=True)
+
+    enter("8B Singles 10am", member(500))
+    assert made["8B Singles 10am"].load().registered_as(member(500)) is not None
+    page = enter("9B Singles 1pm", member(500))  # 3 hours later, in the other table group
+    assert "Pat Example0 is already in 8B Singles 10am, which starts Sun at 10:00 AM" in page.replace("&#39;", "'")
+    assert made["9B Singles 1pm"].load().registered_as(member(500)) is None
+    enter("8B Singles 2pm", member(500))  # 4 hours later: fine
+    assert made["8B Singles 2pm"].load().registered_as(member(500)) is not None
+    enter("9B Singles 1pm", member(501))  # someone else: fine
+    assert made["9B Singles 1pm"].load().registered_as(member(501)) is not None
+    # 0 turns it off
+    admin.post("/admin/pools", data={"pool_id": "nine-foot", "name": "Nine foot", "tables": "17, 18", "hours": "0",
+                                     "events": [made["9B Singles 1pm"].id]})
+    admin.post("/admin/pools", data={"pool_id": "eight-foot", "name": "Eight foot", "tables": "1, 2", "hours": "0",
+                                     "events": [made["8B Singles 10am"].id, made["8B Singles 2pm"].id]})
+    enter("9B Singles 1pm", member(500))
+    assert made["9B Singles 1pm"].load().registered_as(member(500)) is not None

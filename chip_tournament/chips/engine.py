@@ -92,6 +92,22 @@ REQUIRE_MEMBER_DEFAULT = True  # (tests that predate member numbers turn this of
 WAITLIST_OFFER_HOURS = 12  # (tests that predate waiting-list offers set this to 0)
 
 
+def start_of(settings) -> datetime | None:
+    """An event's start from its date and start time (chip or bracket), or None if either can't be read."""
+    try:
+        day = datetime.strptime((settings.date or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        return None
+    text = " ".join((settings.start_time or "").upper().replace(".", "").split())
+    for fmt in ("%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M"):
+        try:
+            t = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return day.replace(hour=t.hour, minute=t.minute)
+    return None
+
+
 class TournamentError(Exception):
     """Raised when an action breaks the tournament rules."""
 
@@ -669,18 +685,7 @@ class Tournament:
     @property
     def event_start(self) -> datetime | None:
         """The tournament's start from Settings, or None if the date or time can't be read."""
-        try:
-            day = datetime.strptime(self.settings.date.strip(), "%Y-%m-%d")
-        except ValueError:
-            return None
-        text = " ".join(self.settings.start_time.upper().replace(".", "").split())
-        for fmt in ("%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H:%M"):
-            try:
-                t = datetime.strptime(text, fmt)
-            except ValueError:
-                continue
-            return day.replace(hour=t.hour, minute=t.minute)
-        return None
+        return start_of(self.settings)
 
     @property
     def partner_deadline(self) -> datetime | None:

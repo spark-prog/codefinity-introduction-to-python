@@ -1,3 +1,4 @@
 {# Event page facts: who may play. Needs t. #}
 {% set rules = elig_describe(elig_rules(t.settings), session_start()) %}
-{% if rules %}<li><span class="k">Who can play</span><span class="v">{{ rules|join(" · ") }}</span></li>{% endif %}
+{% if rules %}<li><span class="k">Who can play</span><span class="v">{{ rules|join(" · ") }}
+  <br><a href="{{ url_for('eligibility_check') }}">Check if you're eligible</a></span></li>{% endif %}

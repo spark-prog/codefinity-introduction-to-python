@@ -19,6 +19,7 @@
 {% endif %}
 {% if team.status == ACTIVE and t.cash_in_open %}<div class="banner">Cash-in is open. See the desk to cash in for {{ t.payout_for(team)|money }}, or keep playing.</div>{% endif %}
 {% set players = team.players %}{% include "_pending_notice.html" %}
+{% set grp, offer_url, signed_in = team, url_for('waitlist_offer', team_id=team.id), is_team %}{% include "_offer_box.html" %}
 {% if team.awaiting_texts %}{% include "_text_alerts.html" %}{% endif %}
 
 <div class="split">

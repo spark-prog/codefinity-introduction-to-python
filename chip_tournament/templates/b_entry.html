@@ -10,6 +10,7 @@
 
 {% if is_entry and entry.awaiting_texts %}
 {% set players = entry.players %}{% include "_pending_notice.html" %}
+{% set grp, offer_url, signed_in = entry, url_for('waitlist_offer', entry_id=entry.id), is_entry %}{% include "_offer_box.html" %}
 <section class="card">
   <h3>Get tournament texts</h3>
   {% include "_save_contact.html" %}

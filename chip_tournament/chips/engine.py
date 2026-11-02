@@ -89,6 +89,7 @@ PARTNER_DEADLINE_HOURS = 24  # a team registered without a partner must add one 
 
 
 REQUIRE_MEMBER_DEFAULT = True  # (tests that predate member numbers turn this off)
+WAITLIST_OFFER_HOURS = 12  # (tests that predate waiting-list offers set this to 0)
 
 
 class TournamentError(Exception):
@@ -139,6 +140,8 @@ class Team:
     matches_left: int | None = None
     registered_at: str = field(default_factory=now)
     list_seeking: bool = False  # registered alone and chose to be on the public "looking for a partner" list
+    offer_until: str = ""  # waiting list: offered an open spot until this time (chips/waitlist.py)
+    offer_emailed: str = ""  # the offer (its deadline) the players were emailed about
 
     @property
     def phones(self) -> list[str]:
@@ -262,6 +265,8 @@ class Settings:
     elig_audit: list[dict] = field(default_factory=list)
     series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): see chips/series.py
     partner_seekers: list[dict] = field(default_factory=list)  # logged-in players looking (not registered)
+    # An open spot is offered to the next team for this long (0 = they move in at once).
+    waitlist_offer_hours: int = field(default_factory=lambda: WAITLIST_OFFER_HOURS)
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them
@@ -521,6 +526,9 @@ class Tournament:
         """Where a team is right now, for the board's Teams list ("On table 5", "#3 in line", ...)."""
         if team.status == NO_SHOW:
             return "No-show"
+        if team.status == WAITLISTED and team.offer_until:
+            from .waitlist import when_text
+            return f"Offered a spot until {when_text(team.offer_until)}"
         if team.status == WAITLISTED:
             return f"Waiting list #{self.waitlist_position(team)}"
         if team.status == REGISTERED:
@@ -887,18 +895,30 @@ class Tournament:
         """Move waiting teams into the field, in order, while there is room."""
         if self.status == FINISHED or self.last_call or self.entries_locked:
             return
+        from . import waitlist
+
         while not self.field_full:
+            if self.settings.field_cap and len(self.field_teams) + len(waitlist.offered(self)) >= self.settings.field_cap:
+                return  # every open spot is already offered to someone
             # After the partner deadline, a team still without a partner can't take an open spot.
-            team = next((self.teams[i] for i in self.waitlist
-                         if not (self.teams[i].needs_partner and self.partner_deadline_passed())), None)
+            team = next((self.teams[i] for i in self.waitlist if not self.teams[i].offer_until
+                         and not (self.teams[i].needs_partner and self.partner_deadline_passed())), None)
             if team is None:
                 return
+            until = waitlist.deadline(self)
+            if until is not None:
+                waitlist.make_offer(self, team, until, self.team_link(team))
+                continue
             self.waitlist.remove(team.id)
-            team.status = REGISTERED
-            self._say(f"{team.name} moved from the waiting list into the field.")
-            self._text_team(team, f"Good news: a spot opened and {team.name} is now in the field for {self.settings.name}.")
-            if self.status == RUNNING:
-                self._join_running(team)
+            self._promote(team)
+
+    def _promote(self, team: Team) -> None:
+        """A waiting team moves into the field."""
+        team.status, team.offer_until = REGISTERED, ""
+        self._say(f"{team.name} moved from the waiting list into the field.")
+        self._text_team(team, f"Good news: a spot opened and {team.name} is now in the field for {self.settings.name}.")
+        if self.status == RUNNING:
+            self._join_running(team)
 
     def set_field_cap(self, cap: int) -> None:
         if cap < 0:
@@ -1024,6 +1044,8 @@ class Tournament:
             self.waitlist.remove(team_id)
             del self.teams[team_id]
             self._say(f"Removed {team.name} from the waiting list.")
+            if team.offer_until:  # it was holding an open spot: offer it to the next team
+                self._fill_from_waitlist()
             return
         if team.status not in (REGISTERED, NO_SHOW):
             raise TournamentError("Teams in the field can only be removed before the tournament starts.")

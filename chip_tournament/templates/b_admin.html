@@ -403,6 +403,9 @@
       <select name="skill_game">
         {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
       </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
+    <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
+      <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
+      <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
     <label>Online registration opens (blank = open now) <input type="datetime-local" name="registration_opens" value="{{ s.registration_opens }}"></label>
     <label>Online registration closes (blank = stays open) <input type="datetime-local" name="registration_closes" value="{{ s.registration_closes }}"></label>
     {% set st, when = reg_window(s) %}

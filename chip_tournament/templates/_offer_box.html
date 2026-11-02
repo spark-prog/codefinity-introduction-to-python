@@ -1,0 +1,14 @@
+{# A waiting team's offer of an open spot. Needs grp, offer_url, signed_in. #}
+{% if grp.offer_until %}
+<section class="card pending-card offer-box">
+  <h2>A spot opened for {{ grp.name }}!</h2>
+  <p>Take it by <b>{{ offer_when(grp.offer_until) }}</b>, or it goes to the next team on the waiting list.</p>
+  {% if signed_in %}
+  <div class="button-row">
+    <form method="post" action="{{ offer_url }}" class="inline"><button class="button big" name="action" value="accept">Accept the spot</button></form>
+    <form method="post" action="{{ offer_url }}" class="inline" onsubmit="return confirm('Give up the spot and leave the waiting list?')">
+      <button class="button secondary" name="action" value="decline">No thanks</button></form>
+  </div>
+  {% else %}<p class="muted">Enter your PIN below to accept it.</p>{% endif %}
+</section>
+{% endif %}

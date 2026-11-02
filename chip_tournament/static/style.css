@@ -995,3 +995,7 @@ tr.check-ok td { opacity: .75; }
 .photo-empty { display: grid; place-items: center; aspect-ratio: 1200 / 630; border: 1px dashed var(--line); border-radius: var(--radius-sm);
   color: var(--muted); margin-bottom: 10px; }
 .event-banner.contain, .event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
+/* Live pages during a deploy: shown until the site answers again, then the page reloads. */
+.reconnecting { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; max-width: calc(100% - 32px);
+  padding: 10px 16px; border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--line); color: var(--ink);
+  box-shadow: var(--shadow); font-size: .95rem; text-align: center; }

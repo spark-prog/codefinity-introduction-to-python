@@ -215,3 +215,25 @@ def test_players_see_why_on_am_i_eligible(tmp_path, monkeypatch):
     assert "Already qualified for Singles Boards" in pages["32200001"]
     assert "needs 10 lifetime 8-Ball matches. You have 6: 4 more to go" in pages["32200002"]
     assert "Already qualified" not in pages["32200003"] and "Not eligible yet" not in pages["32200003"]
+
+
+def test_eligible_with_a_hand_check_shows_green_like_the_register_page(tmp_path, monkeypatch):
+    """Eligible, with something the league office confirms by hand: green Eligible on Am I eligible?, the same as
+    the green "You're eligible" on the Register page, with the note underneath (the detail only for the player)."""
+    from app import create_app
+    from tests.test_register_members import Clients
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    app = create_app(str(tmp_path))
+    app.testing = True
+    app.config["players"].apply(*players.parse_rows([COLS, person("32200001")]), "t", "t")
+    ev = app.config["hub"].create("8-Ball Singles Board", "bracket", format="double")
+    t = ev.load()
+    t.settings.eligibility = rules(active=True, review=["Played in a Singles Board qualifier this year"])
+    ev.store.save(t)
+    anon = app.test_client().post("/eligibility", data={"member": "32200001"}).get_data(as_text=True)
+    assert '<span class="check-badge ok">Eligible ✓</span>' in anon and "The league office will check" not in anon
+    assert "The league office will confirm a detail after you register" in anon and "qualifier this year" not in anon
+    mine = Clients(app).logged_in("32200001").get("/eligibility").get_data(as_text=True)
+    assert "Eligible ✓" in mine and "The league office will confirm: Played in a Singles Board qualifier this year" in mine
+    register = Clients(app).logged_in("32200001").get(f"/t/{ev.id}/register").get_data(as_text=True)
+    assert "You're eligible for 8-Ball Singles Board" in register

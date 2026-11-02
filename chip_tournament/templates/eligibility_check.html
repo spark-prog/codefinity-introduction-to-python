@@ -26,8 +26,9 @@
       {% if e.status == "registered" %}<p><span class="check-badge ok">Registered</span></p>
       {% elif e.status == "eligible" %}<p><span class="check-badge ok">Eligible ✓</span></p>
         {% if e.open %}<a class="button small" href="{{ e.register }}">Register</a>{% endif %}
-      {% elif e.status == "check" %}<p><span class="check-badge differs">The league office will check</span></p>
-        {% if e.reasons %}<p class="muted small-note">{{ e.reasons|join("; ") }}</p>{% endif %}
+      {% elif e.status == "check" %}{# eligible; the league office confirms one or more details by hand #}
+        <p><span class="check-badge ok">Eligible ✓</span></p>
+        <p class="muted small-note">{% if e.reasons %}The league office will confirm: {{ e.reasons|join("; ") }}{% else %}The league office will confirm a detail after you register.{% endif %}</p>
         {% if e.open %}<a class="button small" href="{{ e.register }}">Register</a>{% endif %}
       {% else %}<p><span class="check-badge not_found">Not eligible</span></p>
         {% if e.reasons %}<ul class="small-note">{% for x in e.reasons %}<li>{{ x }}</li>{% endfor %}</ul>

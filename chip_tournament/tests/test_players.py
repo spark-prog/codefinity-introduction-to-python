@@ -201,3 +201,15 @@ def test_daily_schedule(tmp_path):
     store.sync_sheet("automatic", FakeReader(sheet(3)))
     assert not store.due(datetime.now().replace(hour=23))  # already read today
     assert store.due(datetime.now().replace(hour=4, minute=30) + timedelta(days=1))  # tomorrow after 4 AM
+
+
+def test_zero_means_not_active_and_conversion():
+    records, problems = players.parse_rows([HEADERS, row("32200001", sl8="0", sl9="6", mp8="0", mp9="40"),
+                                            row("32200002", first="Bo", sl8="5", sl9="0", mp8="6", mp9="0"),
+                                            row("32200003", first="Cy", sl8="0", sl9="9", mp8="0", mp9="25")])
+    assert problems == []  # a 0 isn't a problem
+    ann, bo, cy = records["32200001"], records["32200002"], records["32200003"]
+    assert ann["sl8"] is None and players.skill_for(ann, "9") == (6, "rated")
+    assert players.skill_for(ann, "8") == (6, "converted from 9-Ball")  # established in 9-Ball: converts
+    assert players.skill_for(bo, "9") == (None, "needs review")  # only 6 8-Ball matches: not established
+    assert players.skill_for(cy, "8") == (None, "needs review")  # SL 9 doesn't exist in 8-Ball

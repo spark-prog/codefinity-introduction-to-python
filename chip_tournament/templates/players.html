@@ -76,8 +76,10 @@
       <tr>
         <td><b>{{ r.first }} {{ r.last }}</b>{% if r.nickname %} <span class="muted">“{{ r.nickname }}”</span>{% endif %}{% if r.rep %}<div class="muted small-note">Division rep: {{ r.rep }}</div>{% endif %}</td>
         <td class="nowrap">{{ r.member }}</td>
-        <td class="nowrap">{{ "SL %s"|format(r.sl8) if r.sl8 is not none else "—" }}{% if r.mp8 is not none %} · {{ r.mp8 }} matches{% endif %}</td>
-        <td class="nowrap">{{ "SL %s"|format(r.sl9) if r.sl9 is not none else "—" }}{% if r.mp9 is not none %} · {{ r.mp9 }} matches{% endif %}</td>
+        {% for g in ("8", "9") %}{% set sl, how = skill_for(r, g) %}
+        <td class="nowrap">{% if how == "rated" %}SL {{ sl }}{% elif sl %}<span class="muted">Not active</span><div class="small-note">plays SL {{ sl }} ({{ how }})</div>{% else %}<span class="muted">Not active</span>{% endif %}
+          {% if r["mp" ~ g] %}<div class="muted small-note">{{ r["mp" ~ g] }} matches{% if r["mp" ~ g] < 10 %} · not established{% endif %}</div>{% endif %}</td>
+        {% endfor %}
         <td class="nowrap">{{ ([r.last8, r.last9]|select|max) or "—" }}</td>
         <td>{{ r.status or "—" }}</td>
         <td class="small-note">{{ r.email or "no email" }}{% if r.cell %}<br>{{ r.cell[:3] }}-{{ r.cell[3:6] }}-{{ r.cell[6:] }}{% endif %}</td>

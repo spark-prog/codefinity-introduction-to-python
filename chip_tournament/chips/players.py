@@ -131,7 +131,9 @@ def parse_rows(rows: list[list[str]]) -> tuple[dict[str, dict], list[str]]:
         bad = []
         for f, lo, hi in (("sl8", 2, 7), ("sl9", 1, 9)):
             v = _num(cells.get(f, ""))
-            if v is not None and not lo <= v <= hi:
+            if v == 0:
+                v = None  # 0 = not active in that format
+            elif v is not None and not lo <= v <= hi:
                 bad.append(f"{LABELS[f]} '{cells.get(f, '').strip()}' (must be {lo}–{hi})")
                 v = None
             rec[f] = v
@@ -156,6 +158,36 @@ def parse_rows(rows: list[list[str]]) -> tuple[dict[str, dict], list[str]]:
     if not records:
         raise PlayerError("No usable player rows were found. Nothing was changed.")
     return records, problems
+
+
+ESTABLISHED = 10  # APA: a player is established in a format after this many matches in it
+RANGES = {"8": (2, 7), "9": (1, 9)}
+
+
+def established(rec: dict, game: str) -> bool:
+    """Established in 8-Ball ('8') or 9-Ball ('9'): 10 or more matches played in it."""
+    return (rec.get(f"mp{game}") or 0) >= ESTABLISHED
+
+
+def skill_for(rec: dict, game: str) -> tuple[int | None, str]:
+    """The skill level a player plays at in 8-Ball ('8') or 9-Ball ('9'), and how it was found.
+
+    - their own skill level in that format: (sl, "rated")
+    - not active in it, but established (10+ matches) in the other format: they convert at their
+      current skill level there: (sl, "converted from 9-Ball") — unless that number doesn't exist in this
+      format (a 9-Ball SL 1, 8 or 9 playing 8-Ball), which needs review
+    - otherwise: (None, "needs review")
+    """
+    own = rec.get(f"sl{game}")
+    if own is not None:
+        return own, "rated"
+    other = "9" if game == "8" else "8"
+    sl = rec.get(f"sl{other}")
+    if sl is not None and established(rec, other):
+        lo, hi = RANGES[game]
+        if lo <= sl <= hi:
+            return sl, f"converted from {other}-Ball"
+    return None, "needs review"
 
 
 def rows_from_csv(raw: bytes) -> list[list[str]]:

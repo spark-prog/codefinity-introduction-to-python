@@ -179,6 +179,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
+    app.jinja_env.globals["skill_for"] = players.skill_for
     # Who runs the text program, shown on the Terms and Privacy pages (they must match the
     # carrier registration). Override with environment variables if they ever change.
     # The number tournament texts come from, so players can save it as a contact (Twilio setting).

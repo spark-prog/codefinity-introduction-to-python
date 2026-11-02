@@ -969,3 +969,29 @@ tr.check-ok td { opacity: .75; }
 .pool-table.playing { border-color: rgba(95, 211, 141, .6); }
 .pool-table.set { border-color: rgba(255, 176, 32, .6); }
 .pool-table.sent { border-color: rgba(255, 107, 118, .6); }
+
+/* ---------------------------------------------------------------- header photo & flyer */
+.event-banner { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; max-height: 380px;
+  border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 var(--space-3); box-shadow: var(--shadow); }
+.flyer-link { display: inline-flex; align-items: center; gap: 12px; margin: 0 0 var(--space-3); text-decoration: none; }
+.flyer-thumb { width: 64px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.event-card.has-photo { overflow: hidden; }
+.event-card-img { display: block; width: calc(100% + 2 * var(--space-4)); max-width: none; height: auto; aspect-ratio: 1200 / 630;
+  object-fit: cover; margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 12px; }
+@media (max-width: 860px) {
+  .event-card-img { width: calc(100% + 2 * var(--space-3)); margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 12px; }
+}
+.your-event:has(.your-event-thumb) { grid-template-columns: 72px 112px 1fr; }
+.your-event-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+@media (max-width: 560px) {
+  .your-event:has(.your-event-thumb) { grid-template-columns: 112px 1fr; }
+  .your-event-thumb { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: 1200 / 630; }
+}
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); }
+.photo-slot h3 { margin: 0 0 8px; }
+.photo-preview { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--line); margin-bottom: 10px; }
+.photo-preview.header { aspect-ratio: 1200 / 630; object-fit: cover; }
+.photo-preview.flyer { max-height: 320px; width: auto; max-width: 100%; }
+.photo-empty { display: grid; place-items: center; aspect-ratio: 1200 / 630; border: 1px dashed var(--line); border-radius: var(--radius-sm);
+  color: var(--muted); margin-bottom: 10px; }
+.event-banner.contain, .event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }

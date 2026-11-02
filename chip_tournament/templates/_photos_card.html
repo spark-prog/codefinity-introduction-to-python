@@ -1,0 +1,81 @@
+{# Director page: the event's header photo and flyer. Needs t. Each form is its own (never inside the settings form). #}
+{% set s = t.settings %}
+<section id="photos" class="card jump-target">
+  <h2>Header photo &amp; flyer</h2>
+  <p class="muted">PNG or JPG. From Canva: <b>Share → Download → PNG</b>. Design the header at <b>1200 × 630</b>: it shows on All Events,
+    this event's page and Register page, players' My account, and as the picture when the link is shared. Not on the TV board.</p>
+  <div class="photo-grid">
+  {% for kind, label in (("header", "Header photo"), ("flyer", "Flyer")) %}
+    {% set url = event_photo(g.event.id, kind) %}
+    {% set own = event_photo(g.event.id, kind) if kind == "flyer" else (url if not (s.flyer_as_header and event_photo(g.event.id, "flyer")) else "") %}
+    <div class="photo-slot">
+      <h3>{{ label }}</h3>
+      {% if kind == "header" and s.flyer_as_header and event_photo(g.event.id, "flyer") %}
+        <p class="muted small-note">Using the flyer as the header (untick it under Flyer to use a separate photo).</p>
+      {% endif %}
+      {% if url %}<a href="{{ url }}" target="_blank" rel="noopener"><img class="photo-preview {{ kind }}" src="{{ url }}" alt="{{ event_photo_alt(t, kind) }}"></a>
+      {% else %}<div class="photo-empty">No {{ label|lower }} yet</div>{% endif %}
+      {% if not is_viewer %}
+      <form method="post" action="{{ url_for('admin_event_photo', kind=kind) }}" enctype="multipart/form-data" class="form" data-once>
+        <label>{{ "Replace with" if own else "Choose" }} a PNG or JPG
+          <input type="file" name="photo" accept="image/png,image/jpeg" data-resize="{{ 1600 if kind == 'header' else 2200 }}"></label>
+        <p class="muted small-note resize-note"></p>
+        <label>Describe it for screen readers (optional)
+          <input name="alt" maxlength="200" value="{{ s[kind ~ '_alt'] }}" placeholder="{{ 'e.g. Movin-On-Up, Nov 21, Park Ave' if kind == 'header' else 'e.g. Flyer: date, time, entry fee, how to qualify' }}"></label>
+        {% if kind == "flyer" %}
+        <input type="hidden" name="flyer_as_header_shown" value="1">
+        <label class="checkbox"><input type="checkbox" name="flyer_as_header" value="1" {% if s.flyer_as_header %}checked{% endif %}>
+          Use the flyer as the header photo too</label>
+        {% endif %}
+        <div class="button-row">
+          <button class="button small" name="action" value="upload" data-busy="Uploading…">Upload</button>
+          {% if url %}<button class="button small secondary" name="action" value="save">Save</button>{% endif %}
+        </div>
+      </form>
+      {% if own %}
+      <form method="post" action="{{ url_for('admin_event_photo', kind=kind) }}" class="inline" style="margin-top: 8px"
+            onsubmit="return confirm('Remove the {{ label|lower }}?')">
+        <input type="hidden" name="action" value="remove"><button class="button small danger-outline">Remove {{ label|lower }}</button></form>
+      {% endif %}
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</section>
+<script>
+// Make a big photo smaller before it's sent (longest side to data-resize pixels, JPEG), so pages stay fast on
+// phones. A small enough file goes as it is; if anything here fails, the original is sent and the server checks it.
+(function () {
+  function kb(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  document.querySelectorAll("input[type=file][data-resize]").forEach(function (input) {
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0], note = input.closest("form").querySelector(".resize-note");
+      if (note) note.textContent = "";
+      if (!file) return;
+      if (!/^image\/(png|jpeg)$/.test(file.type)) { if (note) note.textContent = "That isn't a PNG or JPG."; return; }
+      var max = +input.dataset.resize, img = new Image(), src = URL.createObjectURL(file);
+      img.onload = function () {
+        URL.revokeObjectURL(src);
+        var scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        if (scale === 1 && file.size < 700 * 1024) { if (note) note.textContent = "Ready to upload (" + kb(file.size) + ")."; return; }
+        var c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+        var ctx = c.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);  // a see-through PNG gets a white background
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (blob) {
+          if (!blob || blob.size >= file.size || typeof DataTransfer === "undefined") {
+            if (note) note.textContent = "Ready to upload (" + kb(file.size) + ")."; return;
+          }
+          var dt = new DataTransfer();
+          dt.items.add(new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }));
+          input.files = dt.files;
+          if (note) note.textContent = "Made smaller for phones: " + kb(file.size) + " → " + kb(blob.size) + ".";
+        }, "image/jpeg", 0.85);
+      };
+      img.onerror = function () { URL.revokeObjectURL(src); };
+      img.src = src;
+    });
+  });
+})();
+</script>

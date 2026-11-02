@@ -247,6 +247,9 @@ class BracketSettings:
     team_size: int = 1  # 1 = singles, 2 = doubles / scotch doubles, 3+ = teams (up to MAX_TEAM_SIZE)
     max_player_skill: int = 0  # optional: no player above this skill level (0 = no limit)
     team_skill_cap: int = 0  # optional: an entry's combined skill levels can't be over this (0 = no limit)
+    header_alt: str = ""  # what the header photo shows, for screen readers (the photo itself is a file)
+    flyer_alt: str = ""
+    flyer_as_header: bool = False  # use the flyer as the header photo too
     entry_fee_cents: int = 2000
     added_money_cents: int = 0
     race_winners: int = 5

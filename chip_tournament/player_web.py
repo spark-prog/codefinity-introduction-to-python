@@ -13,6 +13,7 @@ from flask import abort, flash, g, jsonify, redirect, render_template, request, 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from chips import backup, players
+from chips import pending as pending_mod
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
 from chips.throttle import Throttle
@@ -157,6 +158,16 @@ def full_name(rec: dict) -> str:
     return f"{rec['first']} {rec['last']}".strip()
 
 
+def name_matches(typed: str, rec: dict) -> bool:
+    """'ann lee', 'Annie Lee' (nickname) or 'Ann M. Lee' all match Ann Lee (first or nickname, and last name)."""
+    words = (typed or "").lower().replace(".", " ").split()
+    last_words = (rec.get("last") or "").lower().split()
+    if len(words) < 2 or not last_words:
+        return False
+    firsts = {w for w in ((rec.get("first") or "").lower().split()[:1] + [(rec.get("nickname") or "").lower()]) if w}
+    return words[-1] == last_words[-1] and words[0] in firsts
+
+
 def fill_for(rec: dict, t) -> dict:
     """What a registration form gets for this player in this event (never their phone or email)."""
     game = getattr(t.settings, "skill_game", "8")
@@ -183,17 +194,28 @@ def register_registration(app) -> None:
         return found
 
     def attach_members(form, plist: list[Player]) -> list[Player]:
-        """Member numbers picked on the form (logged-in players only): checked, and the name from the player list."""
-        if not g.get("player"):
-            return plist
+        """Member numbers on the form, checked against the player list.
+
+        In the list with a matching name (or picked by a logged-in player): verified, named as in the list.
+        In the list under another name, or not in the list: kept, but pending the director's check."""
+        logged_in = bool(g.get("player"))
         for i, p in enumerate(plist):
-            member = re.sub(r"\D", "", form.get(f"player_member_{i}", ""))
+            raw = form.get(f"player_member_{i}", "")
+            member = re.sub(r"\D", "", raw)
             if not member:
                 continue
+            if not players.MEMBER_RE.fullmatch(member):
+                raise TournamentError(f"'{raw.strip()}' isn't a member number: they're 8 digits starting with 322.")
             rec = store.get(member)
-            if rec is None or not players.MEMBER_RE.fullmatch(member):
-                raise TournamentError(f"Member number {member} isn't in the player list.")
-            p.member, p.name = member, full_name(rec)
+            p.member = member
+            if rec is not None and (logged_in or name_matches(p.name, rec)):
+                p.name, p.pending = full_name(rec), ""
+            elif rec is not None:
+                p.pending = f"The player list has {member} as {full_name(rec)}"
+            elif store.records():
+                p.pending = "Not in the player list"
+            else:
+                p.pending = "The player list isn't loaded"
         return plist
 
     def my_prefill(t) -> dict:
@@ -218,6 +240,50 @@ def register_registration(app) -> None:
         if found is not None and any(p.member == me["member"] for p in found.players):
             session[f"team_{team_id}"] = True
             session[f"entry_{team_id}"] = True
+
+    def pending_rows(t) -> list[dict]:
+        """For the director's Pending verification box: what was typed, and what the player list says now."""
+        rows = []
+        for grp, i, p in pending_mod.pending(t):
+            rec = store.get(p.member)
+            rows.append({"gid": grp.id, "i": i, "group": grp.name, "name": p.name, "member": p.member,
+                         "reason": p.pending, "list_name": full_name(rec) if rec else "",
+                         "now_ok": bool(rec) and name_matches(p.name, rec)})
+        return rows
+
+    app.jinja_env.globals["pending_rows"] = pending_rows
+
+    @app.post("/t/<event>/admin/pending/<gid>/<int:i>")
+    def admin_pending(gid, i):
+        if not session.get("admin"):
+            flash("Only the director can verify member numbers.", "error")
+            return redirect(url_for("admin"))
+        action, store_ev = request.form.get("action", ""), g.event.store
+        try:
+            with store_ev.change(f"Pending verification: {action}") as t:
+                if action == "verify":
+                    who = pending_mod.verify(t, gid, i)
+                    msg = f"Verified {who}."
+                elif action == "correct":
+                    member = re.sub(r"\D", "", request.form.get("member", ""))
+                    rec = store.get(member) if players.MEMBER_RE.fullmatch(member) else None
+                    if rec is None:
+                        raise TournamentError("Enter a member number that's in the player list (8 digits, 322…).")
+                    who = pending_mod.verify(t, gid, i, member=member, name=full_name(rec))
+                    msg = f"Corrected to {member} ({who})."
+                elif action == "remove":
+                    msg = f"Removed {pending_mod.remove(t, gid)} and texted them why."
+                    sms = g.event.sms
+                    messages, t.outbox = list(t.outbox), []
+                    test = t.settings.test_event
+                    for m in messages:
+                        sms.send(m.to, m.body, test=test)
+                else:
+                    raise TournamentError("Pick verify, correct or remove.")
+            flash(msg, "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin") + "#pending")
 
     app.config["attach_members"] = attach_members
     app.jinja_env.globals["my_registration"] = my_registration

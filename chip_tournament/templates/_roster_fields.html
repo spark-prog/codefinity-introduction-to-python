@@ -16,13 +16,14 @@
   {% set p = v.players[i] if v.players and i < v.players|length else none %}
   <fieldset class="partner{% if i %} partner-extra{% endif %}">
     <legend>Partner {{ i + 1 }}</legend>
-    {% if autofill %}<input type="hidden" name="player_member_{{ i }}" value="{{ p.member if p else '' }}">{% endif %}
     <label>Name <input name="player_name_{{ i }}" required value="{{ p.name if p else '' }}" {% if autofill %}data-lookup="{{ i }}" autocomplete="off"{% endif %}
       {% if original_names and p %}data-original="{{ p.name }}"{% endif %} {% if locked and not (original_names and p) %}readonly{% endif %}></label>
     {% if original_names and p %}
     <label class="checkbox name-fix" hidden><input type="checkbox" name="same_person_{{ i }}" value="1">
       <span>Same person: I'm only fixing the spelling of {{ p.name }}'s name (keeps their cell number and text alerts)</span></label>
     {% endif %}
+    {% if member_field %}<label>APA member number <span class="muted">(optional)</span>
+      <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="322…" value="{{ p.member if p and p.member else '' }}"></label>{% endif %}
     <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" max="9" step="1" required
       value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
     {% if hide_phones and p and p.phone %}

@@ -35,6 +35,7 @@
   <div class="stat"><span class="label">Matches left</span><span class="value">{{ t.matches|selectattr("status", "in", ["pending", "ready", "called"])|rejectattr("is_bye")|list|length }}</span></div>
   {% endif %}
 </div>
+{% include "_pending_card.html" %}
 <section class="card controls" style="margin-top: 0">
   {% if setup %}
   {% set unchecked = t.not_checked_in %}

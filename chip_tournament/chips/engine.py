@@ -112,6 +112,7 @@ class Player:
     skill_8: int = 0  # 8-Ball skill level, when asked separately
     skill_9: int = 0  # 9-Ball skill level, when asked separately
     member: str = ""  # APA member number (8 digits, 322...) when known: one player, one spot per event
+    pending: str = ""  # why the member number needs the director's check ("Not in the player list"); "" = fine
 
 
 @dataclass
@@ -931,7 +932,11 @@ class Tournament:
                 old = team.players[i] if i in same_people else next(
                     (o for o in team.players if self._names([o]) == self._names([p])), None)
                 if old is not None:
-                    p.member = old.member
+                    p.member, p.pending = old.member, old.pending
+        for p in players:  # a number already on this team keeps the director's verdict on it
+            same = next((o for o in team.players if p.member and o.member == p.member), None)
+            if same is not None:
+                p.pending = same.pending
         self._check_members(players, skip=team_id)
         # The roster as it was, with corrected names applied, so a spelling fix isn't a swap.
         before = [Player(players[i].name if i in same_people else o.name, o.phone, o.skill) for i, o in enumerate(team.players)]

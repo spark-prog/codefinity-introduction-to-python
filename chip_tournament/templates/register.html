@@ -39,7 +39,7 @@
     {% set solo_checked = form.get("solo") == "1" %}
     {% set list_checked = form.get("list_seeking") == "1" %}
     {% set consent_form = true %}
-    {% set autofill = player is not none %}
+    {% set autofill = player is not none %}{% set member_field = true %}
     {% include "_login_nudge.html" %}
     {% include "_roster_fields.html" %}
     {% if autofill %}{% include "_member_lookup.html" %}{% endif %}

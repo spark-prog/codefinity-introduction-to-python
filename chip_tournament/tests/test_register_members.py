@@ -125,13 +125,20 @@ def test_logged_in_registration_autofill_and_already_registered(app):
         app.config["hub"].get("masquerade").load().teams) == 1
 
 
-def test_anonymous_member_fields_are_ignored(app):
-    r = app.test_client().post("/t/masquerade/register", data=form(player_name_0="Zed One", player_skill_0="3",
-                                                                    player_member_0="32200001", player_name_1="Zed Two",
-                                                                    player_skill_1="3"))
+def test_typed_member_numbers_are_checked(app):
+    """Anyone can type a member number: a matching name is verified, anything else waits for the director."""
+    r = app.test_client().post("/t/masquerade/register", data=form(
+        name="Zeds", player_name_0="Zed One", player_skill_0="3", player_member_0="32200001",
+        player_name_1="cy  day", player_skill_1="3", player_member_1="322-00003"))
     assert r.status_code == 302
     team = next(iter(app.config["hub"].get("masquerade").load().teams.values()))
-    assert [x.member for x in team.players] == ["", ""]  # can't claim someone else's number without logging in
+    zed, cy = team.players
+    assert (zed.member, zed.pending) == ("32200001", "The player list has 32200001 as Ann Lee")
+    assert (cy.name, cy.member, cy.pending) == ("Cy Day", "32200003", "")
+    r = app.test_client().post("/t/masquerade/register", data=form(
+        name="Owls", player_name_0="New Member", player_skill_0="3", player_member_0="32299999",
+        player_name_1="Typo Guy", player_skill_1="3", player_member_1="1234"), follow_redirects=True)
+    assert "isn&#39;t a member number" in r.get_data(as_text=True)
 
 
 def test_bracket_prefill_both_skill_levels(app):

@@ -507,7 +507,7 @@ class BracketTournament:
         """A copy of a player from a form, with its skill set from the 8-Ball and 9-Ball levels if given."""
         skill = max(p.skill_8, p.skill_9) or p.skill
         return Player(name=p.name.strip(), phone=p.phone.strip(), skill=skill, skill_8=p.skill_8, skill_9=p.skill_9,
-                      sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at, member=p.member)
+                      sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at, member=p.member, pending=p.pending)
 
     def registered_as(self, member: str, skip: str | None = None) -> Entry | None:
         """The entry a member number is already in (no-shows don't count)."""
@@ -589,7 +589,11 @@ class BracketTournament:
             p.sms_consent, p.sms_consent_at = False, None
             if not p.member:  # the same person keeps their member number
                 old = next((o for o in entry.players if o.name.lower() == p.name.lower()), None)
-                p.member = old.member if old else ""
+                p.member, p.pending = (old.member, old.pending) if old else ("", "")
+        for p in players:  # a number already on this entry keeps the director's verdict on it
+            same = next((o for o in entry.players if p.member and o.member == p.member), None)
+            if same is not None:
+                p.pending = same.pending
         self._check_players(players)
         self._check_members(players, skip=entry.id)
         if self.status != SETUP and [p.name.lower() for p in players] != [p.name.lower() for p in entry.players]:

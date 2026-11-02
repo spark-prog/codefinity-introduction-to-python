@@ -450,7 +450,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         players = [
             Player(name=request.form.get(f"player_name_{i}", ""), phone=request.form.get(f"player_phone_{i}", ""),
                    skill=int(request.form[f"player_skill_{i}"]) if request.form.get(f"player_skill_{i}", "").isdigit() else 0,
-                   member=request.form.get(f"player_member_{i}", "") if g.get("player") else "")
+                   member=request.form.get(f"player_member_{i}", ""))
             for i in range(TEAM_SIZE)
         ]
         if request.method == "GET" and g.get("player"):  # logged in: Partner 1 is them
@@ -644,7 +644,8 @@ def create_app(data_dir: str | None = None) -> Flask:
                 f"Update roster: {store.load().name_of(team_id)}",
                 lambda t: t.update_roster(
                     team_id,
-                    players_from_form(f, None if session.get("admin") else t.teams[team_id], same)[:1 if solo else TEAM_SIZE],
+                    app.config["attach_members"](f, players_from_form(
+                        f, None if session.get("admin") else t.teams[team_id], same)[:1 if solo else TEAM_SIZE]),
                     name=f.get("name"), list_seeking=f.get("list_seeking") == "1", same_people=same),
                 "Roster saved.",
             ):

@@ -904,3 +904,11 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 .unregister { margin-top: 14px; }
 .unregister summary { cursor: pointer; color: var(--ink-2); text-decoration: underline; }
 .unregister .form { margin-top: 10px; }
+
+/* Skill level check */
+.check-counts { display: flex; flex-wrap: wrap; gap: 8px; }
+.check-badge { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.check-badge.ok { background: rgba(95, 211, 141, .15); color: #5fd38d; }
+.check-badge.differs, .check-badge.missing { background: rgba(255, 176, 32, .15); color: #ffb020; }
+.check-badge.not_found, .check-badge.ambiguous, .check-badge.review { background: rgba(255, 107, 118, .15); color: #ff6b76; }
+tr.check-ok td { opacity: .75; }

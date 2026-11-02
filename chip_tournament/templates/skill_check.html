@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Skill level check — {{ t.settings.name }}{% endblock %}
+{% block content %}
+{% set s = t.settings %}
+<header class="page-head">
+  <p class="eyebrow">{{ s.name }} · Director</p>
+  <h1>Skill level check</h1>
+  <p class="lede">What each player entered, compared with the league's player list{% if not two %} ({{ "9-Ball" if s.skill_game == "9" else "8-Ball" }} skill levels){% endif %}.</p>
+  <p><a href="{{ url_for('admin') }}">← Back to the director page</a></p>
+</header>
+
+{% if not has_list %}
+<section class="card"><p class="backup-status warn">The player list is empty. Link the player sheet on the Players page first.</p></section>
+{% else %}
+<section class="card">
+  <div class="section-head"><h2>Summary</h2>
+    {% if can_fix and not is_viewer and groups|selectattr("fixable")|list %}
+    <form method="post" action="{{ url_for('admin_skill_check_fix') }}" class="inline" onsubmit="return confirm('Set every flagged player to the player list\'s skill levels?')">
+      <input type="hidden" name="id" value="all"><button class="button small">Fix all from the list</button></form>
+    {% endif %}</div>
+  <p class="check-counts">
+    {% for key in ("ok", "differs", "missing", "review", "not_found", "ambiguous") %}{% if counts.get(key) %}
+    <span class="check-badge {{ key }}">{{ labels[key] }}: {{ counts[key] }}</span>{% endif %}{% endfor %}
+  </p>
+  {% if not can_fix %}<p class="muted small-note">The tournament has started, so skill levels can't be changed here any more.</p>{% endif %}
+  <p class="muted small-note">Players who registered without logging in are matched by name. "Fix" also attaches their member number when the name matches exactly one player.</p>
+</section>
+
+<section class="card">
+  <div class="table-wrap"><table class="grid">
+    <thead><tr><th>{{ "Team" if event.kind == CHIP else "Entry" }}</th><th>Player</th><th>Entered</th><th>Player list</th><th>Check</th></tr></thead>
+    {% for grp in groups %}{% for r in grp.players %}
+    <tr class="{{ 'check-ok' if r.status == 'ok' }}">
+      {% if loop.first %}<td rowspan="{{ grp.players|length }}"><b>{{ grp.name }}</b>
+        {% if grp.fixable and can_fix and not is_viewer %}
+        <form method="post" action="{{ url_for('admin_skill_check_fix') }}"><input type="hidden" name="id" value="{{ grp.id }}">
+          <button class="button small secondary">Use the list's levels</button></form>{% endif %}</td>{% endif %}
+      <td>{{ r.name }}{% if r.member %}<div class="muted small-note">{{ r.member }}{% if r.matched_by == "name" %} · matched by name{% endif %}</div>{% endif %}</td>
+      <td class="nowrap">{% if two %}8-Ball {{ r.entered.skill8 or "—" }} · 9-Ball {{ r.entered.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.entered.skill) if r.entered.skill else "—" }}{% endif %}</td>
+      <td class="nowrap">{% if r.list %}{% if two %}8-Ball {{ r.list.skill8 or "—" }} · 9-Ball {{ r.list.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.list.skill) if r.list.skill else "—" }}{% if r.how and r.how != "rated" %}<div class="muted small-note">{{ r.how }}</div>{% endif %}{% endif %}{% else %}—{% endif %}</td>
+      <td><span class="check-badge {{ r.status }}">{{ labels[r.status] }}</span></td>
+    </tr>
+    {% endfor %}{% else %}
+    <tr><td colspan="5" class="muted">Nobody has registered yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

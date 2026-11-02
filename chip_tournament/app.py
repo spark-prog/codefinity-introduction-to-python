@@ -28,8 +28,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
 import player_web
-from chips import backup, bonus_event, export, importer, players, rules as rulebook, schedule, themes
-from chips.bracket import FINAL_CUTS, FORMATS
+from chips import backup, bonus_event, export, importer, players, rules as rulebook, schedule, skill_check, themes
+from chips.bracket import FINAL_CUTS, FORMATS, RACK_CHART
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
     ACTIVE,
@@ -507,6 +507,57 @@ def create_app(data_dir: str | None = None) -> Flask:
         team = store.load().teams.get(team_id) or abort(404)
         check_pin(team)
         return redirect(url_for("team_page", team_id=team_id))
+
+    # ------------------------------------------------- skill level check (chips and brackets)
+
+    def two_levels(t) -> bool:
+        s = t.settings
+        return g.event.kind == BRACKET and s.team_size == 1 and bool(s.skill_groups or s.race_method == RACK_CHART)
+
+    @app.get("/t/<event>/admin/skill-check")
+    @director_view
+    def admin_skill_check():
+        t = store.load()
+        groups = skill_check.check_event(t, player_store, two_levels(t))
+        counts = {}
+        for grp in groups:
+            for r in grp["players"]:
+                counts[r["status"]] = counts.get(r["status"], 0) + 1
+        return render_template("skill_check.html", t=t, groups=groups, counts=counts, labels=skill_check.LABELS,
+                               two=two_levels(t), has_list=bool(player_store.records()),
+                               can_fix=(t.status == SETUP))
+
+    @app.post("/t/<event>/admin/skill-check")
+    @admin_required
+    def admin_skill_check_fix():
+        t = store.load()
+        two = two_levels(t)
+        want = request.form.get("id", "")
+        fixed, failed = 0, []
+        for grp in skill_check.check_event(t, player_store, two):
+            if not grp["fixable"] or (want != "all" and grp["id"] != want):
+                continue
+            people = t.teams if g.event.kind == CHIP else t.entries
+            new = skill_check.fixed_players(people[grp["id"]], grp["players"], two)
+            label = f"Skill check: {grp['name']} set to the player list's levels"
+
+            def apply(tt, gid=grp["id"], new=new):
+                return tt.update_roster(gid, new) if g.event.kind == CHIP else tt.update_entry(gid, None, new)
+
+            try:
+                with store.change(label) as tt:
+                    apply(tt)
+                fixed += 1
+            except TournamentError as exc:
+                failed.append(f"{grp['name']}: {exc}")
+        if fixed:
+            noun = ("team" if fixed == 1 else "teams") if g.event.kind == CHIP else ("entry" if fixed == 1 else "entries")
+            flash(f"Updated {fixed} {noun} to the player list's skill levels.", "ok")
+        for msg in failed:
+            flash(f"Couldn't update {msg}", "error")
+        if not fixed and not failed:
+            flash("Nothing to update.", "ok")
+        return redirect(url_for("admin_skill_check"))
 
     @app.post("/t/<event>/team/<team_id>/unregister")
     def team_unregister(team_id):
@@ -1429,7 +1480,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     # tournament gets its own version (or a 404) from bracket_web.
     shared = {"rules_page", "terms", "privacy", "admin_background", "admin_reset", "admin_delete_archives",
               "admin_broadcast", "admin_text_pins", "find_team", "admin_call_all",
-              "admin_export"}
+              "admin_export", "admin_skill_check", "admin_skill_check_fix"}
     chip_only = {r.endpoint for r in app.url_map.iter_rules() if "event" in r.arguments} - shared
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,

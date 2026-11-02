@@ -6,6 +6,21 @@
   <h1>{{ me.first }} {{ me.last }}</h1>
   <p class="lede">Member {{ me.member }}{% if me.status %} · {{ me.status }}{% endif %}</p>
 </header>
+<section class="your-events">
+  <h2>Your events</h2>
+  {% for e in upcoming %}{% include "_your_event.html" %}
+  {% else %}
+  <div class="card"><p class="muted" style="margin: 0">You're not registered for any upcoming events.
+    <a href="{{ url_for('index') }}">See what's open</a>.</p></div>
+  {% endfor %}
+  {% if past %}
+  <details class="inline-details past-events">
+    <summary>Past events ({{ past|length }})</summary>
+    {% for e in past %}{% include "_your_event.html" %}{% endfor %}
+  </details>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Skill levels</h2>
   <ul class="facts">

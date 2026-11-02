@@ -437,7 +437,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                     raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
-                players = app.config["attach_members"](f, players_from_form(f)[:1 if solo else TEAM_SIZE])
+                players = app.config["attach_members"](f, players_from_form(f)[:1 if solo else TEAM_SIZE], t)
                 if f.get("sms_consent") == "1" and players[0].phone:  # the person registering, for their own number
                     players[0].sms_consent, players[0].sms_consent_at = True, datetime.now().isoformat(timespec="seconds")
                 return t.register_team(f.get("name", ""), players, list_seeking=f.get("list_seeking") == "1")
@@ -645,7 +645,8 @@ def create_app(data_dir: str | None = None) -> Flask:
                 lambda t: t.update_roster(
                     team_id,
                     app.config["attach_members"](f, players_from_form(
-                        f, None if session.get("admin") else t.teams[team_id], same)[:1 if solo else TEAM_SIZE]),
+                        f, None if session.get("admin") else t.teams[team_id], same)[:1 if solo else TEAM_SIZE],
+                        t, t.teams[team_id].players),
                     name=f.get("name"), list_seeking=f.get("list_seeking") == "1", same_people=same),
                 "Roster saved.",
             ):
@@ -723,6 +724,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if f.get("require_member_shown"):
+                s.require_member = f.get("require_member") == "1"
             if f.get("skill_game") in ("8", "9"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

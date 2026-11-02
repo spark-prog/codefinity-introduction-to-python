@@ -42,14 +42,16 @@ def app(tmp_path, monkeypatch):
 def test_your_events(app):
     page = Clients(app).logged_in("32200001").get("/me").get_data(as_text=True)
     events = page.split('<section class="your-events">')[1].split("</section>")[0]
-    upcoming, past = events.split('class="inline-details past-events"')
+    upcoming = events
+    past = page.split('id="history"')[1].split("</section>")[0]
     assert upcoming.index("Movin-On-Up") < upcoming.index("Masquerade")  # soonest first
     assert "Sat, Nov 21" in upcoming and "1:00 PM" in upcoming and "Sat, Dec 19" in upcoming
     assert "Your SL <b>4</b> · team SL <b>9</b> · starts with <b>3 chips</b>" in upcoming
     assert "8-Ball <b>4</b> · 9-Ball <b>6</b> · <b>SL 6–9</b> group" in upcoming
     assert "/t/masquerade/rules" in upcoming and "/t/movin-on-up/rules" in upcoming
     assert "My team page" in upcoming and "with Bo Ray" in upcoming
-    assert "Halloween Doubles" in past and "Not Mine" not in events  # not in Your events...
+    assert "Halloween Doubles" in past and "Halloween Doubles" not in upcoming  # finished: in Your history
+    assert "Not Mine" not in events  # not in Your events...
     assert "Not Mine" in page.split('id="upcoming"')[1]  # ...but offered under Upcoming events
 
 

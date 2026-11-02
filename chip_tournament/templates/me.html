@@ -13,12 +13,6 @@
   <div class="card"><p class="muted" style="margin: 0">You're not registered for any upcoming events.
     <a href="{{ url_for('index') }}">See what's open</a>.</p></div>
   {% endfor %}
-  {% if past %}
-  <details class="inline-details past-events">
-    <summary>Past events ({{ past|length }})</summary>
-    {% for e in past %}{% include "_your_event.html" %}{% endfor %}
-  </details>
-  {% endif %}
 </section>
 
 {% set can_enter = open_events|rejectattr("status", "equalto", "no")|list %}
@@ -33,6 +27,28 @@
     <summary>Not eligible yet ({{ cannot|length }})</summary>
     {% for e in cannot %}{% include "_open_event.html" %}{% endfor %}
   </details>
+  {% endif %}
+</section>
+
+<section class="card" id="history">
+  <h2>Your history</h2>
+  {% if past %}
+  <p class="career">{{ career.events }} tournament{{ "s" if career.events != 1 }}
+    {% if career.titles %} · <b>{{ career.titles }} title{{ "s" if career.titles != 1 }}</b>{% endif %}
+    · {{ career.wins }}–{{ career.losses }} in matches
+    {% if career.won_cents %} · {{ career.won_cents|money }} won{% endif %}</p>
+  <div class="history-list">
+    {% for r in past %}
+    <div class="pending-row">
+      <div><b>{{ r.name }}</b> <span class="muted">· {{ r.date|day if r.date else "" }}{{ (", " ~ r.date[:4]) if r.date else "" }}</span>
+        {% if r.partners %}<br><span class="muted small-note">{{ r.team }} · with {{ r.partners|join(", ") }}</span>{% endif %}</div>
+      <div class="history-result">{% if r.title %}🏆 {% endif %}<b>{{ r.finish }}</b>
+        <br><span class="muted small-note">{{ r.wins }}–{{ r.losses }}{% if r.team_payout_cents %} · {{ r.team_payout_cents|money }}{% if r.partners %} (team){% endif %}{% endif %}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Your finishes and payouts show here after your first tournament.</p>
   {% endif %}
 </section>
 

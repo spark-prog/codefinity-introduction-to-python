@@ -951,3 +951,7 @@ tr.check-ok td { opacity: .75; }
   border: 1px solid rgba(255, 107, 118, .5); background: rgba(255, 107, 118, .08); }
 .eligible-no ul { margin: 6px 0 0; padding-left: 18px; }
 .quick-register { display: grid; gap: 6px; margin-top: 6px; }
+
+/* My account: Your history */
+.career { font-size: 1.1rem; }
+.history-result { text-align: right; }

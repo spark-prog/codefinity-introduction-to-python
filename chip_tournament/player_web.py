@@ -16,6 +16,7 @@ from chips import backup, eligibility, players, schedule
 from chips import pending as pending_mod
 from chips import series as series_mod
 from chips import waitlist as waitlist_mod
+from chips import history as history_mod
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
 from chips.throttle import Throttle
@@ -170,11 +171,13 @@ def register(app, h) -> None:
     def my_account():
         if not g.player:
             return redirect(url_for("player_login", next=request.path))
+        app.config["record_finished"]()  # catch an event that just finished
         events = app.config["your_events"](g.player)
+        past_rows = app.config["history"].for_member(g.player["member"])
         return render_template("me.html", t=None, me=g.player, skill_for=players.skill_for,
                                has_password=accounts.has_password(g.player["member"]), fresh=fresh_code_login(),
                                upcoming=[e for e in events if e["status"] != "finished"],
-                               past=[e for e in events if e["status"] == "finished"],
+                               past=past_rows, career=history_mod.summary(past_rows),
                                open_events=[r for r in app.config["public_results"](g.player["member"])
                                             if r["status"] != "registered"])
 
@@ -558,6 +561,19 @@ def register_registration(app) -> None:
                 ev.store.save(t)
 
     app.config["ask_partners"] = ask_partners
+
+    history = history_mod.History(app.config["data_dir"])
+    app.config["history"] = history
+
+    def record_finished() -> None:
+        """Copy every finished event's results into players' histories (once each)."""
+        for ev in app.config["hub"].events():
+            if not history.recorded(ev.id):
+                t = ev.load()
+                if t.status == "finished" and not t.settings.test_event:
+                    history.record(ev.id, ev.kind, t)
+
+    app.config["record_finished"] = record_finished
     app.jinja_env.globals["offer_when"] = waitlist_mod.when_text
 
     @app.route("/t/<event>/partner/<token>", methods=["GET", "POST"])
@@ -878,6 +894,8 @@ def register_registration(app) -> None:
                         t = ev.load()
                         if email_offers(ev, t):
                             ev.store.save(t)
+                    if probe.status == "finished" and not history.recorded(ev.id):
+                        history.record(ev.id, ev.kind, probe)
                     if eligibility.lock_due(ev.load()):
                         with ev.store.change("Eligibility locked (registration closed)") as t:
                             if eligibility.lock_due(t):

@@ -14,12 +14,13 @@
     <p class="muted small-note">You asked the league office to review this on {{ asked.at|day }}. You'll get an email when they decide.</p>
   {% else %}
     {% if asked and asked.status == "declined" %}<p class="muted small-note">The league office reviewed this on {{ asked.decided_at|day }}: {{ asked.note }}</p>{% endif %}
-    <details class="inline-details">
-      <summary class="button secondary small">Think this is wrong? Ask for a review</summary>
-      <form method="post" action="{{ url_for('review_request') }}" class="form">
+    <p class="small-note" style="margin: 8px 0 6px">Think this is wrong?</p>
+    <details class="inline-details review-ask">
+      <summary class="button secondary small">Ask for a review</summary>
+      <form method="post" action="{{ url_for('review_request') }}" class="form" data-once>
         <label>Anything they should know (optional) <textarea name="message" rows="2" maxlength="500"
           placeholder="e.g. I played on a new team Sep 15; it may not be in the report yet."></textarea></label>
-        <button class="button small">Ask for a review</button>
+        <button class="button small" data-busy="Sending…">Send my request</button>
       </form>
     </details>
   {% endif %}

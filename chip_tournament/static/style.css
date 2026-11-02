@@ -952,6 +952,9 @@ tr.check-ok td { opacity: .75; }
 .eligible-no { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 107, 118, .5); background: rgba(255, 107, 118, .08); }
 .eligible-no ul { margin: 6px 0 0; padding-left: 18px; }
+.eligible-no details.review-ask[open] > summary { margin-bottom: 10px; }
+.eligible-no details.review-ask { max-width: 100%; }
+.eligible-no details.review-ask > summary.button { display: inline-flex; align-items: center; justify-content: center; }
 .quick-register { display: grid; gap: 6px; margin-top: 6px; }
 
 /* My account: Your history */

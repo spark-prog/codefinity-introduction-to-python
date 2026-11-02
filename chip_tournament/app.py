@@ -12,6 +12,7 @@ In production: gunicorn --workers 1 --threads 8 "app:create_app()"
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import secrets
@@ -28,7 +29,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
 import player_web
-from chips import backup, bonus_event, eligibility, export, importer, players, rules as rulebook, schedule, skill_check, themes
+from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, RACK_CHART
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -140,6 +141,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     sms = LocalProxy(lambda: g.event.sms)
     rule_book = rulebook.RuleBook(data_path)
     player_store = players.PlayerStore(data_path)  # every APA player, kept apart from the tournaments
+    pools = pool_mod.Pools(data_path)  # shared tables (Mini-Mania)
+    app.config["pools"] = pools
     app.config["players"] = player_store
 
     def current_t():
@@ -272,20 +275,45 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     def act(label: str, fn, success: str | None = None):
         """Apply one change to the tournament; show rule errors instead of crashing."""
+        pool = pools.of_event(g.event.id)
         try:
-            with store.change(label) as t:
-                # For team-page links in texts: the SITE_URL setting (e.g. https://controltable.app) when set,
-                # else whatever address the director is using.
-                root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
-                t.site_url = f"{root}/t/{g.event.id}"
-                result = fn(t)
-                send_texts(t)
+            # Events sharing tables change one at a time, so two can never take the same table.
+            with pool_mod.lock_for(pool["id"]) if pool else contextlib.nullcontext():
+                with store.change(label) as t:
+                    # For team-page links in texts: the SITE_URL setting (e.g. https://controltable.app) when set,
+                    # else whatever address the director is using.
+                    root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+                    t.site_url = f"{root}/t/{g.event.id}"
+                    pool_mod.inform(t, hub, pool, g.event.id)
+                    result = fn(t)
+                    send_texts(t)
+                if pool:
+                    share_freed_tables(pool, g.event.id)
             if success:
                 flash(success.format(result=result), "ok")
             return result
         except TournamentError as exc:
             flash(str(exc), "error")
             return None
+
+    def share_freed_tables(pool: dict, done_event: str) -> None:
+        """After a change in one pooled event, the others get a turn at any table that's free now."""
+        for other in pool["events"]:
+            ev = hub.get(other)
+            if other == done_event or ev is None:
+                continue
+            probe = ev.load()
+            pool_mod.inform(probe, hub, pool, other)
+            if not (pool_mod.waiting_for_table(probe) and probe.free_tables()):
+                continue
+            with ev.store.change("Shared tables: a table freed up") as t:
+                pool_mod.inform(t, hub, pool, other)
+                pool_mod.give_tables(t)
+                messages, t.outbox = list(t.outbox), []
+                for m in messages:
+                    ev.sms.send(m.to, m.body, test=t.settings.test_event)
+
+    app.config["share_freed_tables"] = share_freed_tables
 
     def tick(ev) -> None:
         """Apply the partner deadline when it's due (nothing runs on its own once play starts)."""
@@ -1243,7 +1271,102 @@ def create_app(data_dir: str | None = None) -> Flask:
     def director():
         return render_template("hub_admin.html", t=None, rows=hub.summaries(), formats=FORMATS,
                                final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"),
-                               backup_status=backup.load_status(data_path), backup_setup=backup.configured())
+                               backup_status=backup.load_status(data_path), backup_setup=backup.configured(),
+                               pools=pools.all())
+
+    # ------------------------------------------------------- shared tables (Mini-Mania)
+
+    def pool_view(pool: dict) -> dict:
+        """Every table in the pool and what's on it, and each event's state."""
+        tables = {name: None for name in pool["tables"]}
+        events = []
+        for eid in pool["events"]:
+            ev = hub.get(eid)
+            if ev is None:
+                continue
+            t = ev.load()
+            chip = ev.kind == CHIP
+            for m in t.matches:
+                if m.status in ("called", "waiting", "ready") and m.table and m.table in tables:
+                    a, b = (m.team_a, m.team_b) if chip else (m.a, m.b)
+                    tables[m.table] = {"event": t.settings.name, "event_id": eid, "names": f"{t.name_of(a)} vs {t.name_of(b)}",
+                                       "state": "sent" if m.sent_at else ("playing" if m.status == "called" else "set")}
+            waiting = len(t.table_queue() if chip else t.ready_queue()) if t.status == RUNNING else 0
+            events.append({"id": eid, "name": t.settings.name, "status": t.status, "waiting": waiting,
+                           "set": len(t.assigned_matches()) if t.status == RUNNING else 0,
+                           "approve": len(t.results_to_approve()) if t.status == RUNNING else 0,
+                           "kind": "Chip tournament" if chip else t.format_name})
+        return {"pool": pool, "tables": tables, "events": events}
+
+    def sync_pool_tables(pool: dict) -> None:
+        """Every event in the pool uses the pool's tables."""
+        for eid in pool["events"]:
+            ev = hub.get(eid)
+            if ev is not None:
+                with ev.store.lock:
+                    t = ev.load()
+                    if t.settings.tables != pool["tables"]:
+                        t.settings.tables = list(pool["tables"])
+                        ev.store.save(t)
+
+    @app.post("/admin/pools")
+    @admin_required
+    def admin_pool_save():
+        f = request.form
+        try:
+            tables = [x.strip() for x in f.get("tables", "").split(",") if x.strip()]
+            events = [e for e in request.form.getlist("events") if hub.get(e)]
+            pool_mod.check_no_clash(hub, events)
+            pool = pools.save(f.get("pool_id") or None, f.get("name", ""), tables, events)
+            sync_pool_tables(pool)
+            flash(f"Saved {pool['name']}: {len(events)} event(s) share tables {', '.join(tables)}.", "ok")
+            return redirect(url_for("admin_pool", pool_id=pool["id"]))
+        except TournamentError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("director") + "#pools")
+
+    @app.post("/admin/pool/<pool_id>/delete")
+    @admin_required
+    def admin_pool_delete(pool_id):
+        pools.delete(pool_id)
+        flash("The events no longer share tables. Each keeps the table list it has now.", "ok")
+        return redirect(url_for("director") + "#pools")
+
+    @app.get("/admin/pool/<pool_id>")
+    @director_view
+    def admin_pool(pool_id):
+        pool = pools.get(pool_id) or abort(404)
+        return render_template("pool_admin.html", t=None, view=pool_view(pool), rows=hub.summaries())
+
+    @app.post("/admin/pool/<pool_id>/call-all")
+    @admin_required
+    def admin_pool_call_all(pool_id):
+        """Call every set match in every event sharing these tables."""
+        pool = pools.get(pool_id) or abort(404)
+        called = 0
+        for eid in pool["events"]:
+            ev = hub.get(eid)
+            if ev is None or not ev.load().assigned_matches():
+                continue
+            with pool_mod.lock_for(pool_id):
+                with ev.store.change("Call all (shared tables)") as t:
+                    pool_mod.inform(t, hub, pool, eid)
+                    root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+                    t.site_url = f"{root}/t/{eid}"
+                    try:
+                        called += t.call_all()
+                    except TournamentError:
+                        pass
+                    messages, t.outbox = list(t.outbox), []
+                    for m in messages:
+                        ev.sms.send(m.to, m.body, test=t.settings.test_event)
+        flash(f"Called {called} match(es) across the events." if called else "No matches are waiting to be called.", "ok")
+        return redirect(url_for("admin_pool", pool_id=pool_id))
+
+    @app.get("/pool/<pool_id>")
+    def pool_board(pool_id):
+        pool = pools.get(pool_id) or abort(404)
+        return render_template("pool_board.html", t=None, view=pool_view(pool))
 
     # ----------------------------------------------------------------- players
 

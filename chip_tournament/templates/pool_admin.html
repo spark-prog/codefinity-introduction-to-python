@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ view.pool.name }} — shared tables{% endblock %}
+{% block head %}{% set secs = 20 %}{% include "_refresh.html" %}{% endblock %}
+{% block content %}
+{% set pool = view.pool %}
+<header class="page-head">
+  <p class="eyebrow">Director · shared tables</p>
+  <h1>{{ pool.name }}</h1>
+  <p><a href="{{ url_for('director') }}">← All tournaments</a> · <a href="{{ url_for('pool_board', pool_id=pool.id) }}">Public board</a></p>
+</header>
+
+<section class="card">
+  <div class="section-head"><h2>Events</h2>
+    {% if not is_viewer and view.events|sum(attribute="set") %}
+    <form method="post" action="{{ url_for('admin_pool_call_all', pool_id=pool.id) }}" class="inline">
+      <button class="button small">Call all ({{ view.events|sum(attribute="set") }}) in every event</button></form>{% endif %}</div>
+  {% for e in view.events %}
+  <div class="pending-row">
+    <div><b><a href="{{ url_for('admin', event=e.id) }}">{{ e.name }}</a></b> <span class="muted">· {{ e.kind }} · {{ {"setup": "Setting up", "running": "Live", "finished": "Finished"}[e.status] }}</span>
+      {% if e.status == "running" %}<br><span class="small-note">{{ e.set }} set for a table · {{ e.waiting }} waiting for a table{% if e.approve %} · <span class="pending-reason">{{ e.approve }} result(s) to approve</span>{% endif %}</span>{% endif %}</div>
+    <a class="button small secondary" href="{{ url_for('admin', event=e.id) }}">Director page</a>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h2>Tables</h2>
+  <div class="pool-grid">
+    {% for name, m in view.tables.items() %}
+    <div class="pool-table {{ m.state if m else 'free' }}">
+      <span class="pool-table-no">{{ name }}</span>
+      {% if m %}<b>{{ m.event }}</b><span class="small-note">{{ m.names }}</span>
+        <span class="small-note muted">{{ {"set": "Set: waiting for the call", "playing": "Playing", "sent": "Result sent"}[m.state] }}</span>
+      {% else %}<span class="muted small-note">Free</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if not is_viewer %}
+<section class="card">
+  <h2>Edit</h2>
+  {% include "_pool_form.html" %}
+  <form method="post" action="{{ url_for('admin_pool_delete', pool_id=pool.id) }}" class="inline" onsubmit="return confirm('Stop sharing these tables?')">
+    <button class="link">Stop sharing tables</button></form>
+</section>
+{% endif %}
+{% endblock %}

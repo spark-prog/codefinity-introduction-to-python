@@ -1660,6 +1660,29 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(f"Deleted {name}, its rosters and its texts.", "ok")
         return redirect(url_for("director"))
 
+    @app.route("/admin/event/<event_id>/copy", methods=["GET", "POST"])
+    @admin_required
+    def copy_event(event_id):
+        """Copy a tournament's setup to a new one with a new name and date (no players, results or history)."""
+        source = hub.get(event_id) or abort(404)
+        t = source.load()
+        if request.method == "POST":
+            try:
+                ev, notes = hub.copy(event_id, request.form.get("name", ""), request.form.get("date", ""))
+            except TournamentError as exc:
+                flash(str(exc), "error")
+            else:
+                flash(f"Copied {t.settings.name} to {ev.load().settings.name}. Check the settings below, make your "
+                      "changes, and press Save settings.", "ok")
+                for note in notes:
+                    flash(note, "error")
+                if t.settings.test_event:
+                    flash("The original is a test event, so this copy is too: untick Test event in Settings to make "
+                          "it a real one (players see it and get texts).", "error")
+                return redirect(url_for("admin", event=ev.id) + "#settings")
+        return render_template("copy_event.html", t=None, source=source, src=t,
+                               form=request.form if request.method == "POST" else {})
+
     # Links from before Control Table hosted several tournaments (old texts, bookmarks, the TV).
     def only_live_event():
         """Where an old /board or /register link should go: the one tournament that's on now."""

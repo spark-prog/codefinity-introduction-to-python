@@ -38,6 +38,7 @@
         <a class="button small" href="{{ url_for('admin', event=r.event.id) }}">Run it</a>
         <a class="button small secondary" href="{{ url_for('home', event=r.event.id) }}">Public page</a>
         <a class="button small secondary" href="{{ url_for('board', event=r.event.id) }}">Board</a>
+        {% if not is_viewer %}<a class="button small secondary" href="{{ url_for('copy_event', event_id=r.event.id) }}">Copy</a>{% endif %}
       </td>
     </tr>
     {% endfor %}

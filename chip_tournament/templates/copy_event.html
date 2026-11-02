@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Copy {{ src.settings.name }} — Control Table{% endblock %}
+{% block content %}
+{% set s = src.settings %}
+<div class="narrow">
+<header class="page-head">
+  <p class="eyebrow">Director</p>
+  <h1>Copy a tournament</h1>
+  <p class="lede">A new tournament set up like <b>{{ s.name }}</b>{% if s.date %} ({{ s.date|day }}){% endif %}. Give it a name and a date, then make any changes in its settings.</p>
+</header>
+<form method="post" class="card form" data-once>
+  <label>New tournament name <input name="name" required maxlength="80" value="{{ form.get('name') or s.name ~ ' (copy)' }}"></label>
+  <label>Date <input name="date" type="date" value="{{ form.get('date', '') }}"></label>
+  {% if s.registration_opens or s.registration_closes %}<p class="muted small-note">Online registration {% if s.registration_opens %}opening{% endif %}{% if s.registration_opens and s.registration_closes %} and {% endif %}{% if s.registration_closes %}closing{% endif %} times move by as many days as the date does.</p>{% endif %}
+  <button class="button big block" data-busy="Copying…">Copy</button>
+</form>
+<section class="card">
+  <h2>What comes with it</h2>
+  <ul>
+    <li>The type and format, {{ "chip tournament settings" if source.kind == "chip" else (src.format_name ~ " · " ~ src.entries_label) }}{% if s.skill_groups is defined and s.skill_groups %}, skill groups{% endif %}</li>
+    <li>Races, entry fee, payouts, field size, tables and timing</li>
+    <li>Who can play (eligibility rules{% if s.series %}, series "{{ s.series }}"{% endif %}), rule set and event rules</li>
+    <li>Start time, venue, details, texts and theme</li>
+  </ul>
+  <h2>What doesn't</h2>
+  <ul>
+    <li>Players and teams, the waiting list, the bracket and results</li>
+    <li>Review requests, approvals, director exceptions and the eligibility lock</li>
+    <li>Shared tables (add the new event to them on the Director page)</li>
+  </ul>
+  {% if s.test_event %}<p class="banner">This is a test event, so the copy will be too until you untick Test event.</p>{% endif %}
+</section>
+<p><a href="{{ url_for('director') }}">← Back to the Director page</a></p>
+</div>
+{% endblock %}

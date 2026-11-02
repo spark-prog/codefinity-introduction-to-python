@@ -9,15 +9,19 @@ starts with "b_".
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
 from chips import eligibility, schedule, themes
 from chips.bracket import (
-    CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
+    CALLED, FINAL_CUTS, FORMATS, MAX_TEAM_SIZE, MODIFIED, NO_SHOW, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT,
+    entries_label, place_text,
 )
-from chips.engine import CONTINUOUS, DIRECTOR_CALLS, Player, TournamentError, check_form_entry, money
+from chips.engine import (
+    CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Player, TournamentError, check_form_entry, money,
+)
 from chips.races import parse_skill_groups, skill_groups_text
 
 
@@ -34,17 +38,26 @@ def parse_payouts(text: str) -> list[int]:
     return out
 
 
+def _person(text: str, phone: str = "") -> Player:
+    """'Ann Lee' or 'Ann Lee (5)': a skill level in brackets is optional."""
+    m = re.fullmatch(r"(.*?)\s*\((\d)\)", text.strip())
+    if m:
+        return Player(name=m.group(1).strip(), phone=phone, skill=int(m.group(2)))
+    return Player(name=text.strip(), phone=phone)
+
+
 def parse_entry_line(line: str, team_size: int) -> tuple[str, list[Player]]:
-    """'Ann Lee' or 'Ann Lee, 555-123-4567' for singles; 'Sharks: Ann & Bob' or 'Ann & Bob' for doubles."""
+    """'Ann Lee' or 'Ann Lee, 555-123-4567' for singles; 'Sharks: Ann & Bob' or 'Ann & Bob' for doubles and teams
+    ('Sharks: Ann & Bob & Cy'). Any player can have a skill level in brackets: 'Ann Lee (5)'."""
     line = line.strip()
     name = ""
     if team_size > 1 and ":" in line:
         name, line = (x.strip() for x in line.split(":", 1))
     if team_size == 1:
         parts = [x.strip() for x in line.split(",")]
-        return "", [Player(name=parts[0], phone=parts[1] if len(parts) > 1 else "")]
+        return "", [_person(parts[0], parts[1] if len(parts) > 1 else "")]
     people = [x.strip() for x in line.replace(" and ", " & ").replace("/", "&").split("&") if x.strip()]
-    return name, [Player(name=p) for p in people]
+    return name, [_person(p) for p in people]
 
 
 def register(app, h) -> dict:
@@ -190,12 +203,21 @@ def register(app, h) -> dict:
                 fmt = f.get("format", s.format)
                 if fmt not in dict(FORMATS):
                     raise TournamentError("Pick a bracket format.")
-                size = f.get("team_size", str(s.team_size))
-                if size not in ("1", "2"):
-                    raise TournamentError("Entries are singles (1) or doubles (2).")
+                size = f.get("team_size", str(s.team_size)).strip()
+                if not size.isdigit() or not 1 <= int(size) <= MAX_TEAM_SIZE:
+                    raise TournamentError(f"Entries are singles, doubles, or teams of 3 to {MAX_TEAM_SIZE} players.")
                 if int(size) != s.team_size and t.entries:
-                    raise TournamentError("Remove the entries before switching between singles and doubles.")
+                    raise TournamentError(f"Remove the entries before changing from {entries_label(s.team_size)} "
+                                          f"to {entries_label(int(size))}.")
                 s.format, s.team_size = fmt, int(size)
+                for key, top in (("max_player_skill", MAX_PLAYER_SKILL), ("team_skill_cap", MAX_PLAYER_SKILL * MAX_TEAM_SIZE)):
+                    value = f.get(key, str(getattr(s, key) or "")).strip() or "0"
+                    if not value.isdigit() or int(value) > top:
+                        raise TournamentError("Skill-level limits are whole numbers (blank for no limit).")
+                    setattr(s, key, int(value))
+                for e in t.entries.values():  # a lower limit can't leave someone already in over it
+                    if e.status != NO_SHOW:
+                        t.check_skill_limits(e.players, e.name)
                 s.seeding = "manual" if f.get("seeding") == "manual" else "random"
                 cut = f.get("final_cut", str(s.final_cut))
                 s.final_cut = int(cut) if cut.isdigit() and int(cut) in FINAL_CUTS else s.final_cut
@@ -548,6 +570,7 @@ def register(app, h) -> dict:
 
     app.jinja_env.globals.setdefault("place_text", place_text)
     app.jinja_env.globals.setdefault("asks_two_levels", asks_two_levels)
+    app.jinja_env.globals.setdefault("max_team_size", MAX_TEAM_SIZE)
     app.jinja_env.globals.setdefault("skill_groups_text", skill_groups_text)
     app.jinja_env.globals.setdefault("RACK_CHART", RACK_CHART)
     app.jinja_env.globals.setdefault("CONTINUOUS", CONTINUOUS)

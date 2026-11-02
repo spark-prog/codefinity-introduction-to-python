@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from .bracket import DOUBLE, MODIFIED, RACK_CHART, ROUND_ROBIN, SINGLE, STRAIGHT
+from .bracket import DOUBLE, MAX_TEAM_SIZE, MODIFIED, RACK_CHART, ROUND_ROBIN, SINGLE, STRAIGHT, entries_label
 from .engine import TournamentError
 from .hub import BRACKET, CHIP
 
@@ -188,8 +188,13 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
             s["registration_cap"] = int(m.group(1))
     else:
         s["format"] = bracket_format
-        if per in (1, 2):
+        if 1 <= per <= MAX_TEAM_SIZE:
             s["team_size"] = per
+        elif per:
+            warnings.append(f"The form says {per} players per entry; teams go up to {MAX_TEAM_SIZE}. Set it by hand.")
+        m = re.search(r"combined skill level\s*(\d+)", elig.get("skill_level_limit") or "", re.IGNORECASE)
+        if m and per and per > 1:
+            s["team_skill_cap"] = int(m.group(1))
         if "chart" in method or "rack race" in method:
             s["race_method"] = RACK_CHART
         elif "ball" in method:
@@ -200,8 +205,10 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
             s["race_winners"] = s["race_losers"] = s["race_finals"] = race
         if "skill" in (fmt.get("grouping_method") or "").lower():
             warnings.append("The form splits players into skill groups: enter them in Settings (e.g. 1-3, 4, 5, 6, 7-9).")
-        if elig.get("skill_level_limit") and "not applicable" not in elig["skill_level_limit"].lower():
-            warnings.append(f"Skill limit '{elig['skill_level_limit']}' isn't checked by brackets yet.")
+        if elig.get("skill_level_limit") and "not applicable" not in elig["skill_level_limit"].lower() \
+                and "team_skill_cap" not in s:
+            warnings.append(f"Skill limit '{elig['skill_level_limit']}': set it in Settings (highest skill level a "
+                            "player can be, or the combined cap).")
         if awards.get("payout_model"):
             warnings.append(f"Payouts: the form says '{awards['payout_model']}'. Set the payout percentages.")
     if "ball" in method and kind == CHIP:
@@ -259,7 +266,9 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
     if kind == CHIP and "registration_cap" in s:
         summary.append(("Skill cap", f"Combined {s['registration_cap']}"))
     if kind == BRACKET and "team_size" in s:
-        summary.append(("Entries", "Singles" if s["team_size"] == 1 else "Doubles"))
+        summary.append(("Entries", entries_label(s["team_size"]).capitalize()))
+    if kind == BRACKET and s.get("team_skill_cap"):
+        summary.append(("Skill cap", f"Combined {s['team_skill_cap']}"))
     return Plan(kind=kind, name=name, settings=s, summary=summary, warnings=warnings,
                 external_id=str(src.get("external_id") or ""))
 

@@ -72,6 +72,12 @@ FORMATS = [
 ]
 FORMAT_NAMES = dict(FORMATS)
 FINAL_CUTS = (4, 8, 16, 32)
+MAX_TEAM_SIZE = 10  # team tournaments: 3 to this many players per entry
+
+
+def entries_label(size: int) -> str:
+    """'singles', 'doubles' or 'teams of 5'."""
+    return "singles" if size == 1 else "doubles" if size == 2 else f"teams of {size}"
 STRAIGHT, RACK_CHART = "straight", "rack_chart"  # race methods
 
 # Entry statuses
@@ -238,7 +244,9 @@ class BracketSettings:
     details: str = ""
     checkin_by: str = ""
     format: str = DOUBLE
-    team_size: int = 1  # 1 = singles, 2 = doubles / scotch doubles
+    team_size: int = 1  # 1 = singles, 2 = doubles / scotch doubles, 3+ = teams (up to MAX_TEAM_SIZE)
+    max_player_skill: int = 0  # optional: no player above this skill level (0 = no limit)
+    team_skill_cap: int = 0  # optional: an entry's combined skill levels can't be over this (0 = no limit)
     entry_fee_cents: int = 2000
     added_money_cents: int = 0
     race_winners: int = 5
@@ -333,6 +341,10 @@ class BracketTournament:
         if entry_id is None:
             return "TBD"
         return self.entries[entry_id].name if entry_id in self.entries else "?"
+
+    @property
+    def entries_label(self) -> str:
+        return entries_label(self.settings.team_size)
 
     @property
     def format_name(self) -> str:
@@ -518,6 +530,7 @@ class BracketTournament:
         size = self.settings.team_size
         if len(players) != size or any(not p.name.strip() for p in players):
             raise TournamentError("Enter a name for the player." if size == 1 else f"Enter all {size} player names.")
+        self.check_skill_limits(players)
         for p in players:
             if p.skill_8 and not 2 <= p.skill_8 <= 7:
                 raise TournamentError("8-Ball skill levels go from 2 to 7.")
@@ -528,6 +541,23 @@ class BracketTournament:
         groups = self.settings.skill_groups
         if groups and size == 1 and players[0].skill and not group_for(groups, players[0].skill):
             raise TournamentError(f"There's no skill group for SL {players[0].skill} in this event.")
+
+    def check_skill_limits(self, players: list[Player], name: str = "") -> None:
+        """The optional limits: the highest skill level a player can be, and an entry's combined cap."""
+        s = self.settings
+        if not (s.max_player_skill or s.team_skill_cap):
+            return
+        missing = [p.name for p in players if not p.skill]
+        if missing:
+            raise TournamentError(f"Enter a skill level for {', '.join(missing)}: this event has a skill-level limit.")
+        if s.max_player_skill:
+            over = [f"{p.name} (SL {p.skill})" for p in players if p.skill > s.max_player_skill]
+            if over:
+                raise TournamentError(f"Players can be skill level {s.max_player_skill} at most: {', '.join(over)}.")
+        total = sum(p.skill for p in players)
+        if s.team_skill_cap and len(players) > 1 and total > s.team_skill_cap:
+            who = f"{name}'s" if name else "The"
+            raise TournamentError(f"{who} combined skill level is {total}, over this event's cap of {s.team_skill_cap}.")
 
     @staticmethod
     def _clean(p: Player) -> Player:
@@ -582,6 +612,8 @@ class BracketTournament:
         players = [self._clean(p) for p in players]
         self._check_players(players)
         self._check_members(players)
+        if self.settings.team_size >= 3 and not (name or "").strip():
+            raise TournamentError("Enter a team name.")
         name = (name or "").strip() or " & ".join(p.name for p in players)
         self._unique_name(name)
         entry = Entry(id=uuid.uuid4().hex[:8], name=name, players=players, pin=self._new_pin())

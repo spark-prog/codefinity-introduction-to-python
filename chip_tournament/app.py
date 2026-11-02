@@ -334,6 +334,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             threading.Thread(target=clock_loop, daemon=True).start()
             threading.Thread(target=backup.nightly_loop, args=(data_path, app.logger.error), daemon=True).start()
             threading.Thread(target=players.sync_loop, args=(player_store, app.logger.error), daemon=True).start()
+            threading.Thread(target=app.config["eligibility_lock_loop"], args=(app.logger.error,), daemon=True).start()
 
     app.config["tick"] = tick_all
 

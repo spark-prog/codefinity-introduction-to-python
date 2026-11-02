@@ -51,15 +51,17 @@
       </div>
       <nav class="nav{% if is_admin or is_viewer %} signed-in{% endif %}">
         {% if event %}
-        <a href="{{ url_for('index') }}">All Events</a>
+        <a href="{{ url_for('index') }}"><span class="hide-xs">All </span>Events</a>
         <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         {% if t and t.status == SETUP and not t.settings.registration_shut %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
-        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{{ "Director" if is_admin or is_viewer else "TD Login" }}</a>
+        <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
+        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{% if is_admin or is_viewer %}Director{% else %}<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>{% endif %}</a>
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
+        <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
         <a href="{{ url_for('director') }}" class="nav-cta {{ 'active' if ep.startswith('admin') or ep == 'director' }}">Director</a>
         {% endif %}
         {% if is_admin or is_viewer %}

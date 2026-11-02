@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Enter your code — Control Table{% endblock %}
+{% block content %}
+<div class="narrow">
+<header class="page-head">
+  <p class="eyebrow">Players</p>
+  <h1>Check your email</h1>
+  <p class="lede">We sent a 6-digit code to <b>{{ email }}</b>. It works for 10 minutes.</p>
+</header>
+<form method="post" class="card form">
+  <label>Code <input name="code" required autofocus inputmode="numeric" autocomplete="one-time-code" maxlength="7" pattern="[0-9 ]*" placeholder="123456"></label>
+  <button class="button big block">Log in</button>
+</form>
+<p class="muted"><a href="{{ url_for('player_login') }}">Didn't get it? Ask for a new code</a></p>
+</div>
+{% endblock %}

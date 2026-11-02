@@ -262,8 +262,14 @@ class Mailer:
         return cls(address, password, to) if address and password.strip() else None
 
     def send(self, subject: str, text: str, attachment: tuple[str, bytes] | None = None) -> None:
+        self.send_to(self.to, subject, text, attachment)
+
+    def send_to(self, to: str, subject: str, text: str, attachment: tuple[str, bytes] | None = None,
+                sender: str = "Control Table", reply_to: str = "") -> None:
         msg = EmailMessage()
-        msg["Subject"], msg["From"], msg["To"] = subject, f"Control Table <{self.address}>", self.to
+        msg["Subject"], msg["From"], msg["To"] = subject, f"{sender} <{self.address}>", to
+        if reply_to:
+            msg["Reply-To"] = reply_to
         msg.set_content(text)
         if attachment:
             msg.add_attachment(attachment[1], maintype="application", subtype="zip", filename=attachment[0])

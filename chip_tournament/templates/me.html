@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}My account — Control Table{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">My account</p>
+  <h1>{{ me.first }} {{ me.last }}</h1>
+  <p class="lede">Member {{ me.member }}{% if me.status %} · {{ me.status }}{% endif %}</p>
+</header>
+<section class="card">
+  <h2>Skill levels</h2>
+  <ul class="facts">
+    {% for g, name in (("8", "8-Ball"), ("9", "9-Ball")) %}{% set sl, how = skill_for(me, g) %}
+    <li><span class="k">{{ name }}</span><span class="v">
+      {% if how == "rated" %}SL {{ sl }}{% elif sl %}Not active · plays SL {{ sl }} ({{ how }}){% else %}Not active{% endif %}
+      {% if me["mp" ~ g] %}<span class="muted"> · {{ me["mp" ~ g] }} matches played{% if me["mp" ~ g] < 10 %} (established at 10){% endif %}</span>{% endif %}</span></li>
+    {% endfor %}
+    {% if me.last8 or me.last9 %}<li><span class="k">Last played</span><span class="v">{{ [me.last8, me.last9]|select|max|day }}</span></li>{% endif %}
+    <li><span class="k">Email</span><span class="v">{{ me.email }}</span></li>
+  </ul>
+  <p class="muted small-note">This comes from the league office's records. If something's wrong, contact {{ legal.email }}.</p>
+</section>
+<section class="card">
+  <h2>Log out</h2>
+  <p class="muted">You stay logged in on this device for 90 days.</p>
+  <div class="button-row">
+    <form method="post" action="{{ url_for('player_logout') }}" class="inline"><button class="button secondary">Log out</button></form>
+    <form method="post" action="{{ url_for('player_logout_everywhere') }}" class="inline"><button class="button secondary">Log out on all devices</button></form>
+  </div>
+</section>
+{% endblock %}

@@ -19,6 +19,8 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from werkzeug.security import check_password_hash, generate_password_hash
+
 CODE_MINUTES = 10
 CODE_TRIES = 5
 LOGIN_DAYS = 90
@@ -111,3 +113,45 @@ class Accounts:
             p = data["players"].setdefault(member, {"version": 1})
             p["version"] = p.get("version", 1) + 1
             self._save(data)
+
+    # passwords (optional: codes always work, and are the "forgot password" route) -------------
+    def has_password(self, member: str) -> bool:
+        return bool(self._load()["players"].get(member, {}).get("pw"))
+
+    def set_password(self, member: str, pw: str) -> None:
+        """Set (or change) a player's password, stored only as a scrypt hash. Every other login of theirs ends."""
+        check_password_rules(pw, member)
+        with self.lock:
+            data = self._load()
+            p = data["players"].setdefault(member, {"version": 1})
+            p["pw"] = generate_password_hash(pw, method="scrypt")
+            p["pw_set"] = datetime.now().isoformat(timespec="seconds")
+            p["version"] = p.get("version", 1) + 1
+            self._save(data)
+
+    def remove_password(self, member: str) -> None:
+        with self.lock:
+            data = self._load()
+            p = data["players"].setdefault(member, {"version": 1})
+            p.pop("pw", None)
+            p.pop("pw_set", None)
+            self._save(data)
+
+    def check_password(self, member: str, pw: str) -> bool:
+        stored = self._load()["players"].get(member, {}).get("pw")
+        return bool(stored) and check_password_hash(stored, pw or "")
+
+
+# ------------------------------------------------------------------ passwords (optional)
+
+COMMON = {"password", "password1", "12345678", "123456789", "1234567890", "qwerty123", "11111111", "00000000",
+          "iloveyou", "letmein1", "abc12345", "poolplayer", "eightball", "88888888", "apaleague", "billiards"}
+
+
+def check_password_rules(pw: str, member: str) -> None:
+    if len(pw or "") < 8:
+        raise LoginError("Use at least 8 characters.")
+    if len(pw) > 128:
+        raise LoginError("That password is too long.")
+    if pw.lower() in COMMON or pw.lower().replace(" ", "") in COMMON or member in pw or len(set(pw)) < 4:
+        raise LoginError("That password is too easy to guess. Try a short phrase you'll remember.")

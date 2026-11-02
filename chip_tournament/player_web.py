@@ -31,6 +31,7 @@ def register(app, h) -> None:
     sends_by_ip = Throttle(limit=30, window=3600)
     sends_by_member = Throttle(limit=5, window=3600)
     wrong_by_device = Throttle(limit=20, window=15 * 60)
+    wrong_pw_by_member = Throttle(limit=10, window=15 * 60)
 
     def current_player() -> dict | None:
         raw = request.cookies.get(COOKIE)
@@ -42,8 +43,24 @@ def register(app, h) -> None:
             return None
         member = data.get("m", "")
         if data.get("v") != accounts.version(member):
-            return None  # logged out on all devices since
-        return store.get(member)
+            return None  # logged out on all devices since (or the password changed)
+        rec = store.get(member)
+        if rec is not None:
+            g.login_via, g.login_at = data.get("via", "code"), data.get("t", 0)
+        return rec
+
+    def set_login(resp, member: str, via: str):
+        """Log this device in for 90 days; `via` (code or password) and the time are kept for fresh-login checks."""
+        import time as _t
+        resp.set_cookie(COOKIE, signer.dumps({"m": member, "v": accounts.version(member), "via": via, "t": int(_t.time())}),
+                        max_age=LOGIN_DAYS * 86400, httponly=True, samesite="Lax",
+                        secure=app.config.get("SESSION_COOKIE_SECURE", False))
+        return resp
+
+    def fresh_code_login() -> bool:
+        """Logged in with an emailed code in the last 10 minutes (needed to set a password)."""
+        import time as _t
+        return g.get("login_via") == "code" and _t.time() - (g.get("login_at") or 0) < 600
 
     @app.before_request
     def load_player():
@@ -60,7 +77,25 @@ def register(app, h) -> None:
     def player_login():
         if g.player:
             return redirect(safe_next(request.args.get("next", "")))
-        if request.method == "POST":
+        if request.method == "POST" and request.form.get("action") == "password":
+            who, nxt = request.form.get("who", "").strip(), request.form.get("next", "")
+            device = h["device_id"]()
+            try:
+                rec = find(who, need_email=False)
+                if wrong_pw_by_member.wait(rec["member"]) or wrong_by_device.wait(device):
+                    raise LoginError("Too many wrong passwords. Wait 15 minutes, or use an emailed code.")
+                if not accounts.has_password(rec["member"]):
+                    raise LoginError("You haven't set a password. Use \"Email me a code\" instead.")
+                if not accounts.check_password(rec["member"], request.form.get("password", "")):
+                    wrong_pw_by_member.fail(rec["member"])
+                    wrong_by_device.fail(device)
+                    raise LoginError("That password isn't right. Try again, or use \"Email me a code\".")
+                wrong_pw_by_member.clear(rec["member"])
+                flash(f"Welcome back, {rec['first']}!", "ok")
+                return set_login(redirect(safe_next(nxt)), rec["member"], "password")
+            except (LoginError, players.PlayerError) as exc:
+                flash(str(exc), "error")
+        elif request.method == "POST":
             who = request.form.get("who", "").strip()
             nxt = request.form.get("next", "")
             try:
@@ -89,7 +124,7 @@ def register(app, h) -> None:
                 flash(str(exc), "error")
         return render_template("player_login.html", t=None, next=request.args.get("next", request.form.get("next", "")))
 
-    def find(who: str) -> dict:
+    def find(who: str, need_email: bool = True) -> dict:
         if not store.records():
             raise LoginError("Player login isn't available yet. Contact the league office.")
         if "@" in who:
@@ -103,7 +138,7 @@ def register(app, h) -> None:
             rec = store.get(member)
             if rec is None:
                 raise LoginError("That member number isn't in the player list. Check it, or contact the league office.")
-        if not rec.get("email"):
+        if need_email and not rec.get("email"):
             raise LoginError("There's no email on file for you, so a code can't be sent. Contact the league office to add one.")
         return rec
 
@@ -125,10 +160,7 @@ def register(app, h) -> None:
             else:
                 wrong_by_device.clear(device)
                 session.pop("login_member", None)
-                resp = redirect(safe_next(session.pop("login_next", "") or ""))
-                resp.set_cookie(COOKIE, signer.dumps({"m": member, "v": accounts.version(member)}),
-                                max_age=LOGIN_DAYS * 86400, httponly=True, samesite="Lax",
-                                secure=app.config.get("SESSION_COOKIE_SECURE", False))
+                resp = set_login(redirect(safe_next(session.pop("login_next", "") or "")), member, "code")
                 flash(f"Welcome, {rec['first']}! You'll stay logged in on this device for {LOGIN_DAYS} days.", "ok")
                 return resp
         return render_template("login_code.html", t=None, email=mask_email(rec["email"]))
@@ -139,8 +171,55 @@ def register(app, h) -> None:
             return redirect(url_for("player_login", next=request.path))
         events = app.config["your_events"](g.player)
         return render_template("me.html", t=None, me=g.player, skill_for=players.skill_for,
+                               has_password=accounts.has_password(g.player["member"]), fresh=fresh_code_login(),
                                upcoming=[e for e in events if e["status"] != "finished"],
                                past=[e for e in events if e["status"] == "finished"])
+
+    @app.post("/me/verify")
+    def me_verify():
+        """Email a code to the logged-in player, to unlock password settings for 10 minutes."""
+        if not g.player:
+            return redirect(url_for("player_login"))
+        mailer = backup.Mailer.from_env()
+        try:
+            if mailer is None or not g.player.get("email"):
+                raise LoginError("A code can't be sent right now. Contact the league office.")
+            code = accounts.new_code(g.player["member"])
+            legal = app.jinja_env.globals["legal"]
+            mailer.send_to(g.player["email"], f"Your Control Table code: {code}",
+                           f"Hi {g.player['first']},\n\nYour code is {code}. It works for 10 minutes.\n\n{legal['brand']}",
+                           sender=legal["brand"], reply_to=legal["email"])
+        except (LoginError, backup.BackupError) as exc:
+            flash(str(exc) if isinstance(exc, LoginError) else "The code email couldn't be sent. Try again in a minute.",
+                  "error")
+            return redirect(url_for("my_account") + "#password")
+        session["login_member"], session["login_next"] = g.player["member"], url_for("my_account") + "#password"
+        return redirect(url_for("player_code"))
+
+    @app.post("/me/password")
+    def me_password():
+        if not g.player:
+            return redirect(url_for("player_login"))
+        member, f = g.player["member"], request.form
+        action = f.get("action", "set")
+        has = accounts.has_password(member)
+        try:
+            if not (fresh_code_login() or (has and accounts.check_password(member, f.get("current", "")))):
+                raise LoginError("For safety, confirm with an emailed code first"
+                                 + (" (or enter your current password)." if has else "."))
+            if action == "remove":
+                accounts.remove_password(member)
+                flash("Password removed. You'll log in with emailed codes.", "ok")
+                return redirect(url_for("my_account"))
+            if f.get("password", "") != f.get("confirm", ""):
+                raise LoginError("The two passwords don't match.")
+            accounts.set_password(member, f.get("password", ""))
+        except LoginError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("my_account") + "#password")
+        flash("Password saved. You're logged out on your other devices; log in there with your password or a code.",
+              "ok")
+        return set_login(redirect(url_for("my_account")), member, "code" if fresh_code_login() else "password")
 
     @app.post("/logout")
     def player_logout():

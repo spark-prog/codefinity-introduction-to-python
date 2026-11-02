@@ -135,7 +135,10 @@ def register(app, h) -> None:
     def my_account():
         if not g.player:
             return redirect(url_for("player_login", next=request.path))
-        return render_template("me.html", t=None, me=g.player, skill_for=players.skill_for)
+        events = app.config["your_events"](g.player)
+        return render_template("me.html", t=None, me=g.player, skill_for=players.skill_for,
+                               upcoming=[e for e in events if e["status"] != "finished"],
+                               past=[e for e in events if e["status"] == "finished"])
 
     @app.post("/logout")
     def player_logout():
@@ -327,6 +330,48 @@ def register_registration(app) -> None:
             flash(str(exc), "error")
         return redirect(url_for("admin") + "#exceptions")
 
+    def find_me(t, me):
+        """The team or entry this player is on in a tournament, and their place on it (or None, None)."""
+        want = full_name(me).lower()
+        for grp in (t.teams if hasattr(t, "teams") else t.entries).values():
+            if grp.status == "no_show":
+                continue
+            for p in grp.players:
+                if p.member == me["member"] or (not p.member and " ".join(p.name.lower().split()) == want):
+                    return grp, p
+        return None, None
+
+    def your_events(me) -> list[dict]:
+        """Every tournament the player is registered in: live and upcoming first (soonest first), then past."""
+        out = []
+        for ev in app.config["hub"].events():
+            t = ev.load()
+            grp, mine = find_me(t, me)
+            if grp is None:
+                continue
+            s, chip = t.settings, ev.kind == "chip"
+            skill = {"mine": mine.skill or max(mine.skill_8, mine.skill_9), "sl8": mine.skill_8, "sl9": mine.skill_9}
+            if chip:
+                skill["team"] = grp.combined_skill if len(grp.players) > 1 else None
+                skill["chips"] = t.chips_preview(grp) if t.status == "setup" else grp.starting_chips or None
+            else:
+                skill["group"] = grp.division
+            where = t.where(grp)
+            if any(p.pending for p in grp.players):
+                where += " · member number pending verification"
+            partners = [p.name for p in grp.players if p is not mine]
+            out.append({"id": ev.id, "name": s.name, "date": s.date, "time": s.start_time, "venue": s.venue,
+                        "status": t.status, "test": s.test_event, "group_name": grp.name, "partners": partners,
+                        "where": where, "skill": skill, "chip": chip,
+                        "page": url_for("team_page", event=ev.id, team_id=grp.id) if chip
+                        else url_for("b_entry", event=ev.id, entry_id=grp.id),
+                        "rules": url_for("rules_page", event=ev.id), "home": url_for("home", event=ev.id)})
+        live = sorted((e for e in out if e["status"] != "finished"),
+                      key=lambda e: (e["status"] != "running", e["date"] or "9999"))
+        past = sorted((e for e in out if e["status"] == "finished"), key=lambda e: e["date"] or "", reverse=True)
+        return live + past
+
+    app.config["your_events"] = your_events
     app.config["attach_members"] = attach_members
     app.jinja_env.globals["my_registration"] = my_registration
     app.jinja_env.globals["my_prefill"] = my_prefill

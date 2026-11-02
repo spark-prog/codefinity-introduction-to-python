@@ -1,0 +1,26 @@
+{# One of a player's events on My account. Needs e. #}
+<article class="card your-event {{ e.status }}">
+  <div class="your-event-when">
+    {% if e.date %}<span class="your-event-day">{{ e.date|day }}</span>{% else %}<span class="your-event-day">Date TBA</span>{% endif %}
+    {% if e.time %}<span class="your-event-time">{{ e.time }}</span>{% endif %}
+  </div>
+  <div class="your-event-body">
+    <h3><a href="{{ e.home }}">{{ e.name }}</a>{% if e.test %} <span class="tag-test">TEST</span>{% endif %}</h3>
+    {% if e.venue %}<p class="muted">{{ e.venue }}</p>{% endif %}
+    <p class="your-event-status">{% if e.status == "running" %}<b class="live-dot">Live now</b> · {% endif %}{{ e.where }}</p>
+    <p class="your-event-skill">
+      {% if e.chip %}
+        Your SL <b>{{ e.skill.mine }}</b>{% if e.skill.team %} · team SL <b>{{ e.skill.team }}</b>{% endif %}{% if e.skill.chips %} · starts with <b>{{ e.skill.chips }} chips</b>{% endif %}
+      {% elif e.skill.sl8 or e.skill.sl9 %}
+        8-Ball <b>{{ e.skill.sl8 or "—" }}</b> · 9-Ball <b>{{ e.skill.sl9 or "—" }}</b>{% if e.skill.group %} · <b>{{ e.skill.group }}</b> group{% endif %}
+      {% else %}
+        Your SL <b>{{ e.skill.mine or "—" }}</b>{% if e.skill.group %} · <b>{{ e.skill.group }}</b> group{% endif %}
+      {% endif %}
+    </p>
+    {% if e.partners %}<p class="muted small-note">{{ e.group_name }} · with {{ e.partners|join(", ") }}</p>{% endif %}
+    <div class="button-row">
+      <a class="button small" href="{{ e.page }}">{{ "My team page" if e.chip else "My page" }}</a>
+      <a class="button small secondary" href="{{ e.rules }}">Rules</a>
+    </div>
+  </div>
+</article>

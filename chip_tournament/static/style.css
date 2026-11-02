@@ -928,3 +928,18 @@ tr.check-ok td { opacity: .75; }
 .exceptions-card summary::-webkit-details-marker { display: none; }
 .exception-form { margin-top: 12px; display: grid; gap: 8px; grid-template-columns: minmax(140px, 1fr) 2fr auto; align-items: end; }
 @media (max-width: 640px) { .exception-form { grid-template-columns: 1fr; } }
+
+/* My account: Your events */
+.your-events { display: grid; gap: 12px; margin-bottom: 18px; }
+.your-event { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: start; }
+.your-event-when { display: grid; gap: 4px; text-align: center; padding: 12px 8px; border-radius: var(--radius-sm);
+  background: rgba(var(--accent-rgb), .12); border: 1px solid rgba(var(--accent-rgb), .35); }
+.your-event-day { font-size: 1.15rem; font-weight: 800; color: var(--accent); line-height: 1.2; }
+.your-event-time { font-size: 1rem; font-weight: 700; }
+.your-event-body h3 { margin: 0 0 4px; }
+.your-event-body p { margin: 4px 0; }
+.your-event-skill { font-size: 1.05rem; }
+.your-event.finished { opacity: .8; }
+.live-dot { color: #5fd38d; }
+.past-events { display: grid; gap: 12px; }
+@media (max-width: 480px) { .your-event { grid-template-columns: 1fr; } .your-event-when { display: flex; gap: 10px; justify-content: center; } }

@@ -18,6 +18,7 @@
       {% endif %}
     </p>
     {% if e.partners %}<p class="muted small-note">{{ e.group_name }} · with {{ e.partners|join(", ") }}</p>{% endif %}
+    {% if e.can_push %}{% set push_url = e.push_url %}{% set series_name = e.series %}{% set push_registered = true %}{% include "_push_box.html" %}{% endif %}
     <div class="button-row">
       <a class="button small" href="{{ e.page }}">{{ "My team page" if e.chip else "My page" }}</a>
       <a class="button small secondary" href="{{ e.rules }}">Rules</a>

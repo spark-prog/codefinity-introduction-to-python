@@ -14,6 +14,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from chips import backup, eligibility, players
 from chips import pending as pending_mod
+from chips import series as series_mod
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
 from chips.throttle import Throttle
@@ -183,6 +184,14 @@ def fill_for(rec: dict, t) -> dict:
 def register_registration(app) -> None:
     """Autofill for registration forms, and knowing who's already registered."""
     store: players.PlayerStore = app.config["players"]
+    pushes = series_mod.Pushes(app.config["data_dir"])
+    app.config["pushes"] = pushes
+
+    def pushed_in(event_id: str, t, member: str):
+        """The push that makes this member eligible for this edition (from the series' previous one)."""
+        return series_mod.pushed_into(app.config["hub"], pushes, event_id, getattr(t.settings, "series", ""), member)
+
+    app.config["pushed_in"] = pushed_in
 
     def my_registration(t):
         """The team or entry the logged-in player is on in this event: (id, name), or None."""
@@ -254,7 +263,8 @@ def register_registration(app) -> None:
             if p.member and eligibility.override_for(t, p.member):  # the director already said yes
                 recs.append(rec)
                 continue
-            no, review = eligibility.check_player(rec, rules, start, game)
+            no, review = eligibility.check_player(rec, rules, start, game,
+                                                  bool(p.member and pushed_in(g.event.id, t, p.member)))
             if no:
                 raise TournamentError(f"{p.name} can't register for {t.settings.name}: " + " ".join(no))
             if review:
@@ -272,10 +282,13 @@ def register_registration(app) -> None:
             return None
         if eligibility.override_for(t, me["member"]):
             return {"ok": True, "no": [], "review": [], "override": True}
+        via = pushed_in(g.event.id, t, me["member"])
         no, review = eligibility.check_player(me, rules, store.config()["session_start"],
-                                              getattr(t.settings, "skill_game", "8"))
+                                              getattr(t.settings, "skill_game", "8"), bool(via))
         asked = next((r for r in reversed(t.settings.review_requests) if r["member"] == me["member"]), None)
-        return {"ok": not no, "no": no, "review": review, "asked": asked}
+        grace = bool(via) or eligibility.list_value(me, rules) == "push"
+        return {"ok": not no, "no": no, "review": review, "asked": asked, "grace": grace,
+                "can_push": can_push(g.event.id, t, me["member"])[0]}
 
     app.jinja_env.globals["my_eligibility"] = my_eligibility
 
@@ -304,7 +317,8 @@ def register_registration(app) -> None:
             elif not eligibility.any_rules(rules) or eligibility.override_for(t, member):
                 row["status"] = "eligible"
             else:
-                no, review = eligibility.check_player(rec, rules, start, getattr(s, "skill_game", "8"))
+                no, review = eligibility.check_player(rec, rules, start, getattr(s, "skill_game", "8"),
+                                                      bool(pushed_in(ev.id, t, member)))
                 row["status"] = "no" if no else ("check" if review else "eligible")
                 if mine:
                     row["reasons"] = no or review
@@ -423,10 +437,81 @@ def register_registration(app) -> None:
                 eligibility.unlock(t)
                 msg = "Eligibility unlocked: the check uses the latest player list again."
             else:
-                flagged = eligibility.lock(t, store, store.config()["session_start"])
+                flagged = eligibility.lock(t, store, store.config()["session_start"],
+                                           lambda m, t=t, eid=g.event.id: bool(pushed_in(eid, t, m)))
                 msg = f"Eligibility checked and locked. {flagged} player(s) sent to Pending verification."
         flash(msg, "ok")
         return redirect(url_for("admin") + "#eligibility")
+
+    def can_push(event_id: str, t, member: str) -> tuple[bool, str]:
+        """Whether a player may push their eligibility for this edition to the next one, and why not."""
+        s = t.settings
+        rules = eligibility.rules_of(s)
+        if not getattr(s, "series", "") or not (rules["list_column"] or rules["list_members"]):
+            return False, "Only invite-only series events can be pushed to the next time."
+        if t.status != "setup":
+            return False, "The event has started, so it's too late to push."
+        rec = store.get(member)
+        if pushed_in(event_id, t, member) or eligibility.list_value(rec, rules) == "push":
+            return False, "This is your one-time grace entry, so it can't be pushed again."
+        if eligibility.list_value(rec, rules) != "yes":
+            return False, f"You're not on the {rules['list_label'] or 'eligible'} list for this event, so there's nothing to push."
+        if any(p["member"] == member for p in pushes.from_event(event_id)):
+            return False, "You've already pushed this one to next time."
+        return True, ""
+
+    @app.post("/t/<event>/push")
+    def push_eligibility():
+        """Push eligibility to the next edition: the player (logged in) or the director for a member number."""
+        ev, admin = g.event, bool(session.get("admin"))
+        member = re.sub(r"\D", "", request.form.get("member", "")) if admin else (g.player or {}).get("member", "")
+        back = url_for("admin") + "#eligibility" if admin else url_for("my_account")
+        if not member:
+            flash("Log in first.", "error")
+            return redirect(url_for("player_login", next=url_for("register")))
+        if request.form.get("confirm") != "1":
+            flash("Tick the box to confirm.", "error")
+            return redirect(back)
+        rec = store.get(member)
+        name = full_name(rec) if rec else member
+        try:
+            with ev.store.change(f"Eligibility pushed to next time: {name}") as t:
+                ok, why = can_push(ev.id, t, member)
+                if not ok:
+                    raise TournamentError(why)
+                found = t.registered_as(member)
+                if found is not None:  # their spot opens for the waiting list
+                    body = (f"{found.name}: your eligibility for {t.settings.name} is pushed to the next "
+                            f"{t.settings.series}, so you're unregistered from this one. See you next time!")
+                    if hasattr(t, "teams"):
+                        t._text_team(found, body)
+                        t.remove_team(found.id)
+                    else:
+                        t._text(found, body)
+                        t.remove_entry(found.id)
+                eligibility.audit(t, "pushed to the next edition", member, name, "by the director" if admin else "by the player")
+                pushes.add(t.settings.series, member, name, ev.id, t.settings.name, t.settings.date,
+                           "director" if admin else "player")
+                messages, t.outbox = list(t.outbox), []
+                for m in messages:
+                    ev.sms.send(m.to, m.body, test=t.settings.test_event)
+            flash(f"{name}'s eligibility is pushed to the next {t.settings.series}"
+                  + (" and they're unregistered from this one." if found is not None else ".")
+                  + " This is a one-time grace: it can't be pushed again.", "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(back)
+
+    app.jinja_env.globals["can_push"] = lambda t, member: can_push(g.event.id, t, member)
+
+    def pushes_into(event_id: str) -> list[dict]:
+        """Players on their one-time grace in this edition (pushed from the previous one in the app)."""
+        hub = app.config["hub"]
+        return [p for p in pushes.all()
+                if series_mod.next_edition(hub, p["series"], p["from_event"], p["from_date"]) == event_id]
+
+    app.jinja_env.globals["pushes_from"] = lambda: pushes.from_event(g.event.id)
+    app.jinja_env.globals["pushes_into"] = lambda: pushes_into(g.event.id)
 
     def lock_loop(log=None, sleep: float = 60) -> None:
         """Background: lock an event's eligibility once its registration closes or it starts."""
@@ -438,7 +523,8 @@ def register_registration(app) -> None:
                     if eligibility.lock_due(ev.load()):
                         with ev.store.change("Eligibility locked (registration closed)") as t:
                             if eligibility.lock_due(t):
-                                eligibility.lock(t, store, store.config()["session_start"])
+                                eligibility.lock(t, store, store.config()["session_start"],
+                                                 lambda m, t=t, eid=ev.id: bool(pushed_in(eid, t, m)))
                 except Exception as exc:  # never stop the loop
                     if log:
                         log("eligibility lock failed for %s: %s", ev.id, exc)
@@ -575,7 +661,10 @@ def register_registration(app) -> None:
             if any(p.pending for p in grp.players):
                 where += " · member number pending verification"
             partners = [p.name for p in grp.players if p is not mine]
-            out.append({"id": ev.id, "name": s.name, "date": s.date, "time": s.start_time, "venue": s.venue,
+            pushable = can_push(ev.id, t, me["member"])[0]
+            out.append({"can_push": pushable, "push_url": url_for("push_eligibility", event=ev.id),
+                        "series": getattr(s, "series", ""),
+                        "id": ev.id, "name": s.name, "date": s.date, "time": s.start_time, "venue": s.venue,
                         "status": t.status, "test": s.test_event, "group_name": grp.name, "partners": partners,
                         "where": where, "skill": skill, "chip": chip,
                         "page": url_for("team_page", event=ev.id, team_id=grp.id) if chip

@@ -260,6 +260,7 @@ class BracketSettings:
     elig_locked_at: str = ""
     elig_snapshot: dict = field(default_factory=dict)
     elig_audit: list[dict] = field(default_factory=list)
+    series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): see chips/series.py
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0

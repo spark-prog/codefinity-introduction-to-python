@@ -2,7 +2,8 @@
 {% set me_ok = my_eligibility(t) %}
 {% if me_ok %}
 {% if me_ok.ok %}
-<p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.override %} (approved by the league office){% elif me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
+<p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.override %} (approved by the league office){% elif me_ok.grace %} (your one-time grace entry){% elif me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
+{% if me_ok.can_push %}{% set push_url = url_for('push_eligibility') %}{% set series_name = t.settings.series %}{% include "_push_box.html" %}{% endif %}
 {% else %}
 <div class="eligible-no"><b>You can't register for this event yet:</b>
   <ul>{% for x in me_ok.no %}<li>{{ x }}</li>{% endfor %}</ul>

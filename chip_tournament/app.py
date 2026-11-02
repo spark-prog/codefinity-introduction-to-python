@@ -27,7 +27,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
-from chips import backup, bonus_event, export, importer, rules as rulebook, schedule, themes
+from chips import backup, bonus_event, export, importer, players, rules as rulebook, schedule, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -138,6 +138,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     store = LocalProxy(lambda: g.event.store)
     sms = LocalProxy(lambda: g.event.sms)
     rule_book = rulebook.RuleBook(data_path)
+    player_store = players.PlayerStore(data_path)  # every APA player, kept apart from the tournaments
+    app.config["players"] = player_store
 
     def current_t():
         """The tournament in view, or None on the pages that cover every tournament."""
@@ -323,6 +325,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             clock_started.set()
             threading.Thread(target=clock_loop, daemon=True).start()
             threading.Thread(target=backup.nightly_loop, args=(data_path, app.logger.error), daemon=True).start()
+            threading.Thread(target=players.sync_loop, args=(player_store, app.logger.error), daemon=True).start()
 
     app.config["tick"] = tick_all
 
@@ -1144,6 +1147,79 @@ def create_app(data_dir: str | None = None) -> Flask:
         return render_template("hub_admin.html", t=None, rows=hub.summaries(), formats=FORMATS,
                                final_cuts=FINAL_CUTS, today=datetime.now().strftime("%Y-%m-%d"),
                                backup_status=backup.load_status(data_path), backup_setup=backup.configured())
+
+    # ----------------------------------------------------------------- players
+
+    def sync_message(entry: dict) -> tuple[str, str]:
+        if entry["status"] == "held":
+            return (f"Sync held: it would remove {entry['removed']} players at once. Check the list below, then approve "
+                    "it or fix the sheet. The previous list is still in use.", "error")
+        extra = f" {entry['problems']} row(s) need a look (listed below)." if entry["problems"] else ""
+        if entry["status"] == "no changes":
+            return f"Checked the sheet: no changes ({entry['players']} players).{extra}", "ok"
+        return (f"Synced {entry['players']} players: {entry['added']} added, {entry['updated']} updated, "
+                f"{entry['removed']} removed.{extra}", "ok")
+
+    @app.get("/admin/players")
+    @director_view
+    def admin_players():
+        q = request.args.get("q", "")
+        return render_template("players.html", t=None, st=player_store.status(), log=player_store.log()[:20],
+                               q=q, results=player_store.search(q), sa_email=configured_sa_email())
+
+    def configured_sa_email() -> str:
+        try:
+            reader = players.SheetReader.from_env()
+        except players.PlayerError:
+            return ""
+        return reader.drive.email if reader else ""
+
+    @app.post("/admin/players/sheet")
+    @admin_required
+    def admin_players_sheet():
+        try:
+            sid = player_store.set_sheet(request.form.get("sheet", ""))
+            if sid:
+                flash(*sync_message(player_store.sync_sheet("director")))
+            else:
+                flash("Unlinked the player sheet. The last list stays until a new one is synced.", "ok")
+        except players.PlayerError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_players"))
+
+    @app.post("/admin/players/sync")
+    @admin_required
+    def admin_players_sync():
+        try:
+            flash(*sync_message(player_store.sync_sheet("director")))
+        except players.PlayerError as exc:
+            flash(f"Sync didn't run: {exc} The previous list is still in use.", "error")
+        return redirect(url_for("admin_players"))
+
+    @app.post("/admin/players/upload")
+    @admin_required
+    def admin_players_upload():
+        upload = request.files.get("file")
+        try:
+            if not upload or not upload.filename:
+                raise players.PlayerError("Pick the CSV file first.")
+            flash(*sync_message(player_store.sync_csv(upload.read(), "director")))
+        except players.PlayerError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_players"))
+
+    @app.post("/admin/players/held")
+    @admin_required
+    def admin_players_held():
+        try:
+            if request.form.get("action") == "approve":
+                flash(*sync_message(player_store.approve_held("director")))
+            else:
+                player_store.discard_held()
+                flash("Discarded the held sync. Fix the sheet, then sync again.", "ok")
+        except players.PlayerError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_players"))
 
     # ----------------------------------------------------------------- backups
 

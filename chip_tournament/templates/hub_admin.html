@@ -8,6 +8,7 @@
     <p class="lede">Every tournament, each with its own registration, tables, texts and undo. Open one to run it.</p>
   </div>
   <div class="button-row" style="justify-content: flex-end">
+    <a class="button secondary" href="{{ url_for('admin_players') }}">Players</a>
     {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
   </div>
 </header>

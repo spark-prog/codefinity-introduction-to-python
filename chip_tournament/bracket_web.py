@@ -148,6 +148,11 @@ def register(app, h) -> dict:
             if f.get("elig_shown"):
                 s.eligibility = eligibility.parse_form(f, s.eligibility)
                 s.series = " ".join(f.get("elig_series", "").split())[:60]
+            hours = (f.get("waitlist_offer_hours", "") or "").strip()
+            if hours:
+                if not hours.isdigit() or int(hours) > 72:
+                    raise TournamentError("Waiting-list offer hours must be 0 to 72.")
+                s.waitlist_offer_hours = int(hours)
             if f.get("skill_game") in ("8", "9", "high", "high7"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

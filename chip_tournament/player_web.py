@@ -15,6 +15,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from chips import backup, eligibility, players, schedule
 from chips import pending as pending_mod
 from chips import series as series_mod
+from chips import waitlist as waitlist_mod
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
 from chips.throttle import Throttle
@@ -557,6 +558,7 @@ def register_registration(app) -> None:
                 ev.store.save(t)
 
     app.config["ask_partners"] = ask_partners
+    app.jinja_env.globals["offer_when"] = waitlist_mod.when_text
 
     @app.route("/t/<event>/partner/<token>", methods=["GET", "POST"])
     def partner_confirm(token):
@@ -820,6 +822,43 @@ def register_registration(app) -> None:
     app.jinja_env.globals["pushes_from"] = lambda: pushes.from_event(g.event.id)
     app.jinja_env.globals["pushes_into"] = lambda: pushes_into(g.event.id)
 
+    @app.post("/t/<event>/team/<team_id>/offer")
+    @app.post("/t/<event>/entry/<entry_id>/offer")
+    def waitlist_offer(team_id=None, entry_id=None):
+        """A waiting team accepts or declines the open spot it was offered."""
+        gid, ev = team_id or entry_id, g.event
+        page = url_for("team_page", team_id=gid) if team_id else url_for("b_entry", entry_id=gid)
+        if not (session.get(f"team_{gid}") or session.get(f"entry_{gid}") or session.get("admin")):
+            flash("Enter your PIN first.", "error")
+            return redirect(page)
+        yes = request.form.get("action") == "accept"
+        try:
+            with ev.store.change(f"Waiting list offer {'accepted' if yes else 'declined'}") as t:
+                name = waitlist_mod.accept(t, gid) if yes else waitlist_mod.decline(t, gid)
+                messages, t.outbox = list(t.outbox), []
+                for m in messages:
+                    ev.sms.send(m.to, m.body, test=t.settings.test_event)
+            flash(f"{name} is in the field. See you there!" if yes else
+                  f"{name} is off the waiting list. The spot goes to the next team.", "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(page if yes else url_for("home"))
+
+    def email_offers(ev, t) -> bool:
+        """Email (as well as text) players who have an offer they haven't been emailed about."""
+        changed = False
+        for grp in waitlist_mod.offered(t):
+            if grp.offer_emailed == grp.offer_until:
+                continue
+            for p in grp.players:
+                if p.member:
+                    email_player(p.member, f"{t.settings.name}: a spot opened for {grp.name}",
+                                 f"A spot opened in {t.settings.name}! {grp.name} has until "
+                                 f"{waitlist_mod.when_text(grp.offer_until)} to take it. Accept or decline on your "
+                                 f"team page: {(t.site_url or '') + ('/team/' if ev.kind == 'chip' else '/entry/') + grp.id}")
+            grp.offer_emailed, changed = grp.offer_until, True
+        return changed
+
     def lock_loop(log=None, sleep: float = 60) -> None:
         """Background: lock an event's eligibility once its registration closes or it starts."""
         import time as _time
@@ -827,6 +866,18 @@ def register_registration(app) -> None:
         while True:
             for ev in app.config["hub"].events():
                 try:
+                    probe = ev.load()
+                    now_ = datetime.now()
+                    if any(datetime.fromisoformat(x.offer_until) <= now_ for x in waitlist_mod.offered(probe)):
+                        with ev.store.change("Waiting list offer ran out") as t:
+                            waitlist_mod.expire(t)
+                            messages, t.outbox = list(t.outbox), []
+                            for m in messages:
+                                ev.sms.send(m.to, m.body, test=t.settings.test_event)
+                    with ev.store.lock:  # bookkeeping: no undo step
+                        t = ev.load()
+                        if email_offers(ev, t):
+                            ev.store.save(t)
                     if eligibility.lock_due(ev.load()):
                         with ev.store.change("Eligibility locked (registration closed)") as t:
                             if eligibility.lock_due(t):

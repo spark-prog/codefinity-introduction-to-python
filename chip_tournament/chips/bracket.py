@@ -150,6 +150,8 @@ class Entry:
     payout_texted: bool = False
     payout_texted_cents: int = 0  # the amount in that text, so a later correction can be texted
     division: str = ""  # skill group label ("SL 4"); "" when the event has one bracket
+    offer_until: str = ""  # waiting list: offered an open spot until this time (chips/waitlist.py)
+    offer_emailed: str = ""  # the offer (its deadline) the players were emailed about
 
     @property
     def skill(self) -> int:
@@ -262,6 +264,7 @@ class BracketSettings:
     elig_audit: list[dict] = field(default_factory=list)
     series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): see chips/series.py
     partner_seekers: list[dict] = field(default_factory=list)  # logged-in players looking (not registered)
+    waitlist_offer_hours: int = field(default_factory=lambda: engine.WAITLIST_OFFER_HOURS)  # see engine.Settings
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
@@ -413,6 +416,9 @@ class BracketTournament:
         """Where an entry is right now, for the board's Players list."""
         if entry.status == NO_SHOW:
             return "No-show"
+        if entry.status == WAITLISTED and entry.offer_until:
+            from .waitlist import when_text
+            return f"Offered a spot until {when_text(entry.offer_until)}"
         if entry.status == WAITLISTED:
             return f"Waiting list #{self.waitlist_position(entry)}"
         if entry.status == REGISTERED:
@@ -626,11 +632,25 @@ class BracketTournament:
         return entry
 
     def _fill_from_waitlist(self) -> None:
+        from . import waitlist
+
         while self.waitlist and not self.field_full:
-            entry = self.entries[self.waitlist.pop(0)]
-            entry.status = REGISTERED
-            self._say(f"{entry.name} moved from the waiting list into the field.")
-            self._text(entry, f"Good news: a spot opened and {entry.name} is in the field for {self.settings.name}.")
+            if self.settings.field_cap and len(self.field_entries) + len(waitlist.offered(self)) >= self.settings.field_cap:
+                return  # every open spot is already offered to someone
+            entry = next((self.entries[i] for i in self.waitlist if not self.entries[i].offer_until), None)
+            if entry is None:
+                return
+            until = waitlist.deadline(self)
+            if until is not None:
+                waitlist.make_offer(self, entry, until, self.entry_link(entry))
+                continue
+            self.waitlist.remove(entry.id)
+            self._promote(entry)
+
+    def _promote(self, entry: Entry) -> None:
+        entry.status, entry.offer_until = REGISTERED, ""
+        self._say(f"{entry.name} moved from the waiting list into the field.")
+        self._text(entry, f"Good news: a spot opened and {entry.name} is in the field for {self.settings.name}.")
 
     def set_field_cap(self, cap: int) -> None:
         if cap < 0:

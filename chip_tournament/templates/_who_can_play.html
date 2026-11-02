@@ -1,0 +1,3 @@
+{# Event page facts: who may play. Needs t. #}
+{% set rules = elig_describe(elig_rules(t.settings), session_start()) %}
+{% if rules %}<li><span class="k">Who can play</span><span class="v">{{ rules|join(" · ") }}</span></li>{% endif %}

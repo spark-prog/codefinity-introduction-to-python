@@ -1,0 +1,30 @@
+{# Event settings: who may play. Needs s. #}
+{% set r = elig_rules(s) %}
+<div class="settings-group">Who can play (eligibility)</div>
+<input type="hidden" name="elig_shown" value="1">
+<p class="muted small-note wide">Checked against the player list when players register. A player who doesn't qualify is told why and how to fix it;
+  anything the list can't answer goes to Pending verification for you.</p>
+<label class="checkbox wide"><input type="checkbox" name="elig_active" value="1" {% if r.active %}checked{% endif %}>
+  Active member in good standing (Past Due and Inactive can't register)</label>
+<label>At least this many lifetime matches (0 = no minimum) <input name="elig_min_matches" type="number" min="0" value="{{ r.min_matches }}"></label>
+<label>…in <select name="elig_matches_game">
+  <option value="either" {% if r.matches_game == "either" %}selected{% endif %}>8-Ball or 9-Ball</option>
+  <option value="8" {% if r.matches_game == "8" %}selected{% endif %}>8-Ball</option>
+  <option value="9" {% if r.matches_game == "9" %}selected{% endif %}>9-Ball</option></select></label>
+<label class="checkbox wide"><input type="checkbox" name="elig_played_session" value="1" {% if r.played_session %}checked{% endif %}>
+  Played at least one match this session (since {{ session_start()|day }}; change it on the Players page)</label>
+<label>Must be active in <select name="elig_active_in">
+  <option value="" {% if not r.active_in %}selected{% endif %}>Either format</option>
+  <option value="8" {% if r.active_in == "8" %}selected{% endif %}>8-Ball</option>
+  <option value="9" {% if r.active_in == "9" %}selected{% endif %}>9-Ball</option></select></label>
+<label>Lowest skill level (0 = none) <input name="elig_skill_min" type="number" min="0" max="9" value="{{ r.skill_min }}"></label>
+<label>Highest skill level (0 = none) <input name="elig_skill_max" type="number" min="0" max="9" value="{{ r.skill_max }}"></label>
+<label>Gender <select name="elig_gender">
+  {% for key, name in elig_genders.items() %}<option value="{{ key }}" {% if r.gender == key %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+<label>Eligible list name (Masters, Ladies, Team Captains, Invited…) <input name="elig_list_label" value="{{ r.list_label }}" placeholder="Blank = no list"></label>
+<label>…players marked Yes in this sheet column <select name="elig_list_column">
+  <option value="">No column</option>
+  {% for c in player_columns() %}<option {% if r.list_column == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+  {% if r.list_column and r.list_column not in player_columns() %}<option selected>{{ r.list_column }}</option>{% endif %}</select></label>
+<label class="wide">…and/or these member numbers <textarea name="elig_list_members" rows="2" placeholder="32212345, 32267890">{{ r.list_members|join(", ") }}</textarea></label>
+<label class="wide">Other requirements the league office checks by hand (one per line) <textarea name="elig_review" rows="2">{{ r.review|join("\n") }}</textarea></label>

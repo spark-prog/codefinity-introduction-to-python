@@ -28,7 +28,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
 import player_web
-from chips import backup, bonus_event, export, importer, players, rules as rulebook, schedule, skill_check, themes
+from chips import backup, bonus_event, eligibility, export, importer, players, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, RACK_CHART
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -181,6 +181,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
     app.jinja_env.globals["skill_for"] = players.skill_for
+    app.jinja_env.globals["elig_rules"] = eligibility.rules_of
+    app.jinja_env.globals["elig_describe"] = eligibility.describe
+    app.jinja_env.globals["elig_genders"] = eligibility.GENDERS
+    app.jinja_env.globals["session_start"] = lambda: player_store.config()["session_start"]
+    app.jinja_env.globals["player_columns"] = lambda: player_store.extra_columns()
     # Who runs the text program, shown on the Terms and Privacy pages (they must match the
     # carrier registration). Override with environment variables if they ever change.
     # The number tournament texts come from, so players can save it as a contact (Twilio setting).
@@ -726,6 +731,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.registration_closed = f.get("registration_closed") == "1"
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
+            if f.get("elig_shown"):
+                s.eligibility = eligibility.parse_form(f, s.eligibility)
             if f.get("skill_game") in ("8", "9"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:
@@ -1273,6 +1280,16 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash(*sync_message(player_store.sync_sheet("director")))
         except players.PlayerError as exc:
             flash(f"Sync didn't run: {exc} The previous list is still in use.", "error")
+        return redirect(url_for("admin_players"))
+
+    @app.post("/admin/players/session")
+    @admin_required
+    def admin_players_session():
+        try:
+            day = player_store.set_session_start(request.form.get("session_start", ""))
+            flash(f"Current session starts {day}.", "ok")
+        except players.PlayerError as exc:
+            flash(str(exc), "error")
         return redirect(url_for("admin_players"))
 
     @app.post("/admin/players/upload")

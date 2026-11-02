@@ -62,19 +62,31 @@ def check_player(p, store: PlayerStore, index: dict, game: str, two_levels: bool
 
 
 def check_event(t, store: PlayerStore, two_levels: bool) -> list[dict]:
-    """Every team or entry, with a row per player and whether anything needs a look."""
+    """Every team or entry, with a row per player (skill levels and eligibility) and whether anything needs a look."""
+    from .eligibility import any_rules, check_player as eligible, check_team, rules_of
+
     index = name_index(store)
     game = getattr(t.settings, "skill_game", "8")
+    rules, start = rules_of(t.settings), store.config()["session_start"]
+    checking = any_rules(rules)
     groups = t.teams.values() if hasattr(t, "teams") else t.entries.values()
     out = []
     for g in groups:
         if getattr(g, "status", "") == "no_show":
             continue
         rows = [check_player(p, store, index, game, two_levels) for p in g.players]
-        out.append({"id": g.id, "name": g.name, "status": g.status, "players": rows,
+        team_no = []
+        if checking:
+            for r in rows:
+                rec = store.get(r["member"]) if r["member"] and r["status"] not in (NOT_FOUND, AMBIGUOUS) else None
+                no, review = eligible(rec, rules, start, game)
+                r["elig"] = {"no": no, "review": review}
+            team_no = check_team([store.get(r["member"]) if r["member"] else None for r in rows], rules)
+        out.append({"id": g.id, "name": g.name, "status": g.status, "players": rows, "team_no": team_no,
+                    "ineligible": any(r.get("elig", {}).get("no") for r in rows) or bool(team_no),
                     "fixable": any(r["status"] in (DIFFERS, MISSING) and r["list"] for r in rows),
                     "issues": [r for r in rows if r["status"] != OK]})
-    return sorted(out, key=lambda x: (not x["issues"], x["name"].lower()))
+    return sorted(out, key=lambda x: (not (x["issues"] or x["ineligible"]), x["name"].lower()))
 
 
 def fixed_players(group, rows: list[dict], two_levels: bool):

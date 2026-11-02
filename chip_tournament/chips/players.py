@@ -57,6 +57,8 @@ COLUMNS = {
     "emailaddress": "email",
     "gender": "gender",
 }
+DROPPED = ("home phone", "birth date", "session defense")  # personal or unneeded: never kept
+SESSION_START = "2026-09-08"  # the current session's first night, until the director changes it
 REQUIRED = ("member number", "first name", "last name", "8-ball skill level", "9-ball skill level", "emailaddress")
 LABELS = {"sl8": "8-Ball SL", "sl9": "9-Ball SL", "mp8": "8-Ball matches", "mp9": "9-Ball matches",
           "last8": "last 8-Ball", "last9": "last 9-Ball", "status": "status", "email": "email", "cell": "cell",
@@ -104,6 +106,8 @@ def parse_rows(rows: list[list[str]]) -> tuple[dict[str, dict], list[str]]:
                                                                           for m in missing)
                           + ". Nothing was changed.")
     where = {COLUMNS[h]: i for i, h in enumerate(headers) if h in COLUMNS}
+    # Any other column the office adds (like a Yes/No "Masters" column for an eligible list) is kept by its name.
+    extras = {rows[0][i].strip(): i for i, h in enumerate(headers) if h and h not in COLUMNS and h not in DROPPED}
     records: dict[str, dict] = {}
     problems: list[str] = []
     emails: dict[str, str] = {}
@@ -121,7 +125,8 @@ def parse_rows(rows: list[list[str]]) -> tuple[dict[str, dict], list[str]]:
             problems.append(f"Row {n} ({name}): member number {member} is already on row "
                             f"{records[member]['row']}. Skipped.")
             continue
-        rec = {"member": member, "row": n}
+        rec = {"member": member, "row": n,
+               "extra": {name: (row[i] if i < len(row) else "").strip() for name, i in extras.items()}}
         for f in ("first", "nickname", "last", "status", "rep", "gender"):
             rec[f] = (cells.get(f) or "").strip()
         rec["email"] = (cells.get("email") or "").strip().lower()
@@ -271,7 +276,20 @@ class PlayerStore:
 
     # settings ------------------------------------------------------------
     def config(self) -> dict:
-        return {"sheet": "", "tab": TAB, **self._read("config.json", {})}
+        return {"sheet": "", "tab": TAB, "session_start": SESSION_START, **self._read("config.json", {})}
+
+    def set_session_start(self, value: str) -> str:
+        try:
+            day = datetime.strptime((value or "").strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            raise PlayerError("Enter the session's start date.")
+        with self.lock:
+            self._write("config.json", {**self.config(), "session_start": day})
+        return day
+
+    def extra_columns(self) -> list[str]:
+        """Extra sheet columns (for eligible lists), from the first player that has them."""
+        return sorted(next((r.get("extra", {}) for r in self.records().values() if r.get("extra")), {}))
 
     def set_sheet(self, link: str) -> str:
         sid = sheet_id(link) if (link or "").strip() else ""

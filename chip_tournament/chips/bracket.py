@@ -57,6 +57,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
+from . import engine
 from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, money, now
 from .races import group_for, group_label, rack_race
 
@@ -250,6 +251,7 @@ class BracketSettings:
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
     member_exceptions: list[dict] = field(default_factory=list)
+    require_member: bool = field(default_factory=lambda: engine.REQUIRE_MEMBER_DEFAULT)  # see engine.Settings
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0

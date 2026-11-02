@@ -93,7 +93,7 @@ def register(app, h) -> dict:
                     raise TournamentError(schedule.shut_message(t.settings))
                 if f.get("agree_terms") != "1":
                     raise TournamentError("Please agree to the Terms & Conditions and Privacy Policy to register.")
-                players = app.config["attach_members"](f, players_from_form(f, size))
+                players = app.config["attach_members"](f, players_from_form(f, size), t)
                 if asks_two_levels(t.settings) and not (players[0].skill_8 or players[0].skill_9):
                     raise TournamentError("Enter your 8-Ball or 9-Ball skill level (or both).")
                 if f.get("sms_consent") == "1" and players[0].phone:
@@ -142,6 +142,8 @@ def register(app, h) -> dict:
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
+            if f.get("require_member_shown"):
+                s.require_member = f.get("require_member") == "1"
             if f.get("skill_game") in ("8", "9"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

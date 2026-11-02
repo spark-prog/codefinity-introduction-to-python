@@ -88,6 +88,9 @@ MIN_PLAYER_SKILL, MAX_PLAYER_SKILL = 1, 9  # covers both 8-Ball and 9-Ball skill
 PARTNER_DEADLINE_HOURS = 24  # a team registered without a partner must add one this long before the start
 
 
+REQUIRE_MEMBER_DEFAULT = True  # (tests that predate member numbers turn this off)
+
+
 class TournamentError(Exception):
     """Raised when an action breaks the tournament rules."""
 
@@ -245,6 +248,8 @@ class Settings:
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
     member_exceptions: list[dict] = field(default_factory=list)
+    # Players registering online must give an APA member number. On for every event, old ones included.
+    require_member: bool = field(default_factory=lambda: REQUIRE_MEMBER_DEFAULT)
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them

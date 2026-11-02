@@ -25,8 +25,9 @@
     <fieldset class="partner">
       <legend>{{ "Player" if s.team_size == 1 else "Player " ~ (i + 1) }}</legend>
       <label>Name <input name="player_name_{{ i }}" value="{{ form.get('player_name_' ~ i, '') }}" required {% if player %}data-lookup="{{ i }}" autocomplete="off"{% endif %}></label>
-      <label>APA member number <span class="muted">(optional)</span>
-        <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="322…" value="{{ form.get('player_member_' ~ i, '') }}"></label>
+      <label>APA member number {% if not s.require_member or is_admin %}<span class="muted">(optional)</span>{% endif %}
+        <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="322…" value="{{ form.get('player_member_' ~ i, '') }}"
+          {% if s.require_member and not is_admin %}required{% endif %} pattern="[0-9 -]*"></label>
       {% if asks_two_levels(s) %}
       <label>8-Ball skill level <input name="player_skill8_{{ i }}" type="number" min="2" max="7" inputmode="numeric" value="{{ form.get('player_skill8_' ~ i, '') }}"></label>
       <label>9-Ball skill level <input name="player_skill9_{{ i }}" type="number" min="1" max="9" inputmode="numeric" value="{{ form.get('player_skill9_' ~ i, '') }}"></label>

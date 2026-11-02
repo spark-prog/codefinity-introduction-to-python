@@ -193,11 +193,13 @@ def register_registration(app) -> None:
                           and any(" ".join(p.name.lower().split()) == want for p in x.players)), None)
         return found
 
-    def attach_members(form, plist: list[Player]) -> list[Player]:
+    def attach_members(form, plist: list[Player], t=None, existing=()) -> list[Player]:
         """Member numbers on the form, checked against the player list.
 
         In the list with a matching name (or picked by a logged-in player): verified, named as in the list.
-        In the list under another name, or not in the list: kept, but pending the director's check."""
+        In the list under another name, or not in the list: kept, but pending the director's check.
+        When the event requires member numbers (players, not the director), every player needs one, except
+        someone already on the roster from before numbers were asked for (`existing`)."""
         logged_in = bool(g.get("player"))
         for i, p in enumerate(plist):
             raw = form.get(f"player_member_{i}", "")
@@ -216,6 +218,14 @@ def register_registration(app) -> None:
                 p.pending = "Not in the player list"
             else:
                 p.pending = "The player list isn't loaded"
+        if t is not None and getattr(t.settings, "require_member", False) and not session.get("admin"):
+            def key(name):
+                return " ".join((name or "").lower().split())
+            grandfathered = {key(o.name) for o in existing if not o.member}
+            for p in plist:
+                if not p.member and key(p.name) not in grandfathered:
+                    raise TournamentError(f"Enter {p.name or 'each player'}'s APA member number (8 digits starting "
+                                          "with 322). It's on their APA card and in the APA app.")
         return plist
 
     def my_prefill(t) -> dict:

@@ -22,8 +22,11 @@
     <label class="checkbox name-fix" hidden><input type="checkbox" name="same_person_{{ i }}" value="1">
       <span>Same person: I'm only fixing the spelling of {{ p.name }}'s name (keeps their cell number and text alerts)</span></label>
     {% endif %}
-    {% if member_field %}<label>APA member number <span class="muted">(optional)</span>
-      <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="322…" value="{{ p.member if p and p.member else '' }}"></label>{% endif %}
+    {% if member_field %}{% set need = t.settings.require_member and not is_admin and not (locked is defined and locked) %}
+    <label>APA member number {% if not need %}<span class="muted">(optional)</span>{% endif %}
+      <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="322…" value="{{ p.member if p and p.member else '' }}"
+        {% if need and new_registration is defined %}required{% endif %} pattern="[0-9 -]*"></label>
+    {% if need and new_registration is not defined %}<p class="muted small-note">Required for a new partner.</p>{% endif %}{% endif %}
     <label>Skill level <input name="player_skill_{{ i }}" class="skill" type="number" min="1" max="9" step="1" required
       value="{{ p.skill if p and p.skill else '' }}" {% if locked %}readonly{% endif %}></label>
     {% if hide_phones and p and p.phone %}

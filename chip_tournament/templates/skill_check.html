@@ -49,7 +49,7 @@
             <input type="hidden" name="member" value="{{ r.member }}"><input type="hidden" name="back" value="{{ url_for('admin_skill_check') }}">
             <input name="note" required placeholder="Why" aria-label="Why"><button class="button small secondary">Override</button></form>{% endif %}
         {% elif r.elig and r.elig.review %}<span class="check-badge differs">Check</span><br>{{ r.elig.review|join("; ") }}
-        {% elif r.elig %}<span class="check-badge ok">Eligible</span>{% else %}—{% endif %}
+        {% elif r.elig %}<span class="check-badge ok">Eligible</span>{% if r.elig.grace %}<br><span class="muted">one-time grace ({{ r.elig.grace }})</span>{% endif %}{% else %}—{% endif %}
         {% if r.elig and r.elig.locked %}<br><span class="muted">as of the lock</span>{% endif %}
         {% if loop.last and grp.team_no %}<br><span class="check-badge not_found">Team</span> {{ grp.team_no|join(" ") }}{% endif %}</td>{% endif %}
     </tr>

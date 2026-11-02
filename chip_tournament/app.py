@@ -525,7 +525,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     @director_view
     def admin_skill_check():
         t = store.load()
-        groups = skill_check.check_event(t, player_store, two_levels(t))
+        groups = skill_check.check_event(t, player_store, two_levels(t),
+                                         lambda m: app.config["pushed_in"](g.event.id, t, m))
         counts = {}
         for grp in groups:
             for r in grp["players"]:
@@ -735,6 +736,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
                 s.eligibility = eligibility.parse_form(f, s.eligibility)
+                s.series = " ".join(f.get("elig_series", "").split())[:60]
             if f.get("skill_game") in ("8", "9", "high", "high7"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

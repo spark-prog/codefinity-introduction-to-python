@@ -146,6 +146,7 @@ def register(app, h) -> dict:
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
                 s.eligibility = eligibility.parse_form(f, s.eligibility)
+                s.series = " ".join(f.get("elig_series", "").split())[:60]
             if f.get("skill_game") in ("8", "9", "high", "high7"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

@@ -1,7 +1,8 @@
 {# Director: eligibility reviews, overrides and the lock. Needs t. #}
 {% set s = t.settings %}
 {% set reviews = s.review_requests|selectattr("status", "equalto", "open")|list %}
-{% if elig_describe(elig_rules(s)) or s.elig_overrides or reviews %}
+{% set pushed_out, graced = pushes_from(), pushes_into() %}
+{% if elig_describe(elig_rules(s)) or s.elig_overrides or reviews or pushed_out or graced %}
 <section class="card jump-target{% if reviews %} pending-card{% endif %}" id="eligibility">
   <div class="section-head"><h3>Eligibility{% if reviews %} · {{ reviews|length }} review request{{ "s" if reviews|length != 1 }}{% endif %}</h3>
     <a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a></div>
@@ -47,6 +48,24 @@
     <label class="wide">Why <input name="note" required placeholder="Medical leave last session, approved by the LO"></label>
     <button class="button small">Override: eligible</button>
   </form>
+  {% endif %}
+  {% if s.series %}
+  <h4 style="margin-top: 16px">Pushed to the next {{ s.series }}{% if pushed_out %} ({{ pushed_out|length }}){% endif %}</h4>
+  {% for x in pushed_out %}
+  <p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · {{ x.at|day }} · by the {{ x.by }}</span></p>
+  {% else %}<p class="muted small-note">Nobody yet.</p>{% endfor %}
+  {% if pushed_out %}<p class="muted small-note">Mark them <b>Push</b> in the sheet's {{ elig_rules(s).list_column or "eligible list" }} column for next time (the app already treats them as Push there).</p>{% endif %}
+  {% if not is_viewer and t.status == "setup" %}
+  <form method="post" action="{{ url_for('push_eligibility') }}" class="form exception-form">
+    <label>Push a player to next time <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
+    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Unregister them here if they're registered</label>
+    <button class="button small secondary">Push to next {{ s.series }}</button>
+  </form>
+  {% endif %}
+  {% endif %}
+  {% if graced %}
+  <h4 style="margin-top: 16px">On their one-time grace here ({{ graced|length }})</h4>
+  {% for x in graced %}<p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · pushed from {{ x.from_name }}</span></p>{% endfor %}
   {% endif %}
 </section>
 {% endif %}

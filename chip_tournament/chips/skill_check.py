@@ -61,9 +61,9 @@ def check_player(p, store: PlayerStore, index: dict, game: str, two_levels: bool
     return {**row, "status": OK if p.skill == level else DIFFERS}
 
 
-def check_event(t, store: PlayerStore, two_levels: bool) -> list[dict]:
+def check_event(t, store: PlayerStore, two_levels: bool, pushed=lambda member: None) -> list[dict]:
     """Every team or entry, with a row per player (skill levels and eligibility) and whether anything needs a look."""
-    from .eligibility import any_rules, check_player as eligible, check_team, rules_of
+    from .eligibility import any_rules, check_player as eligible, check_team, list_value, rules_of
 
     index = name_index(store)
     game = getattr(t.settings, "skill_game", "8")
@@ -87,8 +87,11 @@ def check_event(t, store: PlayerStore, two_levels: bool) -> list[dict]:
                 elif r["member"] in locked:  # what the lock found: later sheet syncs don't change it
                     r["elig"] = {**locked[r["member"]], "locked": True}
                 else:
-                    no, review = eligible(rec, rules, start, game)
+                    via = pushed(r["member"]) if r["member"] else None
+                    no, review = eligible(rec, rules, start, game, bool(via))
                     r["elig"] = {"no": no, "review": review}
+                    if not no and (via or list_value(rec, rules) == "push"):
+                        r["elig"]["grace"] = f"pushed from {via['from_name']}" if via else "Push in the sheet"
             team_no = check_team([store.get(r["member"]) if r["member"] else None for r in rows], rules)
         out.append({"id": g.id, "name": g.name, "status": g.status, "players": rows, "team_no": team_no,
                     "ineligible": any(r.get("elig", {}).get("no") for r in rows) or bool(team_no),

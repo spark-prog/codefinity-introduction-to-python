@@ -66,8 +66,28 @@ def _nice(day: str) -> str:
         return day
 
 
-def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8") -> tuple[list[str], list[str]]:
-    """(refusals, review notes) for one player. Refusals say what's wrong and how to fix it."""
+YES_VALUES = ("yes", "y", "true", "x", "1")
+
+
+def list_value(rec: dict | None, r: dict) -> str:
+    """'yes' (on the list), 'push' (on the list by a one-time grace) or '' from the event's list."""
+    if rec is None:
+        return ""
+    if rec["member"] in r["list_members"]:
+        return "yes"
+    if r["list_column"]:
+        value = ((rec.get("extra") or {}).get(r["list_column"], "") or "").strip().lower()
+        if value in YES_VALUES:
+            return "yes"
+        if value == "push":
+            return "push"
+    return ""
+
+
+def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8",
+                 pushed: bool = False) -> tuple[list[str], list[str]]:
+    """(refusals, review notes) for one player. Refusals say what's wrong and how to fix it.
+    `pushed`: the player pushed their eligibility here from the series' previous edition (on the list)."""
     if not any_rules(r):
         return [], []
     if rec is None:
@@ -111,10 +131,7 @@ def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8")
             no.append(f"This event is {GENDERS[r['gender']].lower()}.")
     if r["list_label"] or r["list_column"] or r["list_members"]:
         label = r["list_label"] or "eligible"
-        on_list = rec["member"] in r["list_members"]
-        if not on_list and r["list_column"]:
-            value = (rec.get("extra") or {}).get(r["list_column"], "")
-            on_list = value.strip().lower() in ("yes", "y", "true", "x", "1")
+        on_list = pushed or list_value(rec, r) in ("yes", "push")
         if not on_list:
             if r["list_members"] or r["list_column"]:
                 no.append(f"Not on the {label} list for this event. Ask the league office if you think you should be.")
@@ -289,7 +306,7 @@ def open_reviews(t) -> list[dict]:
     return [r for r in t.settings.review_requests if r["status"] == "open"]
 
 
-def lock(t, store, session_start: str) -> int:
+def lock(t, store, session_start: str, pushed=lambda member: False) -> int:
     """Registration closed: check everyone once, keep what it found, and stop later sheet syncs changing it.
     Anyone not eligible goes to Pending verification for the director (nobody is removed). Returns how many."""
     rules = rules_of(t.settings)
@@ -304,7 +321,7 @@ def lock(t, store, session_start: str) -> int:
             if override_for(t, p.member):
                 snapshot[p.member] = {"no": [], "review": [], "override": True}
                 continue
-            no, review = check_player(store.get(p.member), rules, session_start, game)
+            no, review = check_player(store.get(p.member), rules, session_start, game, pushed(p.member))
             snapshot[p.member] = {"no": no, "review": review}
             if (no or review) and not p.pending:
                 p.pending = ("Not eligible when registration closed: " + " ".join(no)) if no else \

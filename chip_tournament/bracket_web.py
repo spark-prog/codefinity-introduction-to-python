@@ -102,6 +102,7 @@ def register(app, h) -> dict:
 
             entry = act(f"Registration: {f.get('name', '').strip() or f.get('player_name_0', '').strip()}", go)
             if entry:
+                app.config["ask_partners"](g.event, entry.id)
                 session[f"entry_{entry.id}"] = True
                 group = f" You're in the {entry.division} group." if entry.division else ""
                 flash(f"{entry.name} is registered!{group} Your PIN is {entry.pin}. Keep it to enter scores.", "ok")

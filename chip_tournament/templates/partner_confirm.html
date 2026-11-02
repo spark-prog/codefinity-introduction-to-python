@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Confirm your team — {{ t.settings.name }}{% endblock %}
+{% block content %}
+<div class="narrow">
+<header class="page-head">
+  <p class="eyebrow">{{ t.settings.name }}</p>
+  <h1>Are you on {{ grp.name }}?</h1>
+  <p class="lede">{{ grp.players|rejectattr("member", "equalto", me.member)|map(attribute="name")|join(" & ") or "Your partner" }}
+    registered you, <b>{{ me.name }}</b>, as their partner{% if t.settings.date %} for {{ t.settings.date|day }}{% endif %}.</p>
+</header>
+{% if me.confirm == "confirmed" %}<p class="eligible-yes">You've already confirmed. See you there!</p>
+{% elif me.confirm == "declined" %}<p class="banner">You declined this registration.</p>
+{% else %}
+<form method="post" class="card form">
+  <button class="button big block" name="action" value="confirm">Yes, I'm on {{ grp.name }}</button>
+  <button class="button secondary block" name="action" value="decline">No, I'm not playing with them</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}

@@ -451,6 +451,7 @@ def create_app(data_dir: str | None = None) -> Flask:
 
             team = act(f"Registration: {f.get('name', '').strip()}", register_team)
             if team:
+                app.config["ask_partners"](g.event, team.id)
                 session[f"team_{team.id}"] = True
                 flash(f"{team.name} is registered! Your team PIN is {team.pin} — keep it to edit your roster.", "ok")
                 return redirect(url_for("team_page", team_id=team.id))
@@ -658,6 +659,7 @@ def create_app(data_dir: str | None = None) -> Flask:
                     name=f.get("name"), list_seeking=f.get("list_seeking") == "1", same_people=same),
                 "Roster saved.",
             ):
+                app.config["ask_partners"](g.event, team_id)
                 return redirect(url_for("team_page", team_id=team_id))
             team = store.load().teams[team_id]
         return render_template("roster.html", t=t, team=team, allowed=allowed)

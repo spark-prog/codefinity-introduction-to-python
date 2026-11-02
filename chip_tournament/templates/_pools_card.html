@@ -1,0 +1,18 @@
+{# Director home: shared tables (several events at one venue). Needs pools, rows. #}
+<section class="card" id="pools">
+  <div class="section-head"><h2>Shared tables</h2></div>
+  <p class="muted">For days like Mini-Mania: several tournaments at one venue sharing one set of tables. No table is ever given
+    to two events, a freed table goes to whichever event has a match waiting, and a player at a table in one event isn't
+    called in another until that match ends.</p>
+  {% for p in pools %}
+  <div class="pending-row"><div><b><a href="{{ url_for('admin_pool', pool_id=p.id) }}">{{ p.name }}</a></b>
+    <span class="muted">· tables {{ p.tables|join(", ") }} · {{ p.events|length }} event(s)</span></div>
+    <a class="button small secondary" href="{{ url_for('pool_board', pool_id=p.id) }}">Public board</a></div>
+  {% endfor %}
+  {% if not is_viewer %}
+  <details class="inline-details" {% if not pools %}open{% endif %}>
+    <summary>New shared tables</summary>
+    {% set pool = none %}{% include "_pool_form.html" %}
+  </details>
+  {% endif %}
+</section>

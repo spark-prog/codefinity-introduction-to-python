@@ -955,3 +955,12 @@ tr.check-ok td { opacity: .75; }
 /* My account: Your history */
 .career { font-size: 1.1rem; }
 .history-result { text-align: right; }
+
+/* Shared tables (Mini-Mania) */
+.pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pool-table { display: grid; gap: 2px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); min-height: 84px; }
+.pool-table-no { font-weight: 800; color: var(--accent); }
+.pool-table.free { opacity: .65; }
+.pool-table.playing { border-color: rgba(95, 211, 141, .6); }
+.pool-table.set { border-color: rgba(255, 176, 32, .6); }
+.pool-table.sent { border-color: rgba(255, 107, 118, .6); }

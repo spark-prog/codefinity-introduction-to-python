@@ -388,7 +388,14 @@ class Tournament:
     def free_tables(self) -> list[str]:
         s = self.settings
         busy = {m.table for m in self.matches if m.status in (CALLED, WAITING) and m.table}
+        busy |= getattr(self, "elsewhere_tables", set())  # shared tables: in use by another event (chips/pool.py)
         return [t for t in s.tables if t not in busy and t not in s.tables_down and t not in s.tables_closing]
+
+    def busy_elsewhere(self, m: Match) -> bool:
+        """Shared tables: someone in this match is at a table in another event right now."""
+        members = getattr(self, "elsewhere_members", set())
+        return bool(members) and any(p.member in members for tid in (m.team_a, m.team_b) if tid
+                                     for p in self.teams[tid].players if p.member)
 
     def match_on(self, table: str) -> Match | None:
         """The match on (or set for) a table, if any."""
@@ -1340,13 +1347,16 @@ class Tournament:
         for m in self.table_queue():
             if not free:
                 break
+            if self.busy_elsewhere(m):
+                continue  # a player is at a table in another event: hold this match
             m.table = free.pop(0)
             if self.settings.call_mode != CONTINUOUS:
                 self._say(f"Match #{m.round}: {self.name_of(m.team_a)} vs {self.name_of(m.team_b)} set for table "
                           f"{m.table}, waiting for the director to call it.")
         if self.settings.call_mode == CONTINUOUS:
             for m in self.assigned_matches():
-                self._call(m)
+                if not self.busy_elsewhere(m):
+                    self._call(m)
 
     def _call(self, m: Match) -> None:
         """Text both teams their table and start the match clock."""
@@ -1372,6 +1382,8 @@ class Tournament:
             raise TournamentError(f"Table {m.table} has already been called.")
         if m.status != WAITING or not m.table:
             raise TournamentError("That match doesn't have a table yet.")
+        if self.busy_elsewhere(m):
+            raise TournamentError("A player in that match is at a table in another event right now.")
         self._call(m)
         return m
 
@@ -1380,9 +1392,12 @@ class Tournament:
         assigned = self.assigned_matches()
         if not assigned:
             raise TournamentError("No matches are waiting to be called.")
+        called = 0
         for m in assigned:
-            self._call(m)
-        return len(assigned)
+            if not self.busy_elsewhere(m):  # a player at a table in another event waits
+                self._call(m)
+                called += 1
+        return called
 
     def call_next(self, team_id: str) -> None:
         """Director override: this team's pair (or the team, if not paired yet) goes first."""

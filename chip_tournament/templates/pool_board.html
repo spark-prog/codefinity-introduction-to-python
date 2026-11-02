@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ view.pool.name }}{% endblock %}
+{% block head %}{% set secs = 15 %}{% include "_refresh.html" %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <p class="eyebrow">Live</p>
+  <h1>{{ view.pool.name }}</h1>
+  <p class="lede">Every table, across all the tournaments.</p>
+</header>
+<section class="card">
+  <div class="pool-grid">
+    {% for name, m in view.tables.items() %}
+    <div class="pool-table {{ m.state if m else 'free' }}">
+      <span class="pool-table-no">Table {{ name }}</span>
+      {% if m %}<b>{{ m.names }}</b><span class="small-note muted">{{ m.event }}{% if m.state == "set" %} · next up{% endif %}</span>
+      {% else %}<span class="muted small-note">Open</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="card">
+  <h2>Tournaments</h2>
+  {% for e in view.events %}
+  <p><a href="{{ url_for('board', event=e.id) }}"><b>{{ e.name }}</b></a> <span class="muted">· {{ e.kind }} · {{ {"setup": "Registration", "running": "Live", "finished": "Finished"}[e.status] }}</span></p>
+  {% endfor %}
+</section>
+{% endblock %}

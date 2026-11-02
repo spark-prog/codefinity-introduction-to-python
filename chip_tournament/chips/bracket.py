@@ -384,7 +384,14 @@ class BracketTournament:
 
     def free_tables(self) -> list[str]:
         busy, down = self.busy_tables(), set(self.settings.tables_down) | set(self.settings.tables_closing)
+        busy |= getattr(self, "elsewhere_tables", set())  # shared tables: in use by another event (chips/pool.py)
         return [t for t in self.settings.tables if t not in busy and t not in down]
+
+    def busy_elsewhere(self, m: BMatch) -> bool:
+        """Shared tables: someone in this match is at a table in another event right now."""
+        members = getattr(self, "elsewhere_members", set())
+        return bool(members) and any(p.member in members for eid in (m.a, m.b) if eid in self.entries
+                                     for p in self.entries[eid].players if p.member)
 
     def in_play(self) -> list[BMatch]:
         return sorted((m for m in self.matches if m.status == CALLED),
@@ -1240,7 +1247,7 @@ class BracketTournament:
         for m in self.ready_queue():
             if not free:
                 break
-            if m.a in busy or m.b in busy:
+            if m.a in busy or m.b in busy or self.busy_elsewhere(m):
                 continue
             m.table = free.pop(0)
             busy |= {m.a, m.b}
@@ -1265,7 +1272,8 @@ class BracketTournament:
         return m
 
     def _playing_elsewhere(self, m: BMatch) -> bool:
-        return any(o is not m and o.status == CALLED and {o.a, o.b} & {m.a, m.b} for o in self.matches)
+        return self.busy_elsewhere(m) or any(o is not m and o.status == CALLED and {o.a, o.b} & {m.a, m.b}
+                                             for o in self.matches)
 
     def call_all(self) -> int:
         """Director: call every ready match that has a table. Returns how many were called."""

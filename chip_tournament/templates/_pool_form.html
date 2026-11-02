@@ -1,0 +1,14 @@
+{# Create or edit shared tables. Needs rows (hub summaries) and pool (or none). #}
+<form method="post" action="{{ url_for('admin_pool_save') }}" class="form settings">
+  {% if pool %}<input type="hidden" name="pool_id" value="{{ pool.id }}">{% endif %}
+  <label>Name <input name="name" value="{{ pool.name if pool else '' }}" placeholder="Mini-Mania" required></label>
+  <label class="wide">The venue's tables (comma separated) <input name="tables" value="{{ pool.tables|join(', ') if pool else '' }}" placeholder="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12" required></label>
+  <fieldset class="wide"><legend>Events sharing them</legend>
+    {% for r in rows if r.t.status != "finished" %}
+    <label class="checkbox"><input type="checkbox" name="events" value="{{ r.event.id }}" {% if pool and r.event.id in pool.events %}checked{% endif %}>
+      {{ r.t.settings.name }} <span class="muted">· {{ r.format }}{% if r.t.settings.date %} · {{ r.t.settings.date|day }}{% endif %}</span></label>
+    {% endfor %}
+  </fieldset>
+  <p class="muted small-note wide">Saving sets each event's table list to these tables.</p>
+  <button class="button small">Save</button>
+</form>

@@ -31,6 +31,7 @@
       {% elif s.payouts %}<li><span class="k">Payouts</span><span class="v">{% for place, cents in t.payout_table() %}<span class="pill">{{ place }} {{ cents|money }}</span>{% endfor %}
         {% if t.status == SETUP %}<br><span class="muted">Based on the entries so far.</span>{% endif %}</span></li>{% endif %}
       {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} at the tournament desk.</span></li>{% endif %}
+          {% include "_who_can_play.html" %}
     </ul>
     {% if s.details %}<p class="details">{{ s.details }}</p>{% endif %}
   </div>

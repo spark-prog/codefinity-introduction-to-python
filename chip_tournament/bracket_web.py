@@ -13,7 +13,7 @@ from datetime import datetime
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from chips import schedule, themes
+from chips import eligibility, schedule, themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
 )
@@ -144,6 +144,8 @@ def register(app, h) -> dict:
             s.registration_closed = f.get("registration_closed") == "1"
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
+            if f.get("elig_shown"):
+                s.eligibility = eligibility.parse_form(f, s.eligibility)
             if f.get("skill_game") in ("8", "9"):
                 s.skill_game = f["skill_game"]
             if "registration_opens" in f:

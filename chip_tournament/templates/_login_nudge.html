@@ -1,5 +1,5 @@
 {# Registration: logged-in players get their details filled in; others are offered the login. #}
-{% if player %}
+{% if player %}{% include "_my_eligibility.html" %}
 <p class="login-nudge">Filled in for <b>{{ player.first }} {{ player.last }}</b> from the league's player list.
   {% if (t.settings.team_size if t.settings.team_size is defined else TEAM_SIZE) > 1 %}Start typing your partner's name to find them.{% endif %}</p>
 {% else %}

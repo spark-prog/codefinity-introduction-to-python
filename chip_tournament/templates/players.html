@@ -56,6 +56,16 @@
   {% endif %}
 </section>
 
+<section class="card">
+  <h2>Current session</h2>
+  <p class="muted">"Played a match this session" counts league matches on or after this date.</p>
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_players_session') }}" class="reset-row">
+    <input type="date" name="session_start" value="{{ st.config.session_start }}" required>
+    <button class="button small">Save</button></form>
+  {% else %}<p>Started {{ st.config.session_start|day }}</p>{% endif %}
+</section>
+
 {% if st.problems %}
 <section class="card">
   <h2>Rows that need a look ({{ st.problems|length }})</h2>

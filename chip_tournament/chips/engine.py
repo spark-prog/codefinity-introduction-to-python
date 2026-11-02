@@ -250,6 +250,7 @@ class Settings:
     member_exceptions: list[dict] = field(default_factory=list)
     # Players registering online must give an APA member number. On for every event, old ones included.
     require_member: bool = field(default_factory=lambda: REQUIRE_MEMBER_DEFAULT)
+    eligibility: dict = field(default_factory=dict)  # who may play (see chips/eligibility.py); {} = anyone
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     tables_down: list[str] = field(default_factory=list)  # out of service: nothing is assigned to them

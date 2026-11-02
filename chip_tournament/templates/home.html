@@ -25,6 +25,7 @@
       {% if s.last_call_time %}<li><span class="k">Last call</span><span class="v">{{ s.last_call_time }}</span></li>{% endif %}
       <li><span class="k">Starting chips</span><span class="v">{% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
         <br><span class="muted">By combined skill level. Combined skill can't be over {{ s.registration_cap }} at registration. It can go up to {{ t.max_skill }} by tournament time; {{ t.max_skill + 1 }} or more needs a new partner.</span></span></li>
+          {% include "_who_can_play.html" %}
     </ul>
   </div>
 </header>

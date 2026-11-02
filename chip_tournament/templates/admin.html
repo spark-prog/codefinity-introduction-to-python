@@ -317,7 +317,7 @@
 
 <section id="teams" class="jump-target">
   <div class="section-head"><h2>Teams & chips</h2><span class="muted">{{ t.teams|length }} team(s)</span>
-    {% if not is_viewer and t.teams %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download teams (CSV)</a>{% endif %}{% if t.teams %}<a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill level check</a>{% endif %}</div>
+    {% if not is_viewer and t.teams %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download teams (CSV)</a>{% endif %}{% if t.teams %}<a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a>{% endif %}</div>
   {% if t.teams %}
   <div class="team-search">
     <input type="search" id="team-search" placeholder="Search a team, player{% if not is_viewer %} or last 4 of a cell{% endif %}" aria-label="Search teams" autocomplete="off">
@@ -518,6 +518,7 @@
       Close online registration (the Register button disappears; you can still add teams here)</label>
     <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
       Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
+    {% include "_eligibility_settings.html" %}
     <label>Skill levels from the player list
       <select name="skill_game">
         <option value="8" {% if s.skill_game != "9" %}selected{% endif %}>8-Ball skill levels</option>

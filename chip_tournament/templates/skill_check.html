@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Skill level check — {{ t.settings.name }}{% endblock %}
+{% block title %}Skill &amp; eligibility check — {{ t.settings.name }}{% endblock %}
 {% block content %}
 {% set s = t.settings %}
 <header class="page-head">
   <p class="eyebrow">{{ s.name }} · Director</p>
-  <h1>Skill level check</h1>
+  <h1>Skill &amp; eligibility check</h1>
+  {% set rules_text = elig_describe(elig_rules(s), session_start()) %}
+  {% if rules_text %}<p class="muted">Who can play: {{ rules_text|join(" · ") }}.</p>{% endif %}
   <p class="lede">What each player entered, compared with the league's player list{% if not two %} ({{ "9-Ball" if s.skill_game == "9" else "8-Ball" }} skill levels){% endif %}.</p>
   <p><a href="{{ url_for('admin') }}">← Back to the director page</a></p>
 </header>
@@ -28,7 +30,8 @@
 
 <section class="card">
   <div class="table-wrap"><table class="grid">
-    <thead><tr><th>{{ "Team" if event.kind == CHIP else "Entry" }}</th><th>Player</th><th>Entered</th><th>Player list</th><th>Check</th></tr></thead>
+    {% set checking = elig_describe(elig_rules(s)) %}
+    <thead><tr><th>{{ "Team" if event.kind == CHIP else "Entry" }}</th><th>Player</th><th>Entered</th><th>Player list</th><th>Check</th>{% if checking %}<th>Eligibility</th>{% endif %}</tr></thead>
     {% for grp in groups %}{% for r in grp.players %}
     <tr class="{{ 'check-ok' if r.status == 'ok' }}">
       {% if loop.first %}<td rowspan="{{ grp.players|length }}"><b>{{ grp.name }}</b>
@@ -39,6 +42,10 @@
       <td class="nowrap">{% if two %}8-Ball {{ r.entered.skill8 or "—" }} · 9-Ball {{ r.entered.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.entered.skill) if r.entered.skill else "—" }}{% endif %}</td>
       <td class="nowrap">{% if r.list %}{% if two %}8-Ball {{ r.list.skill8 or "—" }} · 9-Ball {{ r.list.skill9 or "—" }}{% else %}{{ "SL %s"|format(r.list.skill) if r.list.skill else "—" }}{% if r.how and r.how != "rated" %}<div class="muted small-note">{{ r.how }}</div>{% endif %}{% endif %}{% else %}—{% endif %}</td>
       <td><span class="check-badge {{ r.status }}">{{ labels[r.status] }}</span></td>
+      {% if checking %}<td class="small-note">{% if r.elig and r.elig.no %}<span class="check-badge not_found">Not eligible</span><br>{{ r.elig.no|join(" ") }}
+        {% elif r.elig and r.elig.review %}<span class="check-badge differs">Check</span><br>{{ r.elig.review|join("; ") }}
+        {% elif r.elig %}<span class="check-badge ok">Eligible</span>{% else %}—{% endif %}
+        {% if loop.last and grp.team_no %}<br><span class="check-badge not_found">Team</span> {{ grp.team_no|join(" ") }}{% endif %}</td>{% endif %}
     </tr>
     {% endfor %}{% else %}
     <tr><td colspan="5" class="muted">Nobody has registered yet.</td></tr>

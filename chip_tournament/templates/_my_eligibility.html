@@ -1,0 +1,10 @@
+{# Register page, logged in: does this player qualify? Needs t. #}
+{% set me_ok = my_eligibility(t) %}
+{% if me_ok %}
+{% if me_ok.ok %}
+<p class="eligible-yes">✓ You're eligible for {{ t.settings.name }}{% if me_ok.review %} (the league office will confirm: {{ me_ok.review|join("; ") }}){% endif %}.</p>
+{% else %}
+<div class="eligible-no"><b>You can't register for this event yet:</b>
+  <ul>{% for x in me_ok.no %}<li>{{ x }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% endif %}

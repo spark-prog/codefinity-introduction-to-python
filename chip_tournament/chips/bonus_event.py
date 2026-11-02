@@ -155,6 +155,11 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
     if cap:
         s["field_cap"] = cap
 
+    from .eligibility import any_rules, from_bonus_event
+    who_can_play, elig_notes = from_bonus_event(doc)
+    if any_rules(who_can_play):
+        s["eligibility"] = who_can_play
+    warnings += elig_notes
     basis = (elig.get("skill_level_basis") or "").lower()
     if "9-ball" in basis or "9 ball" in basis:
         s["skill_game"] = "9"
@@ -244,6 +249,9 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
             if x) or "No dates"),
         ("Rules", match["title"] if match else "Not matched"),
     ]
+    if s.get("eligibility"):
+        from .eligibility import describe
+        summary.append(("Who can play", "; ".join(describe(s["eligibility"]))))
     if kind == CHIP and "registration_cap" in s:
         summary.append(("Skill cap", f"Combined {s['registration_cap']}"))
     if kind == BRACKET and "team_size" in s:

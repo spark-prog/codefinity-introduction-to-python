@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from chips import backup, players
+from chips import backup, eligibility, players
 from chips import pending as pending_mod
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, LoginError, mask_email
@@ -229,7 +229,48 @@ def register_registration(app) -> None:
                 if not p.member and key(p.name) not in grandfathered:
                     raise TournamentError(f"Enter {p.name or 'each player'}'s APA member number (8 digits starting "
                                           "with 322). It's on their APA card and in the APA app.")
+        if t is not None and not session.get("admin"):
+            check_eligibility(t, plist, existing)
         return plist
+
+    def check_eligibility(t, plist: list[Player], existing=()) -> None:
+        """Refuse a player who doesn't qualify (saying why and how to fix it); send what the list
+        can't answer to Pending verification. Players already on the roster aren't re-checked here."""
+        rules = eligibility.rules_of(t.settings)
+        if not eligibility.any_rules(rules):
+            return
+        start, game = store.config()["session_start"], getattr(t.settings, "skill_game", "8")
+        already = {o.member for o in existing if o.member}
+        recs = []
+        for p in plist:
+            rec = store.get(p.member) if p.member else None
+            if p.member and p.member in already:
+                recs.append(rec)
+                continue
+            if p.pending:  # the number itself is waiting for the director
+                recs.append(None)
+                continue
+            no, review = eligibility.check_player(rec, rules, start, game)
+            if no:
+                raise TournamentError(f"{p.name} can't register for {t.settings.name}: " + " ".join(no))
+            if review:
+                p.pending = "Eligibility: " + "; ".join(review)
+            recs.append(rec)
+        team = eligibility.check_team(recs, rules)
+        if team:
+            raise TournamentError(team[0])
+
+    def my_eligibility(t):
+        """For a logged-in player looking at an event: are they eligible, and why not?"""
+        me = g.get("player")
+        rules = eligibility.rules_of(t.settings)
+        if not me or not eligibility.any_rules(rules):
+            return None
+        no, review = eligibility.check_player(me, rules, store.config()["session_start"],
+                                              getattr(t.settings, "skill_game", "8"))
+        return {"ok": not no, "no": no, "review": review}
+
+    app.jinja_env.globals["my_eligibility"] = my_eligibility
 
     def my_prefill(t) -> dict:
         """Partner 1 / the player: the logged-in player's own details, phone included (it's theirs)."""

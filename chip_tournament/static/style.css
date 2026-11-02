@@ -943,3 +943,10 @@ tr.check-ok td { opacity: .75; }
 .live-dot { color: #5fd38d; }
 .past-events { display: grid; gap: 12px; }
 @media (max-width: 480px) { .your-event { grid-template-columns: 1fr; } .your-event-when { display: flex; gap: 10px; justify-content: center; } }
+
+/* Eligibility on the register page */
+.eligible-yes { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--radius-sm); color: #5fd38d;
+  border: 1px solid rgba(95, 211, 141, .45); background: rgba(95, 211, 141, .08); font-weight: 600; }
+.eligible-no { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 107, 118, .5); background: rgba(255, 107, 118, .08); }
+.eligible-no ul { margin: 6px 0 0; padding-left: 18px; }

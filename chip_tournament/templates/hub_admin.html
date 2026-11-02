@@ -13,6 +13,14 @@
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>.</p>{% endif %}
+{% if unreadable %}
+<section class="card notice-error">
+  <h2>{{ unreadable|length }} tournament{{ "s" if unreadable|length != 1 }} can't be opened</h2>
+  <p class="muted">Its saved file couldn't be read, so it's hidden from the lists until it's fixed. Everything else works.
+    Restoring last night's backup (Backups) usually fixes it; send the details below to whoever maintains Control Table.</p>
+  <ul class="small-note">{% for id, why in unreadable.items() %}<li><b>/t/{{ id }}</b>: {{ why }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
 
 <section class="card">
   <div class="section-head"><h2>Tournaments</h2></div>

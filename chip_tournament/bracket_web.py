@@ -17,7 +17,7 @@ from chips import eligibility, schedule, themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MODIFIED, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT, place_text,
 )
-from chips.engine import CONTINUOUS, DIRECTOR_CALLS, Player, TournamentError, money
+from chips.engine import CONTINUOUS, DIRECTOR_CALLS, Player, TournamentError, check_form_entry, money
 from chips.races import parse_skill_groups, skill_groups_text
 
 
@@ -54,6 +54,7 @@ def register(app, h) -> dict:
     parse_money = h["parse_money"]
 
     def players_from_form(f, size: int) -> list[Player]:
+        check_form_entry(f, size)
         players = []
         for i in range(size):
             levels = {}

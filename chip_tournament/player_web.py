@@ -7,7 +7,7 @@ a player on the same phone doesn't stay a director for 90 days.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -394,8 +394,7 @@ def register_registration(app) -> None:
         rec, start = store.get(member), store.config()["session_start"]
         mine = bool(g.get("player")) and g.player["member"] == member
         out = []
-        for ev in app.config["hub"].events():
-            t = ev.load()
+        for ev, t in app.config["hub"].loaded():
             s = t.settings
             if t.status == "finished" or (s.test_event and not session.get("admin")):
                 continue  # test events only show to a phone that's also signed in as director (practice runs)
@@ -571,9 +570,8 @@ def register_registration(app) -> None:
 
     def record_finished() -> None:
         """Copy every finished event's results into players' histories (once each)."""
-        for ev in app.config["hub"].events():
+        for ev, t in app.config["hub"].loaded():
             if not history.recorded(ev.id):
-                t = ev.load()
                 if t.status == "finished" and not t.settings.test_event:
                     history.record(ev.id, ev.kind, t)
 
@@ -1025,8 +1023,7 @@ def register_registration(app) -> None:
     def your_events(me) -> list[dict]:
         """Every tournament the player is registered in: live and upcoming first (soonest first), then past."""
         out = []
-        for ev in app.config["hub"].events():
-            t = ev.load()
+        for ev, t in app.config["hub"].loaded():
             grp, mine = find_me(t, me)
             if grp is None:
                 continue

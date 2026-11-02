@@ -10,7 +10,6 @@ from chips.engine import (
     ELIMINATED,
     FINISHED,
     RUNNING,
-    WAITING,
     Player,
     TournamentError,
 )
@@ -760,7 +759,6 @@ def test_table_call_text_carries_the_league_prefix():
 
 # ---------------------------------------------------- registering without a partner
 
-from datetime import datetime  # noqa: E402
 
 from chips.engine import REGISTERED, WAITLISTED  # noqa: E402
 

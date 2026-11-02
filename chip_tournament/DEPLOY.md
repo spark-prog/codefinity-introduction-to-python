@@ -27,6 +27,14 @@ Cost: the Hobby plan is about $5/month, and that includes usage credit that shou
    | `VIEWER_PASSWORD` | Optional. A second, **view-only** director login (at least 8 characters, different from the director password), e.g. for the league office to look around. It sees the director page and guide but can't change anything, and phone numbers, PINs and text messages are hidden. |
    | `TZ` | Your venue's time zone, e.g. `America/Chicago`, `America/New_York`, `America/Denver`, `America/Los_Angeles`. Without it, every time shows in UTC. |
    | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Optional, for real texts (see below). |
+   | `SECRET_KEY` | Recommended. A long random string that signs logins. Without it the app makes one and keeps it in the data volume, which works as long as the volume does; set it so a lost or replaced volume doesn't log everyone out. Never share it. |
+   | `SITE_URL` | Recommended. The public address used in links inside texts and emails, e.g. `https://controltable.app`. Without it, links use whatever address the request came in on. |
+   | `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | The Gmail (Google Workspace) account that sends email: player login codes, partner confirmations, waiting-list offers and emailed backups. The password is a Google **app password**, not the account password. |
+   | `GOOGLE_SERVICE_ACCOUNT_JSON` | The whole service-account key file (JSON), pasted in. Used to read the player list from the restricted Google Sheet and to save backups to Google Drive. Share the sheet and the backup folder with the service account's email address. |
+   | `BACKUP_DRIVE_FOLDER_ID` | Optional. The Google Drive folder for nightly backups (the ID or the folder's link). It must be in a **Shared drive** the service account belongs to; if Drive fails or this isn't set, backups are emailed instead. |
+   | `BACKUP_EMAIL` | Optional. Where emailed backups go. Defaults to `GMAIL_ADDRESS`. |
+   | `TRUSTED_IP_HEADER` | Optional. When the site sits behind a CDN such as Cloudflare, the header that carries the real visitor's address (`CF-Connecting-IP` for Cloudflare), so login limits count each visitor separately. Check what your host sends at `/admin/whoami` (director only) before setting it, and only set it if every request really comes through that CDN. |
+   | `FLASK_DEBUG` | Local testing only (`python app.py`). Never set it on the live server. |
 
    Railway sets `PORT` itself. `CHIPS_DATA_DIR=/data` is already in the Dockerfile.
 6. **Give it a web address.** Under *Settings → Networking*, generate a domain (e.g. `your-league.up.railway.app`) or connect your own.

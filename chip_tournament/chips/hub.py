@@ -134,11 +134,25 @@ class Hub:
                 return ev
         return None
 
+    def loaded(self):
+        """(event, tournament) for every event that can be read. One unreadable file is skipped (and listed in
+        self.unreadable for the director and /healthz) instead of taking down every page that lists events."""
+        bad = {}
+        for ev in self.events():
+            try:
+                t = ev.load()
+            except Exception as exc:  # a damaged or unexpected file
+                bad[ev.id] = f"{type(exc).__name__}: {exc}"[:200]
+                continue
+            yield ev, t
+        self.unreadable = bad
+
+    unreadable: dict[str, str] = {}
+
     def summaries(self) -> list[dict]:
         """Every tournament with what the hub pages show, soonest first, finished last."""
         out = []
-        for ev in self.events():
-            t = ev.load()
+        for ev, t in self.loaded():
             people = getattr(t, "teams", None) if ev.kind == CHIP else getattr(t, "entries", None)
             field = t.field_teams if ev.kind == CHIP else t.field_entries
             fmt = "Chip tournament" if ev.kind == CHIP else t.format_name

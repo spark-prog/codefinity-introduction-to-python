@@ -2,7 +2,6 @@
 
 import csv
 import io
-import random
 
 from app import create_app
 from chips.engine import Player

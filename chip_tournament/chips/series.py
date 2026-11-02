@@ -49,10 +49,10 @@ def key(series: str) -> str:
 def next_edition(hub, series: str, from_event: str, from_date: str) -> str | None:
     """The next event in the series after an edition (by date), or None if it isn't created yet."""
     later = []
-    for ev in hub.events():
+    for ev, t in hub.loaded():
         if ev.id == from_event:
             continue
-        s = ev.load().settings
+        s = t.settings
         if key(getattr(s, "series", "")) == key(series) and s.date and s.date > (from_date or ""):
             later.append((s.date, ev.id))
     return min(later)[1] if later else None

@@ -89,7 +89,9 @@ class Store:
             if not history:
                 return None
             entry = history.pop()
-            self.path.write_text(entry["state"])
+            tmp = self.path.with_suffix(".tmp")  # write-then-swap, like every other save, so a crash can't half-write it
+            tmp.write_text(entry["state"])
+            tmp.replace(self.path)
             self._write(self.history_path, history)
             return entry["label"]
 

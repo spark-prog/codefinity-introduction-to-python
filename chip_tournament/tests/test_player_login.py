@@ -93,7 +93,7 @@ def test_codes_expire_and_run_out_of_tries(tmp_path):
 
 
 def test_log_out_on_all_devices(app):
-    phone, laptop, mail = app.test_client(), app.test_client(), app.config["mail"]
+    phone, laptop = app.test_client(), app.test_client()
     for client in (phone, laptop):
         with client.session_transaction() as s:
             s["login_member"] = "32200001"
@@ -120,7 +120,6 @@ def test_both_login_pages_show_their_own_form(app):
 
 
 def test_optional_password(app):
-    import time
     c, mail = app.test_client(), app.config["mail"]
     accounts = app.config["accounts"]
     page = c.post("/login", data={"who": "32200001", "action": "password", "password": "whatever1"},

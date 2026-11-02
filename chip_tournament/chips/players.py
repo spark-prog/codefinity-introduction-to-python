@@ -1,7 +1,7 @@
 """The player store: every APA player from the office's player Sheet, kept apart from the tournaments.
 
 The office keeps a Google Sheet (tab "Current Player Records") clean by hand. Control Table
-reads it every 15 minutes, or when the director presses Sync now, as the service account
+reads it once a day (about 4 AM), or when the director presses Sync now, as the service account
 (the same Google login as backups). Each sync is checked before it's used:
 
 - the required columns must be there; rows with a bad member number (always 8 digits
@@ -33,7 +33,8 @@ from .backup import BackupError, Drive
 TAB = "Current Player Records"
 MEMBER_RE = re.compile(r"322\d{5}")
 HOLD_SHARE = 0.05  # hold a sync that removes more than this share of the players
-SYNC_MINUTES = 15
+SYNC_HOUR = 4  # the daily sync runs after this hour (after the 3 AM backup)
+RETRY_MINUTES = 60  # a failed daily sync tries again this often
 STALE_DAYS = 8
 LOG_KEEP = 60
 
@@ -329,7 +330,7 @@ class PlayerStore:
             log = self.log()
             if not quiet or not log or log[0].get("problems") != entry["problems"]:
                 self._write("sync_log.json", ([entry] + log)[:LOG_KEEP])
-            elif quiet:  # keep the data date fresh without filling the log every 15 minutes
+            elif quiet:  # keep the data date fresh without filling the log on every check
                 log[0]["checked_at"] = now
                 self._write("sync_log.json", log)
             return entry
@@ -374,12 +375,19 @@ class PlayerStore:
     def due(self, at: datetime | None = None) -> bool:
         if not self.config()["sheet"] or self.held():
             return False
+        at = at or datetime.now()
+        if at.hour < SYNC_HOUR:
+            return False
+        log = self.log()
+        done = max([self.data().get("synced_at", "")] + [x.get("checked_at") or x["at"] for x in log[:1]])
+        if done and datetime.fromisoformat(done).date() >= at.date():
+            return False  # already read today (by the daily sync or Sync now)
         last = self._read("last_try.json", "")
-        return not last or (at or datetime.now()) - datetime.fromisoformat(last) >= timedelta(minutes=SYNC_MINUTES)
+        return not last or at - datetime.fromisoformat(last) >= timedelta(minutes=RETRY_MINUTES)
 
 
-def sync_loop(store: PlayerStore, log=None, sleep: float = 60) -> None:
-    """Background: read the sheet every 15 minutes when it's linked."""
+def sync_loop(store: PlayerStore, log=None, sleep: float = 300) -> None:
+    """Background: read the sheet once a day when it's linked (checks every few minutes whether it's due)."""
     import time
 
     while True:

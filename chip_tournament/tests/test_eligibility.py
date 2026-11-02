@@ -156,3 +156,62 @@ def test_highest_of_8_and_9():
     assert event_skill(rec(sl8="0", sl9="0"), "high") == (None, "needs review")
     no, _ = el.check_player(r, rules(skill_max=6), START, "high7")
     assert no == ["This event is for skill level 1–6; your highest skill level is 7."]
+
+
+# ------------------------------------------------- Singles Boards: Eligible / Not Eligible / Qualified in a sheet column
+
+def boards(**kw):
+    return rules(list_label="Singles Boards", list_column="Masters", **kw)
+
+
+def test_singles_boards_eligible_qualified_and_not_eligible():
+    assert el.check_player(rec(masters="Eligible"), boards(), START, "8") == ([], [])
+    assert el.check_player(rec(masters="ELIGIBLE "), boards(), START, "8") == ([], [])  # any capitals and spaces
+    assert el.check_player(rec(masters="Qualified"), boards(), START, "8")[0] == [
+        "Already qualified for Singles Boards: you've earned your spot, so you can't enter this qualifier again. "
+        "Ask the league office if that's not right."]
+    # Not Eligible: says the format and their count from the player list
+    assert el.check_player(rec(masters="Not Eligible", mp8="7"), boards(), START, "8")[0] == [
+        "Not eligible yet: Singles Boards needs 10 lifetime 8-Ball matches. You have 7: 3 more to go."]
+    assert el.check_player(rec(masters="Not Eligible", mp8="40", mp9="4"), boards(), START, "9")[0] == [
+        "Not eligible yet: Singles Boards needs 10 lifetime 9-Ball matches. You have 4: 6 more to go."]
+    # The list is behind: they have the matches now
+    assert el.check_player(rec(masters="Not Eligible", mp8="12"), boards(), START, "8")[0] == [
+        "The Singles Boards list marks you Not Eligible (10 lifetime 8-Ball matches needed), but the player list "
+        "shows 12. Ask the league office to update it."]
+    # Blank: not on the list, as before
+    assert el.check_player(rec(masters=""), boards(), START, "8")[0] == [
+        "Not on the Singles Boards list for this event. Ask the league office if you think you should be."]
+    # With the event's own match rule too, the reason is said once
+    no, _ = el.check_player(rec(masters="Not Eligible", mp8="7"), boards(min_matches=10, matches_game="8"), START, "8")
+    assert no == ["Needs 10 lifetime 8-Ball matches. You have 7: 3 more to go."]
+    # Qualified players can't push into the next edition either
+    assert el.list_value(rec(masters="Qualified"), boards()) == "qualified"
+    assert el.list_value(rec(masters="Eligible"), boards()) == "yes"
+
+
+def test_a_plain_no_still_means_not_on_the_list():
+    assert el.check_player(rec(masters="No"), boards(), START, "8")[0] == [
+        "Not on the Singles Boards list for this event. Ask the league office if you think you should be."]
+
+
+def test_players_see_why_on_am_i_eligible(tmp_path, monkeypatch):
+    from app import create_app
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    app = create_app(str(tmp_path))
+    app.testing = True
+    app.config["players"].apply(*players.parse_rows([
+        COLS, person("32200001", masters="Qualified"), person("32200002", first="Bo", masters="Not Eligible", mp8="6"),
+        person("32200003", first="Cy", masters="Eligible")]), "t", "t")
+    ev = app.config["hub"].create("8-Ball Singles Boards", "bracket", format="double")
+    t = ev.load()
+    t.settings.eligibility, t.settings.skill_game = boards(), "8"
+    ev.store.save(t)
+    from tests.test_register_members import Clients
+    anon = app.test_client().post("/eligibility", data={"member": "32200001"}).get_data(as_text=True)
+    assert "reasons are private" in anon and "Already qualified" not in anon  # someone else looking: no reasons
+    pages = {m: Clients(app).logged_in(m).get("/eligibility").get_data(as_text=True).replace("&#39;", "'")
+             for m in ("32200001", "32200002", "32200003")}
+    assert "Already qualified for Singles Boards" in pages["32200001"]
+    assert "needs 10 lifetime 8-Ball matches. You have 6: 4 more to go" in pages["32200002"]
+    assert "Already qualified" not in pages["32200003"] and "Not eligible yet" not in pages["32200003"]

@@ -26,9 +26,10 @@
 <label>Series (a recurring invite-only event: MVP, Movin-On-Up) <input name="elig_series" value="{{ s.series }}" placeholder="Blank = a one-off event">
   <span class="muted small-note">Players eligible through the list can push their eligibility once to the next event with the same series name.</span></label>
 <label>Eligible list name (Masters, Ladies, Team Captains, Invited…) <input name="elig_list_label" value="{{ r.list_label }}" placeholder="Blank = no list"></label>
-<label>…players marked Yes (or Push, for a one-time grace) in this sheet column <select name="elig_list_column">
+<label>…players marked Yes or Eligible (or Push, for a one-time grace) in this sheet column <select name="elig_list_column">
   <option value="">No column</option>
   {% for c in player_columns() %}<option {% if r.list_column == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
   {% if r.list_column and r.list_column not in player_columns() %}<option selected>{{ r.list_column }}</option>{% endif %}</select></label>
+<p class="muted small-note wide">In that column, <b>Qualified</b> (already earned their spot) and <b>Not Eligible</b> (not 10 lifetime matches in the format yet) can't enter, and each player is told why.</p>
 <label class="wide">…and/or these member numbers <textarea name="elig_list_members" rows="2" placeholder="32212345, 32267890">{{ r.list_members|join(", ") }}</textarea></label>
 <label class="wide">Other requirements the league office checks by hand (one per line) <textarea name="elig_review" rows="2">{{ r.review|join("\n") }}</textarea></label>

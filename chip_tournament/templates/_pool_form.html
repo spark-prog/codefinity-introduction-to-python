@@ -3,6 +3,8 @@
   {% if pool %}<input type="hidden" name="pool_id" value="{{ pool.id }}">{% endif %}
   <label>Name <input name="name" value="{{ pool.name if pool else '' }}" placeholder="Mini-Mania" required></label>
   <label class="wide">The venue's tables (comma separated) <input name="tables" value="{{ pool.tables|join(', ') if pool else '' }}" placeholder="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12" required></label>
+  <label>Hours per tournament <input name="hours" type="number" min="0" step="0.5" value="{{ (pool.hours if pool and pool.hours is defined else 4)|float|round(1)|string|replace('.0', '') }}"></label>
+  <p class="muted small-note wide">A player can't enter two shared-tables events that start closer together than this (checked across all shared tables, so the 8-foot and 9-foot groups count together). 0 turns it off.</p>
   <fieldset class="wide"><legend>Events sharing them</legend>
     {% for r in rows if r.t.status != "finished" %}
     <label class="checkbox"><input type="checkbox" name="events" value="{{ r.event.id }}" {% if pool and r.event.id in pool.events %}checked{% endif %}>

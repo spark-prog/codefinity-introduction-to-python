@@ -750,9 +750,10 @@ def test_save_contact_note_and_card(tmp_path, monkeypatch, client):
 def test_event_menu_order(client):
     page = client.get("/").get_data(as_text=True)  # an event's home page, still in setup
     nav = page[page.index('<nav class="nav'):page.index("</nav>")]
-    labels = re.findall(r">([^<>]+)</a>", nav)
-    assert labels == ["All Events", "Chip Tournament", "Board", "Rules", "Register", "TD Login"]
-    assert '<a href="/">All Events</a>' in nav
+    labels = [re.sub(r"<[^>]+>", "", a) for a in re.findall(r"<a [^>]*>(.*?)</a>", nav)]
+    assert labels == ["All Events", "Chip Tournament", "Board", "Rules", "Register", "Log in", "TD LoginTD"]
+    assert '<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>' in nav  # short on phones
+    assert '<a href="/"><span class="hide-xs">All </span>Events</a>' in nav
     assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title hide-sm active"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/admin"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/board"' in nav

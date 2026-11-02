@@ -27,6 +27,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
+import player_web
 from chips import backup, bonus_event, export, importer, players, rules as rulebook, schedule, themes
 from chips.bracket import FINAL_CUTS, FORMATS
 from chips.hub import BRACKET, CHIP, Hub
@@ -1413,6 +1414,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
         "scorer_device": scorer_device,
     })
+    player_web.register(app, {"device_id": device_id})
 
     @app.before_request
     def dispatch_by_kind():

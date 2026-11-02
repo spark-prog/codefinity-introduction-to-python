@@ -883,3 +883,6 @@ main:has(.match-grid.compact) { max-width: 1680px; }
 /* Players page */
 .held-sync { border-color: #ffb020; }
 .held-sync h2 { color: #ffb020; }
+
+/* Narrow phones: "All Events" becomes "Events" so the event menu stays on one row */
+@media (max-width: 400px) { .hide-xs { display: none; } .nav a, .nav .link { letter-spacing: .03em; } }

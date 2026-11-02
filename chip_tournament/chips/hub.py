@@ -15,7 +15,8 @@ import json
 import re
 import shutil
 import threading
-from dataclasses import dataclass
+import copy
+from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path
 
@@ -110,6 +111,53 @@ class Hub:
             ev.store.save(t)
             self._save_index(rows)
             return ev
+
+    # Settings that belong to one event's history, not its setup: a copy starts without them.
+    NOT_COPIED = ("name", "date", "bonus_event_id", "registration_closed", "elig_audit", "elig_locked_at",
+                  "elig_overrides", "elig_snapshot", "review_requests", "member_exceptions", "partner_seekers",
+                  "tables_down", "tables_closing")
+
+    def copy(self, event_id: str, name: str, date: str = "") -> tuple[Event, list[str]]:
+        """A new event with the same type and settings as `event_id`: no players, results or history. The
+        registration open/close times move by as many days as the date does. Returns (event, notes)."""
+        source = self.get(event_id)
+        if source is None:
+            raise TournamentError("That tournament isn't there any more.")
+        date = (date or "").strip()
+        new_day = None
+        if date:
+            try:
+                new_day = datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                raise TournamentError("Pick the new date from the calendar.")
+        old = source.load().settings
+        ev = self.create(name, source.kind)
+        notes = []
+        with ev.store.lock:
+            t = ev.store.load()
+            for f in fields(type(t.settings)):
+                if f.name not in self.NOT_COPIED:
+                    setattr(t.settings, f.name, copy.deepcopy(getattr(old, f.name)))
+            t.settings.date = date
+            try:
+                shift = new_day - datetime.strptime(old.date, "%Y-%m-%d") if new_day else None
+            except ValueError:
+                shift = None
+            for key in ("registration_opens", "registration_closes"):
+                value = getattr(t.settings, key)
+                if not value:
+                    continue
+                try:
+                    moved = datetime.strptime(value, "%Y-%m-%dT%H:%M") + shift if shift is not None else None
+                except ValueError:
+                    moved = None
+                if moved is None:
+                    setattr(t.settings, key, "")
+                    notes.append("Registration open/close times were cleared: set them in Settings.")
+                else:
+                    setattr(t.settings, key, moved.strftime("%Y-%m-%dT%H:%M"))
+            ev.store.save(t)
+        return ev, sorted(set(notes))
 
     def delete(self, event_id: str) -> bool:
         with self.lock:

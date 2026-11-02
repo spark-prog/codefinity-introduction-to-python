@@ -393,8 +393,8 @@ def register_registration(app) -> None:
         for ev in app.config["hub"].events():
             t = ev.load()
             s = t.settings
-            if t.status == "finished" or s.test_event:
-                continue
+            if t.status == "finished" or (s.test_event and not session.get("admin")):
+                continue  # test events only show to a phone that's also signed in as director (practice runs)
             rules = eligibility.rules_of(s)
             row = {"name": s.name, "date": s.date, "time": s.start_time, "home": url_for("home", event=ev.id),
                    "register": url_for("register", event=ev.id), "open": t.status == "setup" and not s.registration_shut,

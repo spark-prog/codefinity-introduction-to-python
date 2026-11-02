@@ -123,8 +123,9 @@ def test_sync_from_the_sheet_and_failures(tmp_path):
     with pytest.raises(players.PlayerError, match="no tab"):
         store.sync_sheet("automatic", FakeReader(error="The sheet has no tab named 'Current Player Records'."))
     assert "no tab" in store.status()["error"]["error"]
-    assert not store.due()  # waits 15 minutes before trying again
-    assert store.due(datetime.now() + timedelta(minutes=16))
+    store._write("last_try.json", "2026-11-03T09:00:00")  # that failed try was at 9 AM
+    assert not store.due(datetime(2026, 11, 3, 9, 30))  # waits an hour before trying again
+    assert store.due(datetime(2026, 11, 3, 10, 1))
     store.sync_sheet("director", FakeReader(sheet(3)))
     st = store.status()
     assert st["count"] == 3 and st["error"] is None and st["sheet_modified"].startswith("2026-11-02")
@@ -189,3 +190,14 @@ def test_players_page(app):
     assert "Synced 4 players: 4 added" in page and "1 row(s) need a look" in page and "isn&#39;t 8 digits" in page
     page = viewer.get("/admin/players?q=p3").get_data(as_text=True)
     assert "32200003" in page and "SL 4" in page and "9999" not in page
+
+
+def test_daily_schedule(tmp_path):
+    store = players.PlayerStore(tmp_path)
+    store.set_sheet("https://docs.google.com/spreadsheets/d/SHEET1234567890abcdefXYZ/edit")
+    day = datetime(2026, 11, 3)
+    assert not store.due(day.replace(hour=3, minute=59))  # waits for 4 AM
+    assert store.due(day.replace(hour=4, minute=5))  # never synced
+    store.sync_sheet("automatic", FakeReader(sheet(3)))
+    assert not store.due(datetime.now().replace(hour=23))  # already read today
+    assert store.due(datetime.now().replace(hour=4, minute=30) + timedelta(days=1))  # tomorrow after 4 AM

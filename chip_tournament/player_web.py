@@ -837,6 +837,9 @@ def register_registration(app) -> None:
         ev, admin = g.event, bool(session.get("admin"))
         member = re.sub(r"\D", "", request.form.get("member", "")) if admin else (g.player or {}).get("member", "")
         back = url_for("admin") + "#eligibility" if admin else url_for("my_account")
+        came_from = request.form.get("back", "")
+        if not admin and came_from.startswith("/") and not came_from.startswith("//"):  # the event page's button
+            back = came_from
         if not member:
             flash("Log in first.", "error")
             return redirect(url_for("player_login", next=url_for("register")))

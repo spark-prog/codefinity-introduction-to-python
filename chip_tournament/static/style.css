@@ -1045,3 +1045,7 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
 .unsaved-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; }
 .unsaved-bar .button { box-shadow: var(--shadow), 0 0 0 4px rgba(var(--accent-rgb), .25); white-space: nowrap; }
 .unsaved-bar[hidden] { display: none; }
+
+/* Push eligibility: APA yellow, next to Register */
+.button.warning { background: var(--amber); border-color: var(--amber); color: #1a1400; box-shadow: 0 6px 18px rgba(255, 201, 60, .25); }
+.button.warning:hover { filter: brightness(1.06); color: #1a1400; }

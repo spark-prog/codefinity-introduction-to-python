@@ -211,3 +211,26 @@ def test_older_pushes_without_a_target_still_land(app):
     app.config["pushes"].add("MVP", "32200001", "Ann Lee", "mvp-fall", "MVP Fall", "2026-11-14", "player")
     t = app.config["hub"].get("mvp-spring").load()
     assert app.config["pushed_in"]("mvp-spring", t, "32200001")["member"] == "32200001"
+
+
+def test_push_eligibility_button_on_the_event_page(app):
+    """A yellow Push eligibility button next to Register: no hunting through the Register page."""
+    hub = app.config["hub"]
+    page = app.test_client().get("/t/mvp-fall/").get_data(as_text=True)
+    assert 'class="button big warning"' in page and "/login?next=/t/mvp-fall/" in page  # logged out: log in first
+    ann = Clients(app).logged_in("32200001")  # Yes in the sheet
+    register(ann, "mvp-fall", "Ann Lee", "32200001")
+    page = ann.get("/t/mvp-fall/").get_data(as_text=True)
+    assert 'data-dialog-title="Push your eligibility to MVP Spring?"' in page and ">Push eligibility</button>" in page
+    assert "You'll be unregistered" in page
+    assert page.count("Push your eligibility to MVP Spring") == 1  # not also inside "You're registered"
+    r = ann.post("/t/mvp-fall/push", data={"confirm": "1", "back": "/t/mvp-fall/"})
+    assert r.headers["Location"].endswith("/t/mvp-fall/")  # back to the event page
+    assert not hub.get("mvp-fall").load().entries
+    page = ann.get("/t/mvp-fall/").get_data(as_text=True)
+    assert ">Push eligibility</button>" not in page  # done: no button
+    bo = Clients(app).logged_in("32200002")  # Push in the sheet: on his grace, can't push
+    assert "Push eligibility" not in bo.get("/t/mvp-fall/").get_data(as_text=True)
+    assert "Push eligibility" not in app.test_client().get("/t/mvp-spring/").get_data(as_text=True)  # no target there
+    r = ann.post("/t/mvp-fall/push", data={"confirm": "1", "back": "//evil.example"})
+    assert r.headers["Location"].endswith("/me")  # only our own pages

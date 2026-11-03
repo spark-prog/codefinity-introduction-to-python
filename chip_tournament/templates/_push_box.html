@@ -3,7 +3,7 @@
   <summary>Can't make it? Push your eligibility to the next {{ series_name }}</summary>
   <form method="post" action="{{ push_url }}" class="form">
     <p class="small-note">You keep your invitation for the next {{ series_name }} instead. You can do this <b>once</b>:
-      next time is your one-time grace and can't be pushed again.{% if push_registered %} You'll be unregistered from this one, and your spot goes to the waiting list.{% endif %}</p>
+      next time is your one-time grace and can't be pushed again. You can't enter this one after pushing.{% if push_registered %} You'll be unregistered from this one, and your spot goes to the waiting list.{% endif %}</p>
     <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Yes, push my eligibility to the next {{ series_name }}</label>
     <button class="button small">Push to next time</button>
   </form>

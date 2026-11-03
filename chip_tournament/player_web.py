@@ -292,6 +292,15 @@ def register_registration(app) -> None:
     pushes = series_mod.Pushes(app.config["data_dir"])
     app.config["pushes"] = pushes
 
+    def pushed_out(event_id: str, t, member: str, said_to_them: bool = True) -> str:
+        """Why a player who pushed their eligibility away from this edition can't enter it ("" if they didn't).
+        said_to_them: "You pushed your …" (the player's own pages) or "They pushed their …" (a registration form)."""
+        if member and any(p["member"] == member for p in pushes.from_event(event_id)):
+            you, your = ("You", "your") if said_to_them else ("They", "their")
+            return (f"{you} pushed {your} eligibility to the next {getattr(t.settings, 'series', '') or 'edition'}, "
+                    f"so {you.lower()} can't enter this one. If that was a mistake, ask the league office.")
+        return ""
+
     def pushed_in(event_id: str, t, member: str):
         """The push that makes this member eligible for this edition (from the series' previous one)."""
         return series_mod.pushed_into(app.config["hub"], pushes, event_id, getattr(t.settings, "series", ""), member)
@@ -373,6 +382,9 @@ def register_registration(app) -> None:
             if p.member and eligibility.override_for(t, p.member):  # the director already said yes
                 recs.append(rec)
                 continue
+            if p.member and pushed_out(g.event.id, t, p.member):  # they gave this one up for next time
+                raise TournamentError(f"{p.name} can't register for {t.settings.name}: "
+                                      + pushed_out(g.event.id, t, p.member, said_to_them=False))
             no, review = eligibility.check_player(rec, rules, start, game,
                                                   bool(p.member and pushed_in(g.event.id, t, p.member)))
             if no:
@@ -392,10 +404,13 @@ def register_registration(app) -> None:
             return None
         if eligibility.override_for(t, me["member"]):
             return {"ok": True, "no": [], "review": [], "override": True}
+        asked = next((r for r in reversed(t.settings.review_requests) if r["member"] == me["member"]), None)
+        gone = pushed_out(g.event.id, t, me["member"])
+        if gone:
+            return {"ok": False, "no": [gone], "review": [], "asked": asked, "grace": False, "can_push": False}
         via = pushed_in(g.event.id, t, me["member"])
         no, review = eligibility.check_player(me, rules, store.config()["session_start"],
                                               getattr(t.settings, "skill_game", "8"), bool(via))
-        asked = next((r for r in reversed(t.settings.review_requests) if r["member"] == me["member"]), None)
         grace = bool(via) or eligibility.list_value(me, rules) == "push"
         return {"ok": not no, "no": no, "review": review, "asked": asked, "grace": grace,
                 "can_push": can_push(g.event.id, t, me["member"])[0]}
@@ -428,6 +443,10 @@ def register_registration(app) -> None:
                 row["status"] = "registered"
             elif not eligibility.any_rules(rules) or eligibility.override_for(t, member):
                 row["status"] = "eligible"
+            elif pushed_out(ev.id, t, member):
+                row["status"] = "no"
+                if mine:
+                    row["reasons"] = [pushed_out(ev.id, t, member)]
             else:
                 no, review = eligibility.check_player(rec, rules, start, getattr(s, "skill_game", "8"),
                                                       bool(pushed_in(ev.id, t, member)))

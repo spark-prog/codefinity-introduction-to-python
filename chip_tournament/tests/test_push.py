@@ -90,3 +90,39 @@ def test_director_pushes_for_a_player_and_sees_the_lists(app):
     app.config["hub"].get("mvp-fall").store.save(t)
     r = admin.post("/t/mvp-fall/push", data={"member": "32200003", "confirm": "1"}, follow_redirects=True)
     assert "The event has started, so it&#39;s too late to push" in r.get_data(as_text=True)
+
+
+def test_after_pushing_you_cant_enter_this_edition(app):
+    """Pushing gives up this edition: no registering for it afterwards (the grace is for next time)."""
+    hub = app.config["hub"]
+    ann = Clients(app).logged_in("32200001")  # still Yes in the sheet for this edition
+    ann.post("/t/mvp-fall/push", data={"confirm": "1"})
+    reason = "You pushed your eligibility to the next MVP, so you can&#39;t enter this one."
+    page = ann.get("/t/mvp-fall/register").get_data(as_text=True)
+    assert "You can't register for this event yet" in page and reason in page
+    assert "Push your eligibility" not in page
+    page = register(ann, "mvp-fall", "Ann Lee", "32200001")
+    assert "Ann Lee can&#39;t register for MVP Fall: They pushed their eligibility to the next MVP, so they can&#39;t" in page
+    assert not hub.get("mvp-fall").load().entries
+    mine = ann.get("/eligibility").get_data(as_text=True)
+    fall = mine.split("MVP Fall", 1)[1].split("MVP Spring", 1)[0]
+    assert "Not eligible" in fall and reason in fall
+    spring = mine.split("MVP Spring", 1)[1]
+    assert "Eligible ✓" in spring.split("</article>", 1)[0]  # next time: eligible on her grace
+    anyone = app.test_client().post("/eligibility", data={"member": "32200001"}).get_data(as_text=True)
+    assert "pushed your eligibility" not in anyone  # the reason is private
+    # The director can still add her, or override if the push was a mistake
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    admin.post("/t/mvp-fall/admin/overrides", data={"member": "32200001", "action": "allow", "note": "pushed by mistake"})
+    assert "approved by the league office" in ann.get("/t/mvp-fall/register").get_data(as_text=True)
+    register(ann, "mvp-fall", "Ann Lee", "32200001")
+    assert hub.get("mvp-fall").load().registered_as("32200001") is not None
+
+
+def test_the_directors_push_box_is_a_clear_confirmation(app):
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    page = admin.get("/t/mvp-fall/admin").get_data(as_text=True)
+    assert "Yes, push them to the next MVP (if they're registered here, they're unregistered and texted" in page
+    assert "Unregister them here if they" not in page

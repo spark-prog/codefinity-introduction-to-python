@@ -58,7 +58,7 @@
   {% if not is_viewer and t.status == "setup" %}
   <form method="post" action="{{ url_for('push_eligibility') }}" class="form exception-form">
     <label>Push a player to next time <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
-    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Unregister them here if they're registered</label>
+    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Yes, push them to the next {{ s.series }} (if they're registered here, they're unregistered and texted, and they can't enter this one)</label>
     <button class="button small secondary">Push to next {{ s.series }}</button>
   </form>
   {% endif %}

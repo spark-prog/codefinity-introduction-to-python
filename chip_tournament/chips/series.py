@@ -28,9 +28,10 @@ class Pushes:
             return []
 
     def add(self, series: str, member: str, name: str, from_event: str, from_name: str, from_date: str,
-            by: str) -> dict:
+            by: str, to_event: str = "", to_name: str = "") -> dict:
         rec = {"series": series, "member": member, "name": name, "from_event": from_event, "from_name": from_name,
-               "from_date": from_date, "by": by, "at": datetime.now().isoformat(timespec="seconds")}
+               "from_date": from_date, "by": by, "at": datetime.now().isoformat(timespec="seconds"),
+               "to_event": to_event, "to_name": to_name}
         with self.lock:
             rows = self.all() + [rec]
             tmp = self.path.with_suffix(".tmp")
@@ -58,12 +59,45 @@ def next_edition(hub, series: str, from_event: str, from_date: str) -> str | Non
     return min(later)[1] if later else None
 
 
+NO_PUSHING = "none"  # settings.push_to when the director turned pushing off
+
+
+def target(hub, event_id: str, settings) -> tuple[str, str] | None:
+    """(event id, name) players on this event's list can push their eligibility to, or None.
+    The director picks the event (settings.push_to); older events without a pick use their series name and
+    the next event in that series by date."""
+    pick = getattr(settings, "push_to", "")
+    if pick == NO_PUSHING:
+        return None
+    if pick:
+        found = None if pick == event_id else hub.get(pick)
+        if found is None:
+            return None
+        t = found.load()
+        return None if t.status == "finished" else (pick, t.settings.name)
+    series = getattr(settings, "series", "")
+    nxt = next_edition(hub, series, event_id, getattr(settings, "date", "")) if series else None
+    if nxt:
+        return nxt, hub.get(nxt).load().settings.name
+    return None
+
+
 def pushed_into(hub, pushes: Pushes, event_id: str, series: str, member: str) -> dict | None:
-    """The push that makes this player eligible for this edition (pushed from the previous one), if any."""
-    if not series or not member:
+    """The push that makes this player eligible for this event (pushed here from another one), if any."""
+    if not member:
         return None
     for p in pushes.all():
-        if p["member"] == member and key(p["series"]) == key(series) and p["from_event"] != event_id \
-                and next_edition(hub, p["series"], p["from_event"], p["from_date"]) == event_id:
+        if p["member"] != member or p["from_event"] == event_id:
+            continue
+        if p.get("to_event"):
+            if p["to_event"] == event_id:
+                return p
+        elif series and key(p["series"]) == key(series) \
+                and next_edition(hub, p["series"], p["from_event"], p["from_date"]) == event_id:  # older pushes
             return p
     return None
+
+
+def lands_in(hub, p: dict) -> str | None:
+    """Where a push takes the player: its event, or (older pushes) the next one in its series."""
+    return p.get("to_event") or next_edition(hub, p["series"], p["from_event"], p["from_date"])

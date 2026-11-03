@@ -6,6 +6,6 @@
   <p>You're already registered{% if reg.name and reg.name != player.first ~ " " ~ player.last %} as <b>{{ reg.name }}</b>{% endif %}.
     {% set page = url_for('team_page', team_id=reg.id) if event.kind == CHIP else url_for('b_entry', entry_id=reg.id) %}
     Edit your registration <a href="{{ page }}">here</a>, or <a href="{{ page }}#unregister">unregister</a>.</p>
-  {% if can_push(t, player.member)[0] %}{% set push_url = url_for('push_eligibility') %}{% set series_name = t.settings.series %}{% set push_registered = true %}{% include "_push_box.html" %}{% endif %}
+  {% if can_push(t, player.member)[0] %}{% set push_url = url_for('push_eligibility') %}{% set push_name = push_target(t)[1] %}{% set push_registered = true %}{% include "_push_box.html" %}{% endif %}
 </div>
 {% endif %}

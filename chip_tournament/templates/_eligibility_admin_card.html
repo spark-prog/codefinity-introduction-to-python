@@ -49,17 +49,18 @@
     <button class="button small">Override: eligible</button>
   </form>
   {% endif %}
-  {% if s.series %}
-  <h4 style="margin-top: 16px">Pushed to the next {{ s.series }}{% if pushed_out %} ({{ pushed_out|length }}){% endif %}</h4>
+  {% set target = push_target(t) %}
+  {% if target or pushed_out %}
+  <h4 style="margin-top: 16px">Pushed to {{ target[1] if target else "another event" }}{% if pushed_out %} ({{ pushed_out|length }}){% endif %}</h4>
   {% for x in pushed_out %}
-  <p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · {{ x.at|day }} · by the {{ x.by }}</span></p>
+  <p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · {{ x.at|day }} · by the {{ x.by }}{% if x.to_name and (not target or x.to_name != target[1]) %} · to {{ x.to_name }}{% endif %}</span></p>
   {% else %}<p class="muted small-note">Nobody yet.</p>{% endfor %}
-  {% if pushed_out %}<p class="muted small-note">Mark them <b>Push</b> in the sheet's {{ elig_rules(s).list_column or "eligible list" }} column for next time (the app already treats them as Push there).</p>{% endif %}
-  {% if not is_viewer and t.status == "setup" %}
+  {% if pushed_out %}<p class="muted small-note">Mark them <b>Push</b> in the sheet's {{ elig_rules(s).list_column or "eligible list" }} column for that event (the app already treats them as Push there).</p>{% endif %}
+  {% if target and not is_viewer and t.status == "setup" %}
   <form method="post" action="{{ url_for('push_eligibility') }}" class="form exception-form">
-    <label>Push a player to next time <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
-    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Yes, push them to the next {{ s.series }} (if they're registered here, they're unregistered and texted, and they can't enter this one)</label>
-    <button class="button small secondary">Push to next {{ s.series }}</button>
+    <label>Push a player to {{ target[1] }} <input name="member" inputmode="numeric" maxlength="10" placeholder="322…" required></label>
+    <label class="checkbox"><input type="checkbox" name="confirm" value="1" required> Yes, push them to {{ target[1] }} (if they're registered here, they're unregistered and texted, and they can't enter this one)</label>
+    <button class="button small secondary">Push to {{ target[1] }}</button>
   </form>
   {% endif %}
   {% endif %}

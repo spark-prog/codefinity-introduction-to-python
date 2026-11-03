@@ -314,7 +314,8 @@ class Settings:
     elig_locked_at: str = ""
     elig_snapshot: dict = field(default_factory=dict)
     elig_audit: list[dict] = field(default_factory=list)
-    series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): see chips/series.py
+    series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): older events; see push_to
+    push_to: str = ""  # the event players on this one's list can push their eligibility to ("" = no pushing)
     partner_seekers: list[dict] = field(default_factory=list)  # logged-in players looking (not registered)
     # An open spot is offered to the next team for this long (0 = they move in at once).
     waitlist_offer_hours: int = field(default_factory=lambda: WAITLIST_OFFER_HOURS)

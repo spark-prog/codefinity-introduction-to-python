@@ -292,13 +292,19 @@ def register_registration(app) -> None:
     pushes = series_mod.Pushes(app.config["data_dir"])
     app.config["pushes"] = pushes
 
+    def push_target(event_id: str, t) -> tuple[str, str] | None:
+        """(event id, name) this event's players can push their eligibility to, or None."""
+        return series_mod.target(app.config["hub"], event_id, t.settings)
+
     def pushed_out(event_id: str, t, member: str, said_to_them: bool = True) -> str:
-        """Why a player who pushed their eligibility away from this edition can't enter it ("" if they didn't).
+        """Why a player who pushed their eligibility away from this event can't enter it ("" if they didn't).
         said_to_them: "You pushed your …" (the player's own pages) or "They pushed their …" (a registration form)."""
-        if member and any(p["member"] == member for p in pushes.from_event(event_id)):
+        mine = [p for p in pushes.from_event(event_id) if p["member"] == member] if member else []
+        if mine:
+            where = mine[-1].get("to_name") or f"the next {mine[-1].get('series') or 'event'}"
             you, your = ("You", "your") if said_to_them else ("They", "their")
-            return (f"{you} pushed {your} eligibility to the next {getattr(t.settings, 'series', '') or 'edition'}, "
-                    f"so {you.lower()} can't enter this one. If that was a mistake, ask the league office.")
+            return (f"{you} pushed {your} eligibility to {where}, so {you.lower()} can't enter this one. "
+                    "If that was a mistake, ask the league office.")
         return ""
 
     def pushed_in(event_id: str, t, member: str):
@@ -809,20 +815,20 @@ def register_registration(app) -> None:
         return redirect(url_for("admin") + "#eligibility")
 
     def can_push(event_id: str, t, member: str) -> tuple[bool, str]:
-        """Whether a player may push their eligibility for this edition to the next one, and why not."""
+        """Whether a player may push their eligibility from this event to the one the director picked, and why not."""
         s = t.settings
         rules = eligibility.rules_of(s)
-        if not getattr(s, "series", "") or not (rules["list_column"] or rules["list_members"]):
-            return False, "Only invite-only series events can be pushed to the next time."
-        if t.status != "setup":
-            return False, "The event has started, so it's too late to push."
         rec = store.get(member)
         if pushed_in(event_id, t, member) or eligibility.list_value(rec, rules) == "push":
             return False, "This is your one-time grace entry, so it can't be pushed again."
+        if push_target(event_id, t) is None or not (rules["list_column"] or rules["list_members"]):
+            return False, "Pushing to another event isn't turned on for this one."
+        if t.status != "setup":
+            return False, "The event has started, so it's too late to push."
         if eligibility.list_value(rec, rules) != "yes":
             return False, f"You're not on the {rules['list_label'] or 'eligible'} list for this event, so there's nothing to push."
         if any(p["member"] == member for p in pushes.from_event(event_id)):
-            return False, "You've already pushed this one to next time."
+            return False, "You've already pushed this one."
         return True, ""
 
     @app.post("/t/<event>/push")
@@ -831,6 +837,9 @@ def register_registration(app) -> None:
         ev, admin = g.event, bool(session.get("admin"))
         member = re.sub(r"\D", "", request.form.get("member", "")) if admin else (g.player or {}).get("member", "")
         back = url_for("admin") + "#eligibility" if admin else url_for("my_account")
+        came_from = request.form.get("back", "")
+        if not admin and came_from.startswith("/") and not came_from.startswith("//"):  # the event page's button
+            back = came_from
         if not member:
             flash("Log in first.", "error")
             return redirect(url_for("player_login", next=url_for("register")))
@@ -844,10 +853,11 @@ def register_registration(app) -> None:
                 ok, why = can_push(ev.id, t, member)
                 if not ok:
                     raise TournamentError(why)
+                to_event, to_name = push_target(ev.id, t)
                 found = t.registered_as(member)
                 if found is not None:  # their spot opens for the waiting list
-                    body = (f"{found.name}: your eligibility for {t.settings.name} is pushed to the next "
-                            f"{t.settings.series}, so you're unregistered from this one. See you next time!")
+                    body = (f"{found.name}: your eligibility for {t.settings.name} is pushed to {to_name}, "
+                            "so you're unregistered from this one. See you there!")
                     if hasattr(t, "teams"):
                         t._text_team(found, body)
                         t.remove_team(found.id)
@@ -856,11 +866,11 @@ def register_registration(app) -> None:
                         t.remove_entry(found.id)
                 eligibility.audit(t, "pushed to the next edition", member, name, "by the director" if admin else "by the player")
                 pushes.add(t.settings.series, member, name, ev.id, t.settings.name, t.settings.date,
-                           "director" if admin else "player")
+                           "director" if admin else "player", to_event, to_name)
                 messages, t.outbox = list(t.outbox), []
                 for m in messages:
                     ev.sms.send(m.to, m.body, test=t.settings.test_event)
-            flash(f"{name}'s eligibility is pushed to the next {t.settings.series}"
+            flash(f"{name}'s eligibility is pushed to {to_name}"
                   + (" and they're unregistered from this one." if found is not None else ".")
                   + " This is a one-time grace: it can't be pushed again.", "ok")
         except TournamentError as exc:
@@ -872,10 +882,21 @@ def register_registration(app) -> None:
     def pushes_into(event_id: str) -> list[dict]:
         """Players on their one-time grace in this edition (pushed from the previous one in the app)."""
         hub = app.config["hub"]
-        return [p for p in pushes.all()
-                if series_mod.next_edition(hub, p["series"], p["from_event"], p["from_date"]) == event_id]
+        return [p for p in pushes.all() if series_mod.lands_in(hub, p) == event_id]
 
     app.jinja_env.globals["pushes_from"] = lambda: pushes.from_event(g.event.id)
+    app.jinja_env.globals["push_target"] = lambda t: push_target(g.event.id, t)
+
+    def push_choices(t) -> tuple[str, list]:
+        """For the settings: (what's picked now, [(event id, name, date)]) of the events players can be pushed to:
+        not this one, not finished, soonest first. An older event without a pick shows its series' next event."""
+        here, hub = g.event.id, app.config["hub"]
+        rows = sorted((x.settings.date or "9999-99-99", ev.id, x.settings.name, x.settings.date)
+                      for ev, x in hub.loaded() if ev.id != here and x.status != "finished")
+        picked = t.settings.push_to or (push_target(here, t) or (series_mod.NO_PUSHING,))[0]
+        return picked, [(i, n, d) for _, i, n, d in rows]
+
+    app.jinja_env.globals["push_choices"] = push_choices
     app.jinja_env.globals["pushes_into"] = lambda: pushes_into(g.event.id)
 
     @app.post("/t/<event>/team/<team_id>/offer")
@@ -1081,7 +1102,7 @@ def register_registration(app) -> None:
             partners = [p.name for p in grp.players if p is not mine]
             pushable = can_push(ev.id, t, me["member"])[0]
             out.append({"can_push": pushable, "push_url": url_for("push_eligibility", event=ev.id),
-                        "series": getattr(s, "series", ""),
+                        "push_name": (push_target(ev.id, t) or ("", ""))[1],
                         "id": ev.id, "name": s.name, "date": s.date, "time": s.start_time, "venue": s.venue,
                         "status": t.status, "test": s.test_event, "group_name": grp.name, "partners": partners,
                         "where": where, "skill": skill, "chip": chip,

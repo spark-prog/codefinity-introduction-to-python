@@ -273,7 +273,8 @@ class BracketSettings:
     elig_locked_at: str = ""
     elig_snapshot: dict = field(default_factory=dict)
     elig_audit: list[dict] = field(default_factory=list)
-    series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): see chips/series.py
+    series: str = ""  # recurring invite-only events share a series name (MVP, Movin-On-Up): older events; see push_to
+    push_to: str = ""  # the event players on this one's list can push their eligibility to ("" = no pushing)
     partner_seekers: list[dict] = field(default_factory=list)  # logged-in players looking (not registered)
     waitlist_offer_hours: int = field(default_factory=lambda: engine.WAITLIST_OFFER_HOURS)  # see engine.Settings
     bonus_event_id: str = ""  # the Bonus Event form entry this event was created from (see chips/bonus_event.py)

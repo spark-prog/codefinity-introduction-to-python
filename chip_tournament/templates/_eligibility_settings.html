@@ -23,8 +23,13 @@
 <label>Highest skill level (0 = none) <input name="elig_skill_max" type="number" min="0" max="9" value="{{ r.skill_max }}"></label>
 <label>Gender <select name="elig_gender">
   {% for key, name in elig_genders.items() %}<option value="{{ key }}" {% if r.gender == key %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-<label>Series (a recurring invite-only event: MVP, Movin-On-Up) <input name="elig_series" value="{{ s.series }}" placeholder="Blank = a one-off event">
-  <span class="muted small-note">Players eligible through the list can push their eligibility once to the next event with the same series name.</span></label>
+{% set picked, push_events = push_choices(t) %}
+<label>Allow players to push to
+  <select name="push_to">
+    <option value="none" {% if picked == "none" %}selected{% endif %}>Don't allow pushing</option>
+    {% for id, name, date in push_events %}<option value="{{ id }}" {% if picked == id %}selected{% endif %}>{{ name }}{% if date %} · {{ date|day }}, {{ date[:4] }}{% endif %}</option>{% endfor %}
+  </select>
+  <span class="muted small-note">Players on this event's eligible list who can't make it can push their eligibility once to the event you pick: they can't enter this one, and get a one-time grace there.</span></label>
 <label>Eligible list name (Masters, Ladies, Team Captains, Invited…) <input name="elig_list_label" value="{{ r.list_label }}" placeholder="Blank = no list"></label>
 <label>…players marked Yes or Eligible (or Push, for a one-time grace) in this sheet column <select name="elig_list_column">
   <option value="">No column</option>

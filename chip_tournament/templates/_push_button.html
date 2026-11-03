@@ -1,0 +1,18 @@
+{# Event page: a yellow Push eligibility button next to Register, for invite-only events that allow pushing.
+   Logged in and able to push: confirm, then push. Not logged in: log in first, then come back here. Needs t. #}
+{% set target = push_target(t) %}
+{% if target and t.status == SETUP and (elig_rules(t.settings).list_column or elig_rules(t.settings).list_members) %}
+  {% if player %}
+    {% if can_push(t, player.member)[0] %}
+    {% set registered = my_registration(t) %}
+    <form method="post" action="{{ url_for('push_eligibility') }}" class="inline"
+          data-dialog-title="Push your eligibility to {{ target[1] }}?"
+          data-dialog-text="You keep your invitation for {{ target[1] }} instead, as a one-time grace (it can't be pushed again). You can't enter {{ t.settings.name }} after pushing.{% if registered %} You'll be unregistered, and your spot goes to the waiting list.{% endif %}"
+          data-dialog-ok="Push it">
+      <input type="hidden" name="confirm" value="1"><input type="hidden" name="back" value="{{ request.path }}">
+      <button class="button big warning" title="Can't make it? Keep your invitation for {{ target[1] }}">Push eligibility</button></form>
+    {% endif %}
+  {% else %}
+    <a class="button big warning" href="{{ url_for('player_login', next=request.path) }}" title="Log in to push your eligibility to {{ target[1] }}">Push eligibility</a>
+  {% endif %}
+{% endif %}

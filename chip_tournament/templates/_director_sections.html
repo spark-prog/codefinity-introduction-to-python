@@ -79,10 +79,21 @@
   // Unsaved changes: a bar with Save, and a warning before leaving the page.
   var form = document.querySelector("#settings form.settings"), bar = document.getElementById("unsaved-bar");
   if (!form || !bar) return;
-  var dirty = false;
+  // Unsaved = the form differs from how the page opened: change something back and the Save button goes away.
+  function snapshot() {
+    var parts = [];
+    form.querySelectorAll("input[name], select[name], textarea[name]").forEach(function (el) {
+      if (el.closest("[data-no-dirty]")) return;
+      var v = (el.type === "checkbox" || el.type === "radio") ? el.checked : el.value;
+      parts.push(el.name + "=" + v);
+    });
+    return parts.join("\u0001");
+  }
+  var original = snapshot(), dirty = false;
   function changed(e) {
     if (e.target.closest("[data-no-dirty]") || !e.target.name) return;
-    dirty = true; bar.hidden = false;
+    dirty = snapshot() !== original;
+    bar.hidden = !dirty;
   }
   form.addEventListener("input", changed);
   form.addEventListener("change", changed);

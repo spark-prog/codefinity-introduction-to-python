@@ -823,7 +823,9 @@ def create_app(data_dir: str | None = None) -> Flask:
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
                 s.eligibility = eligibility.parse_form(f, s.eligibility)
-                s.series = " ".join(f.get("elig_series", "").split())[:60]
+            if f.get("push_to") is not None:  # the event players can push to ("none" = no pushing)
+                pick = f.get("push_to", "")
+                s.push_to = pick if pick != g.event.id and app.config["hub"].get(pick) is not None else "none"
             hours = (f.get("waitlist_offer_hours", "") or "").strip()
             if hours:
                 if not hours.isdigit() or int(hours) > 72:

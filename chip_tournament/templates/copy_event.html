@@ -19,7 +19,7 @@
   <ul>
     <li>The type and format, {{ "chip tournament settings" if source.kind == "chip" else (src.format_name ~ " · " ~ src.entries_label) }}{% if s.skill_groups is defined and s.skill_groups %}, skill groups{% endif %}</li>
     <li>Races, entry fee, payouts, field size, tables and timing</li>
-    <li>Who can play (eligibility rules{% if s.series %}, series "{{ s.series }}"{% endif %}), rule set and event rules</li>
+    <li>Who can play (eligibility rules), rule set and event rules</li>
     <li>Start time, venue, details, texts and theme</li>
   </ul>
   <h2>What doesn't</h2>
@@ -27,6 +27,8 @@
     <li>Players and teams, the waiting list, the bracket and results</li>
     <li>Review requests, approvals, director exceptions and the eligibility lock</li>
     <li>Shared tables (add the new event to them on the Director page)</li>
+    <li>Where players can push to (pick it in the new event's Who can play settings). Tip: set this event's
+      <b>Allow players to push to</b> to the new one so its players can push there.</li>
   </ul>
   {% if s.test_event %}<p class="banner">This is a test event, so the copy will be too until you untick Test event.</p>{% endif %}
 </section>

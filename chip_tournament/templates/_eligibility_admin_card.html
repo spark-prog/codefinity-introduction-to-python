@@ -10,7 +10,7 @@
   {% for r in reviews %}
   <div class="pending-row">
     <div><b>{{ r.name }}</b> <span class="muted">· {{ r.member }} · asked {{ r.at|day }}</span><br>
-      <span class="pending-reason">{{ r.reasons|join(" ") }}</span>
+      <span class="pending-reason">{{ r.reasons|join(" ")|with_links }}</span>
       {% if r.message %}<br><span class="muted">“{{ r.message }}”</span>{% endif %}</div>
     {% if not is_viewer %}
     <form method="post" action="{{ url_for('admin_review', rid=r.id) }}" class="inline correct-form">

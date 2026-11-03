@@ -15,6 +15,8 @@ from datetime import datetime
 from .players import basis_label, event_skill
 
 EITHER = "either"
+JOIN_URL = "https://join.poolplayers.com/"  # APA's sign-up page: shown as a JOIN button
+LEAGUE_URL = "https://firstcoast.poolplayers.com/home"
 GENDERS = {"": "Open to everyone", "women": "Women only", "men": "Men only", "mixed": "Jack & Jill (one man, one woman)"}
 
 
@@ -119,7 +121,8 @@ def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8",
         if status == "past due":
             no.append("Membership is Past Due. Pay your dues with the league office to play.")
         elif status == "inactive":
-            no.append("Not active on a team (Inactive). Join a team roster this session to play.")
+            no.append(f"Not eligible: not active in First Coast APA. Join to play: {JOIN_URL} "
+                      f"(or find a team at {LEAGUE_URL}).")
         elif status != "active":
             review.append(f"Member status is '{rec.get('status') or 'blank'}'")
     if r["min_matches"]:

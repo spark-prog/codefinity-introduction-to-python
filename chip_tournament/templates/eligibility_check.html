@@ -14,7 +14,8 @@
 {% if results is not none %}
 <section class="your-events">
   <h2>{% if mine %}Your events{% else %}Member {{ member }}{% endif %}</h2>
-  {% if not known %}<p class="banner">That member number isn't in the league's player list (it may be new). You can still register: the league office will check it.</p>{% endif %}
+  {% if not known %}<p class="banner">That member number isn't in the league's player list (it may be new). You can still register: the league office will check it.
+    Not an APA member yet? <a class="button small warning join-link" href="https://join.poolplayers.com/" target="_blank" rel="noopener">JOIN</a></p>{% endif %}
   {% for e in results %}
   <article class="card your-event">
     <div class="your-event-when">
@@ -31,7 +32,7 @@
         <p class="muted small-note">{% if e.reasons %}The league office will confirm: {{ e.reasons|join("; ") }}{% else %}The league office will confirm a detail after you register.{% endif %}</p>
         {% if e.open %}<a class="button small" href="{{ e.register }}">Register</a>{% endif %}
       {% else %}<p><span class="check-badge not_found">Not eligible</span></p>
-        {% if e.reasons %}<ul class="small-note">{% for x in e.reasons %}<li>{{ x }}</li>{% endfor %}</ul>
+        {% if e.reasons %}<ul class="small-note">{% for x in e.reasons %}<li>{{ x|with_links }}</li>{% endfor %}</ul>
           <a class="button small secondary" href="{{ e.register }}">Ask for a review</a>
         {% elif not mine %}<p class="muted small-note">The reasons are private. <a href="{{ url_for('player_login', next=url_for('eligibility_check')) }}">Log in</a> as this player to see why.</p>{% endif %}
       {% endif %}

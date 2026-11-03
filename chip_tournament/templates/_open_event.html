@@ -24,7 +24,7 @@
       {% endif %}
     {% else %}
       <p><span class="check-badge not_found">Not eligible yet</span></p>
-      <ul class="small-note">{% for x in e.reasons %}<li>{{ x }}</li>{% endfor %}</ul>
+      <ul class="small-note">{% for x in e.reasons %}<li>{{ x|with_links }}</li>{% endfor %}</ul>
       <a class="button small secondary" href="{{ e.register }}">Ask for a review</a>
     {% endif %}
   </div>

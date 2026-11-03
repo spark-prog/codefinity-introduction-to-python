@@ -8,7 +8,7 @@
 {% if me_ok.can_push %}{% set push_url = url_for('push_eligibility') %}{% set push_name = push_target(t)[1] %}{% include "_push_box.html" %}{% endif %}
 {% else %}
 <div class="eligible-no"><b>You can't register for this event yet:</b>
-  <ul>{% for x in me_ok.no %}<li>{{ x }}</li>{% endfor %}</ul>
+  <ul>{% for x in me_ok.no %}<li>{{ x|with_links }}</li>{% endfor %}</ul>
   {% set asked = me_ok.asked %}
   {% if asked and asked.status == "open" %}
     <p class="muted small-note">You asked the league office to review this on {{ asked.at|day }}. You'll get an email when they decide.</p>

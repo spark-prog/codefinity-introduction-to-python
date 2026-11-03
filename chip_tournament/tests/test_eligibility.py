@@ -40,7 +40,7 @@ def rules(**kw):
 def test_each_rule_says_why_and_how_to_fix():
     assert el.check_player(rec(status="Past Due"), rules(active=True), START) == (
         ["Membership is Past Due. Pay your dues with the league office to play."], [])
-    assert "Inactive" in el.check_player(rec(status="Inactive"), rules(active=True), START)[0][0]
+    assert "not active in First Coast APA" in el.check_player(rec(status="Inactive"), rules(active=True), START)[0][0]
     assert el.check_player(rec(status="Suspended?"), rules(active=True), START)[1] == ["Member status is 'Suspended?'"]
     no, _ = el.check_player(rec(mp8="4"), rules(min_matches=6), START)
     assert no == ["Needs 6 lifetime matches. You have 4: 2 more to go."]
@@ -237,3 +237,39 @@ def test_eligible_with_a_hand_check_shows_green_like_the_register_page(tmp_path,
     assert "Eligible ✓" in mine and "The league office will confirm: Played in a Singles Board qualifier this year" in mine
     register = Clients(app).logged_in("32200001").get(f"/t/{ev.id}/register").get_data(as_text=True)
     assert "You're eligible for 8-Ball Singles Board" in register
+
+
+def test_inactive_players_get_a_join_link(tmp_path, monkeypatch):
+    from app import create_app
+    from tests.test_register_members import Clients
+    no, _ = el.check_player(rec(status="Inactive"), rules(active=True), START)
+    assert no == ["Not eligible: not active in First Coast APA. Join to play: https://join.poolplayers.com/ "
+                  "(or find a team at https://firstcoast.poolplayers.com/home)."]
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    app = create_app(str(tmp_path))
+    app.testing = True
+    app.config["players"].apply(*players.parse_rows([COLS, person("32200001", status="Inactive")]), "t", "t")
+    ev = app.config["hub"].create("Monday Masters", "bracket", format="double")
+    t = ev.load()
+    t.settings.team_size, t.settings.eligibility = 1, rules(active=True)
+    ev.store.save(t)
+    ann = Clients(app).logged_in("32200001")
+    join = '<a class="button small warning join-link" href="https://join.poolplayers.com/" target="_blank" rel="noopener">JOIN</a>'
+    for path in (f"/t/{ev.id}/register", "/eligibility"):
+        page = ann.get(path).get_data(as_text=True)
+        assert "Not eligible: not active in First Coast APA. Join to play: " + join in page, path
+        assert '<a href="https://firstcoast.poolplayers.com/home" target="_blank" rel="noopener">firstcoast.poolplayers.com</a>' in page
+    unknown = app.test_client().post("/eligibility", data={"member": "32299999"}).get_data(as_text=True)
+    assert "Not an APA member yet?" in unknown and 'href="https://join.poolplayers.com/"' in unknown
+
+
+def test_links_in_messages_stay_safe(tmp_path, monkeypatch):
+    from app import create_app
+    monkeypatch.setenv("ADMIN_PASSWORD", "secretpw1")
+    app = create_app(str(tmp_path))
+    f = app.jinja_env.filters["with_links"]
+    out = str(f("<script>alert(1)</script> see https://example.com/x. and https://join.poolplayers.com/"))
+    assert "<script>" not in out and "&lt;script&gt;" in out
+    assert '<a href="https://example.com/x" target="_blank" rel="noopener">example.com/x</a>.' in out  # the full stop stays outside
+    assert ">JOIN</a>" in out
+    assert str(f('x" onmouseover="alert(1)')) == "x&#34; onmouseover=&#34;alert(1)"

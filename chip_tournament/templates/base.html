@@ -94,7 +94,7 @@
     {% endif %}
     {% if t and t.settings.test_event %}<div class="test-banner">TEST EVENT: practice only. No texts are sent, and it isn't listed on All Events.</div>{% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg|with_links }}</div>{% endfor %}
     {% endwith %}
     {% block content %}{% endblock %}
   </main>

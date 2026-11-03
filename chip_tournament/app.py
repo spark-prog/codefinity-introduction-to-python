@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import quote_plus
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
+from markupsafe import Markup, escape
 from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -192,6 +193,26 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.config["data_dir"] = data_path
 
     app.jinja_env.filters["money"] = money
+
+    def with_links(text) -> Markup:
+        """A message with its web addresses as links: APA's join page as a JOIN button, others by name.
+        The message itself keeps the plain address, so it still reads right in a text or the log."""
+        from chips.eligibility import JOIN_URL
+        out, last = [], 0
+        s = str(text or "")
+        for m in re.finditer(r"https?://[^\s<>\"')]+[^\s<>\"').,;:!?]", s):
+            out.append(escape(s[last:m.start()]))
+            url = m.group(0)
+            if url.rstrip("/") == JOIN_URL.rstrip("/"):
+                out.append(Markup('<a class="button small warning join-link" href="{}" target="_blank" rel="noopener">JOIN</a>').format(url))
+            else:
+                label = re.sub(r"^https?://", "", url).rstrip("/").removesuffix("/home")
+                out.append(Markup('<a href="{}" target="_blank" rel="noopener">{}</a>').format(url, label))
+            last = m.end()
+        out.append(escape(s[last:]))
+        return Markup("").join(out)
+
+    app.jinja_env.filters["with_links"] = with_links
     app.jinja_env.filters["urlquote"] = quote_plus
     app.jinja_env.filters["clock"] = clock
     app.jinja_env.filters["day"] = day

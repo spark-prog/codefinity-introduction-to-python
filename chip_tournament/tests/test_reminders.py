@@ -64,13 +64,16 @@ def test_google_link(monkeypatch):
 def test_reminder_email_text():
     t = SimpleNamespace(settings=settings(), site_url="https://controltable.app")
     grp = SimpleNamespace(id="e1", name="Ann Lee", players=[SimpleNamespace(name="Ann Lee")])
-    subject, text = reminders.email_text(t, "board", "bracket", grp, reminders.DAY_BEFORE)
+    day_before, same_day = datetime(2026, 11, 6, 10, 30), datetime(2026, 11, 7, 8, 30)
+    subject, text = reminders.email_text(t, "board", "bracket", grp, reminders.DAY_BEFORE, now=day_before)
     assert subject == "Reminder: 8-Ball Singles Board is tomorrow"
     assert "When: Sat, Nov 7 at 10:30 AM (check in by 10:15 AM)" in text and "Where: Park Ave, Billiards, 123 Main St" in text
     assert "https://controltable.app/t/board/entry/e1" in text and "/t/board/calendar.ics" in text
-    subject, _ = reminders.email_text(t, "board", "bracket", grp, reminders.TWO_HOURS)
+    subject, _ = reminders.email_text(t, "board", "bracket", grp, reminders.TWO_HOURS, now=same_day)
     assert subject == "Reminder: 8-Ball Singles Board is today at 10:30 AM"
-    assert reminders.text_body(t, reminders.TWO_HOURS) == ("Reminder: 8-Ball Singles Board is today at 10:30 AM at "
+    assert reminders.text_body(t, reminders.DAY_BEFORE, now=day_before).startswith(
+        "Reminder: 8-Ball Singles Board is tomorrow at 10:30 AM")
+    assert reminders.text_body(t, reminders.TWO_HOURS, now=same_day) == ("Reminder: 8-Ball Singles Board is today at 10:30 AM at "
                                                           "Park Ave, Billiards. Check in by 10:15 AM.")
 
 
@@ -116,7 +119,8 @@ def test_the_field_gets_one_day_before_reminder(app, mail):
     counts = app.config["send_reminders"](ev)
     assert counts["emails"] == 1 and counts["texts"] == 0
     assert [m["to"] for m in mail.sent] == ["ann@example.com"]  # Bo is on the waiting list
-    assert mail.sent[0]["subject"] == "Reminder: 8-Ball Singles Board is tomorrow" and "Hi Ann" in mail.sent[0]["text"]
+    day = reminders.day_word(ev.load().settings)  # 20 hours ahead: today or tomorrow, by the calendar date
+    assert mail.sent[0]["subject"].startswith(f"Reminder: 8-Ball Singles Board is {day}") and "Hi Ann" in mail.sent[0]["text"]
     assert app.config["send_reminders"](ev) is None and len(mail.sent) == 1  # once only
     assert ev.load().settings.reminders_sent["day"]["emails"] == 1
 
@@ -125,7 +129,7 @@ def test_two_hour_reminder_with_texts(app, mail):
     ev = event_soon(app, hours_ahead=1.5, reminder_texts=True, sms_name="First Coast APA")
     counts = app.config["send_reminders"](ev)
     assert counts == {"at": counts["at"], "emails": 1, "texts": 1}
-    assert "is today at" in mail.sent[0]["subject"]
+    assert mail.sent[0]["subject"].startswith(f"Reminder: 8-Ball Singles Board is {reminders.day_word(ev.load().settings)}")
     log = (ev.dir / "texts.log").read_text()
     assert "First Coast APA: Reminder: 8-Ball Singles Board is today at" in log and "9045550101" not in log
     assert "day" not in ev.load().settings.reminders_sent
@@ -167,3 +171,19 @@ def test_director_turns_reminders_on_and_off(app):
     c.post(f"/t/{ev.id}/admin/settings", data=form)
     s = ev.load().settings
     assert (s.reminders, s.reminder_texts) == (False, True)
+
+
+def test_a_day_before_reminder_sent_on_the_day_itself_says_today():
+    """An event set up the same morning: the day-before reminder goes out that day and must not say tomorrow."""
+    s = settings(name="Friday Night 9-Ball", date="2026-11-13", start_time="7:00 PM")
+    morning = datetime(2026, 11, 13, 9, 0)
+    assert reminders.due(s, morning) == reminders.DAY_BEFORE
+    t = SimpleNamespace(settings=s, site_url="")
+    grp = SimpleNamespace(id="e1", name="Ann Lee", players=[SimpleNamespace(name="Ann Lee")])
+    subject, _ = reminders.email_text(t, "x", "bracket", grp, reminders.DAY_BEFORE, now=morning)
+    assert subject == "Reminder: Friday Night 9-Ball is today at 7:00 PM"
+    assert reminders.text_body(t, reminders.DAY_BEFORE, now=morning).startswith(
+        "Reminder: Friday Night 9-Ball is today at 7:00 PM")
+    # the night before, just after midnight: still the 13th's event, said as today; at 11 PM on the 12th, tomorrow
+    assert reminders.day_word(s, datetime(2026, 11, 12, 23, 0)) == "tomorrow"
+    assert reminders.day_word(s, datetime(2026, 11, 13, 0, 5)) == "today"

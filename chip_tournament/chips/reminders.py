@@ -65,11 +65,24 @@ def where_line(s) -> str:
     return ", ".join(x for x in (s.venue, s.address) if x) or "See the event page"
 
 
-def email_text(t, event_id: str, kind: str, grp, which: str) -> tuple[str, str]:
+def day_word(s, now: datetime | None = None) -> str:
+    """'today' or 'tomorrow' from the calendar date, not from which reminder it is: a day-before reminder that
+    goes out on the event's own date (an event set up that morning) says today."""
+    start = start_of(s)
+    now = now or datetime.now()
+    if start and start.date() == now.date():
+        return "today"
+    if start and (start.date() - now.date()).days == 1:
+        return "tomorrow"
+    return f"on {start.strftime('%a, %b %-d')}" if start else "coming up"
+
+
+def email_text(t, event_id: str, kind: str, grp, which: str, now: datetime | None = None) -> tuple[str, str]:
     """(subject, body) of a reminder email for one entry or team."""
     s = t.settings
     start = start_of(s)
-    soon = "tomorrow" if which == DAY_BEFORE else f"today at {s.start_time}"
+    day = day_word(s, now)
+    soon = f"{day} at {s.start_time}" if day == "today" else day
     subject = f"Reminder: {s.name} is {soon}"
     root = site_root(t)
     page = f"{root}/t/{event_id}/{'entry' if kind == 'bracket' else 'team'}/{grp.id}" if root else ""
@@ -86,10 +99,9 @@ def email_text(t, event_id: str, kind: str, grp, which: str) -> tuple[str, str]:
     return subject, "\n".join(lines)
 
 
-def text_body(t, which: str) -> str:
+def text_body(t, which: str, now: datetime | None = None) -> str:
     s = t.settings
-    soon = "tomorrow" if which == DAY_BEFORE else "today"
-    body = f"Reminder: {s.name} is {soon} at {s.start_time}"
+    body = f"Reminder: {s.name} is {day_word(s, now)} at {s.start_time}"
     if s.venue:
         body += f" at {s.venue}"
     body += "."

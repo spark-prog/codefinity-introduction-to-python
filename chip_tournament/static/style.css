@@ -1053,3 +1053,12 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
 /* Push eligibility: APA yellow, next to Register */
 .button.warning { background: var(--amber); border-color: var(--amber); color: #1a1400; box-shadow: 0 6px 18px rgba(255, 201, 60, .25); }
 .button.warning:hover { filter: brightness(1.06); color: #1a1400; }
+
+/* A message from the last action, shown where you are on the page (the page keeps your place). */
+.flash-toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: 16px;
+  width: min(560px, calc(100% - 32px)); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); border-radius: var(--radius-sm); }
+.flash-toast .flash { margin: 0; padding-right: 44px; background-color: #10233d; }
+.flash-toast .flash + .flash { margin-top: 6px; }
+.flash-toast-close { position: absolute; top: 4px; right: 6px; background: none; border: 0; color: inherit;
+  font-size: 1.5rem; line-height: 1; padding: 6px 10px; cursor: pointer; color: #fff; }
+.button-row > .race-change { align-self: center; }

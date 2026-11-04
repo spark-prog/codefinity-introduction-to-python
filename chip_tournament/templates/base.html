@@ -134,6 +134,7 @@ window.ctSafeReload = (function () {
     document.close();
     if (y) window.addEventListener("load", function () { window.scrollTo(0, y); });
   }
+  window.ctKeepPlace && window.ctKeepPlace(true);  // the new page puts back the open sections and the spot on screen
   function check() {
     var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
@@ -206,6 +207,71 @@ window.ctSafeReload = (function () {
       form.querySelectorAll("button[disabled][data-label]").forEach(function (b) { b.disabled = false; b.textContent = b.dataset.label; });
     });
   });
+})();
+(function () {
+  // Keep my place: send anything (check in a team, call a match, save a setting) and the page that comes back
+  // opens the same sections and scrolls to the same spot, instead of jumping to the top or to a section heading.
+  // The spot is kept relative to the nearest landmark around what you pressed (a team row, a table card, a
+  // section), so it stays put even when something above it changes. Messages are shown in a note on top.
+  var KEY = "ct-keep";
+  function read() { try { return JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) { return null; } }
+  function write(v) { try { if (v) sessionStorage.setItem(KEY, JSON.stringify(v)); else sessionStorage.removeItem(KEY); } catch (e) {} }
+  function place(from, armed) {
+    var mark = from && from.closest ? from.closest("[id]") : null;
+    var open = [];
+    document.querySelectorAll("details[open]").forEach(function (d) {
+      if (d.id) open.push("#" + d.id);
+      else if (d.dataset.key) open.push('details[data-key="' + d.dataset.key + '"]');
+    });
+    write({ path: location.pathname, y: window.scrollY, id: mark ? mark.id : "",
+            top: mark ? mark.getBoundingClientRect().top : 0, open: open, at: Date.now(), armed: !!armed });
+  }
+  window.ctKeepPlace = function (armed) { place(null, armed); };
+  document.addEventListener("submit", function (e) {
+    var f = e.target;
+    if ((f.getAttribute("method") || "get").toLowerCase() !== "post" || f.target === "_blank" || f.hasAttribute("data-no-keep")) return;
+    place(e.submitter || f, false);
+  }, true);
+  document.addEventListener("click", function (e) {  // following a link is a fresh visit, not a return
+    var s = read();
+    if (s && !s.armed && e.target.closest && e.target.closest("a[href]") && !e.target.closest('a[href^="#"]')) write(null);
+  }, true);
+  // Only a page that was actually left (not a confirm pop-up that was cancelled) brings its place back.
+  window.addEventListener("pagehide", function () {
+    var s = read();
+    if (s && !s.armed && Date.now() - s.at < 20000) { s.armed = true; write(s); }
+  });
+  var s = read();
+  if (!s) return;
+  if (!s.armed) { if (Date.now() - s.at > 60000) write(null); return; }
+  write(null);
+  if (s.path !== location.pathname || Date.now() - s.at > 60000) return;
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  if (location.hash) history.replaceState(history.state, "", location.pathname + location.search);  // no jump to #tables
+  (s.open || []).forEach(function (sel) { try { var d = document.querySelector(sel); if (d) d.open = true; } catch (e) {} });
+  function go() {
+    var el = s.id && document.getElementById(s.id);
+    var y = el ? window.scrollY + el.getBoundingClientRect().top - s.top : s.y;
+    window.scrollTo(0, Math.max(0, Math.round(y)));
+  }
+  go();
+  requestAnimationFrame(go);
+  window.addEventListener("load", function () { go(); setTimeout(go, 50); });
+  // What the action said (done, or what went wrong) sits at the top of the page: show it where you are.
+  var flashes = document.querySelectorAll("main > .flash");
+  if (flashes.length && window.scrollY > 0) {
+    var note = document.createElement("div");
+    note.className = "flash-toast";
+    note.setAttribute("role", "status");
+    flashes.forEach(function (f) { note.appendChild(f.cloneNode(true)); });
+    var close = document.createElement("button");
+    close.type = "button"; close.className = "flash-toast-close"; close.setAttribute("aria-label", "Close"); close.textContent = "×";
+    note.appendChild(close);
+    document.body.appendChild(note);
+    var hide = function () { if (note.parentNode) note.parentNode.removeChild(note); };
+    close.addEventListener("click", hide);
+    setTimeout(hide, note.querySelector(".flash.error") ? 12000 : 5000);
+  }
 })();
 (function () {
   // Live pages reload on a timer, but never while someone is using them: a field in focus, anything

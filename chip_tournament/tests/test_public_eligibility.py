@@ -1,5 +1,7 @@
 """Phase 8: the public 'Am I eligible?' page."""
 
+import re
+
 import pytest
 
 from app import create_app
@@ -44,7 +46,8 @@ def test_status_only_for_anyone(app):
     assert "Am I eligible?" in c.get("/").get_data(as_text=True)
     page = lookup(c, "322-00002")
     assert page.count(">Not eligible<") == 2 and page.count("Eligible ✓") == 1  # Past Due: only Open Night
-    assert "Past Due" not in page and "lifetime" not in page and "Bo" not in page and "Ray" not in page
+    shown = re.sub(r"<script.*?</script>", "", page, flags=re.S)  # what's on the page, not the page's code
+    assert "Past Due" not in shown and "lifetime" not in shown and "Bo" not in shown and "Ray" not in shown
     assert "The reasons are private" in page and "Practice" not in page  # no test events
     page = lookup(c, "32200001")
     assert "Registered" in page and page.count("Eligible ✓") == 2

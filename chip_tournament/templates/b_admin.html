@@ -244,7 +244,7 @@
   <div class="table-wrap"><table class="grid team-table entry-table">
     <thead><tr><th>#</th><th>Entry</th>{% if not is_viewer %}<th>PIN</th>{% endif %}<th>Status</th><th></th></tr></thead>
     {% for e in t.listed_entries %}
-    <tr>
+    <tr id="entry-{{ e.id }}">
       <td class="seed-cell">{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
       <td class="team-cell"><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
         {% if s.team_size > 1 and e.partners != e.name %}<div class="muted">{{ e.partners }}</div>{% endif %}

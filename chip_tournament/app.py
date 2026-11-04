@@ -32,6 +32,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import bracket_web
 import photos_web
 import qr_web
+import cal_web
 import player_web
 from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
@@ -836,6 +837,8 @@ def create_app(data_dir: str | None = None) -> Flask:
             if t.status == SETUP:
                 s.require_checkin = f.get("require_checkin") == "1"
             s.sms_name = f.get("sms_name", s.sms_name).strip()
+            if f.get("reminders_shown"):
+                s.reminders, s.reminder_texts = f.get("reminders") == "1", f.get("reminder_texts") == "1"
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
@@ -1757,6 +1760,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     player_web.register_registration(app)
     photos_web.register(app, admin_required)  # header photo and flyer: every tournament type
     qr_web.register(app, director_view)  # table QR stickers: every tournament type
+    cal_web.register(app)  # Add to calendar: every tournament type
 
     @app.before_request
     def dispatch_by_kind():

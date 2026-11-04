@@ -23,6 +23,7 @@
     <div class="button-row">
       <a class="button small" href="{{ e.page }}">{{ "My team page" if e.chip else "My page" }}</a>
       <a class="button small secondary" href="{{ e.rules }}">Rules</a>
+      {% if e.status != "running" %}{% set cal = calendar_links(e.id) %}{% include "_calendar_links.html" %}{% endif %}
     </div>
   </div>
 </article>

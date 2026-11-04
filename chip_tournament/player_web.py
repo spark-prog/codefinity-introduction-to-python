@@ -12,7 +12,7 @@ from datetime import datetime
 from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from chips import backup, eligibility, players, schedule
+from chips import backup, eligibility, players, reminders, schedule
 from chips import pending as pending_mod
 from chips import pool as pool_mod
 from chips import series as series_mod
@@ -937,6 +937,36 @@ def register_registration(app) -> None:
             grp.offer_emailed, changed = grp.offer_until, True
         return changed
 
+    def send_reminders(ev) -> dict | None:
+        """Email (and text, if the event says so) the field the day before and 2 hours before. Returns the counts."""
+        if ev.load().status != "setup" or not reminders.due(ev.load().settings):
+            return None
+        with ev.store.lock:  # bookkeeping: no undo step. Marked before sending, so a restart never sends it twice.
+            t = ev.load()
+            which = reminders.due(t.settings)
+            if t.status != "setup" or not which:
+                return None
+            t.settings.reminders_sent[which] = {"at": datetime.now().isoformat(timespec="seconds"), "emails": 0, "texts": 0}
+            ev.store.save(t)
+        s, emailed, texted = t.settings, set(), set()
+        body = reminders.text_body(t, which)
+        if s.sms_name:
+            body = f"{s.sms_name}: {body}"
+        for grp, p in reminders.recipients(t):
+            if p.member and p.member not in emailed:
+                subject, text = reminders.email_text(t, ev.id, ev.kind, grp, which)
+                if email_player(p.member, subject, text):
+                    emailed.add(p.member)
+            if s.reminder_texts and p.phone and p.sms_consent and p.phone not in texted:
+                ev.sms.send(p.phone, body, test=s.test_event)
+                texted.add(p.phone)
+        counts = {"at": t.settings.reminders_sent[which]["at"], "emails": len(emailed), "texts": len(texted)}
+        with ev.store.lock:
+            t = ev.load()
+            t.settings.reminders_sent[which] = counts
+            ev.store.save(t)
+        return counts
+
     def lock_loop(log=None, sleep: float = 60) -> None:
         """Background: lock an event's eligibility once its registration closes or it starts."""
         import time as _time
@@ -956,6 +986,7 @@ def register_registration(app) -> None:
                         t = ev.load()
                         if email_offers(ev, t):
                             ev.store.save(t)
+                    send_reminders(ev)
                     if probe.status == "finished" and not history.recorded(ev.id):
                         history.record(ev.id, ev.kind, probe)
                     if eligibility.lock_due(ev.load()):
@@ -969,6 +1000,7 @@ def register_registration(app) -> None:
             _time.sleep(sleep)
 
     app.config["eligibility_lock_loop"] = lock_loop
+    app.config["send_reminders"] = send_reminders
 
     def my_prefill(t) -> dict:
         """Partner 1 / the player: the logged-in player's own details, phone included (it's theirs)."""

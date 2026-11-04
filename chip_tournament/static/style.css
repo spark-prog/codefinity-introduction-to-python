@@ -1081,3 +1081,8 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
   .qr-sticker { border: 1.5px dashed #999; padding: .2in; }
   .qr-code svg { max-width: 2.6in; }
 }
+
+/* Add to calendar */
+.cal-menu { display: inline-block; }
+.cal-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.cal-menu > summary { display: inline-flex; align-items: center; min-height: 0; }

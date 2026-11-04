@@ -1,0 +1,7 @@
+{# Add to calendar: needs cal = calendar_links(event id, tournament). #}
+{% if cal %}<details class="inline-details cal-menu"><summary class="button small secondary">📅 Add to calendar</summary>
+  <div class="cal-options">
+    <a class="button small secondary" href="{{ cal.ics }}">Apple, Outlook or phone</a>
+    <a class="button small secondary" href="{{ cal.google }}" target="_blank" rel="noopener">Google Calendar</a>
+  </div>
+</details>{% endif %}

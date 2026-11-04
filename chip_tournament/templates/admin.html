@@ -569,6 +569,11 @@
     <label class="checkbox"><input type="hidden" name="test_event_shown" value="1"><input type="checkbox" name="test_event" value="1" {% if s.test_event %}checked{% endif %}>
       Test event: never send texts (they're only logged below) and hide it from All Events. Players can still use a direct link.</label>
     <label>Text sender name (starts every text) <input name="sms_name" value="{{ s.sms_name }}" placeholder="First Coast APA"></label>
+    <input type="hidden" name="reminders_shown" value="1">
+    <label class="checkbox wide"><input type="checkbox" name="reminders" value="1" {% if s.reminders %}checked{% endif %}> Email players a reminder the day before and 2 hours before the start</label>
+    <label class="checkbox wide"><input type="checkbox" name="reminder_texts" value="1" {% if s.reminder_texts %}checked{% endif %}> Also text the reminders (players who agreed to texts)</label>
+    <p class="muted wide">{% if s.test_event %}Test events don't send reminders.{% else %}Reminders go to everyone in the field who's in the player list with an email. Players who register after the day-before reminder get the 2-hour one.{% endif %}
+      {% for key, label in (("day", "Day-before"), ("2h", "2-hour")) %}{% set r = s.reminders_sent.get(key) %}{% if r %}<br>{{ label }} reminder sent {{ r.at[:16]|replace("T", " ") }}: {{ r.emails }} email{{ "s" if r.emails != 1 }}{% if r.texts %}, {{ r.texts }} text{{ "s" if r.texts != 1 }}{% endif %}.{% endif %}{% endfor %}</p>
     <label>Questions phone (on the registration text) <input name="contact_phone" value="{{ s.contact_phone }}" placeholder="904-528-7657"></label>
     <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>
     <label class="checkbox"><input type="checkbox" name="require_checkin" value="1" {% if s.require_checkin %}checked{% endif %} {% if t.status != SETUP %}disabled{% endif %}>

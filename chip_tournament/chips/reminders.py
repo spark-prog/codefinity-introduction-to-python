@@ -49,7 +49,10 @@ def recipients(t) -> list[tuple[object, object]]:
 
 
 def site_root(t) -> str:
-    return (os.environ.get("SITE_URL", "").strip() or getattr(t, "site_url", "") or "").rstrip("/")
+    """The site's address (https://controltable.app): the SITE_URL setting, else the one the event saved. An event
+    saves its own page address (https://.../t/<event>), so that part is taken off."""
+    root = (os.environ.get("SITE_URL", "").strip() or getattr(t, "site_url", "") or "").rstrip("/")
+    return root.split("/t/", 1)[0] if "/t/" in root else root
 
 
 def when_line(s) -> str:

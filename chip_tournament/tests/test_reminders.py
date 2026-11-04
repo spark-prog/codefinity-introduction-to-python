@@ -187,3 +187,25 @@ def test_a_day_before_reminder_sent_on_the_day_itself_says_today():
     # the night before, just after midnight: still the 13th's event, said as today; at 11 PM on the 12th, tomorrow
     assert reminders.day_word(s, datetime(2026, 11, 12, 23, 0)) == "tomorrow"
     assert reminders.day_word(s, datetime(2026, 11, 13, 0, 5)) == "today"
+
+
+def test_links_use_the_site_address_not_the_events_saved_page_address(monkeypatch):
+    """An event saves its own page address (site_url = https://.../t/<event>): links must not repeat /t/<event>."""
+    monkeypatch.delenv("SITE_URL", raising=False)
+    t = SimpleNamespace(settings=settings(), site_url="https://chip-tournament.onrender.com/t/board")
+    assert reminders.site_root(t) == "https://chip-tournament.onrender.com"
+    grp = SimpleNamespace(id="e1", name="Ann Lee", players=[SimpleNamespace(name="Ann Lee")])
+    _, text = reminders.email_text(t, "board", "bracket", grp, reminders.DAY_BEFORE, now=datetime(2026, 11, 6, 10, 30))
+    assert "https://chip-tournament.onrender.com/t/board/entry/e1" in text and "/t/board/t/board" not in text
+    monkeypatch.setenv("SITE_URL", "https://controltable.app/")
+    assert reminders.site_root(t) == "https://controltable.app"
+
+
+def test_calendar_file_link_isnt_doubled(app, monkeypatch):
+    monkeypatch.delenv("SITE_URL", raising=False)
+    ev = event_soon(app, hours_ahead=48)
+    t = ev.load()
+    t.site_url = f"https://controltable.app/t/{ev.id}"  # what the app saves once texts have gone out
+    ev.store.save(t)
+    body = app.test_client().get(f"/t/{ev.id}/calendar.ics").get_data(as_text=True).replace("\r\n ", "")
+    assert f"URL:https://controltable.app/t/{ev.id}/\r\n" in body

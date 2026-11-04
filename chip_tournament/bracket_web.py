@@ -17,8 +17,10 @@ from flask import abort, flash, g, redirect, render_template, request, session, 
 from chips import eligibility, schedule, themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MAX_TEAM_SIZE, MODIFIED, NO_SHOW, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT,
-    entries_label, place_text,
+    asks_two_levels, entries_label, place_text,
 )
+from chips import race_charts
+from chips.race_charts import ADJUSTED, BALL_COUNT, RACK_RACE, STANDARD
 from chips.engine import (
     CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Player, TournamentError, check_form_entry, money,
 )
@@ -80,9 +82,6 @@ def register(app, h) -> dict:
                                   skill=levels["skill"], skill_8=levels["skill8"], skill_9=levels["skill9"]))
         return players
 
-    def asks_two_levels(s) -> bool:
-        """Singles events that place or race players by skill ask for 8-Ball and 9-Ball levels."""
-        return s.team_size == 1 and bool(s.skill_groups or s.race_method == RACK_CHART)
 
     def back(anchor: str = "") -> str:
         return url_for("admin") + (f"#{anchor}" if anchor else "")
@@ -232,9 +231,18 @@ def register(app, h) -> dict:
                 s.groups = max(1, s.groups)
                 s.skill_groups = parse_skill_groups(f.get("skill_groups", skill_groups_text(s.skill_groups)))
                 method = f.get("race_method", s.race_method)
-                if method not in (STRAIGHT, RACK_CHART):
+                if method not in (STRAIGHT, RACK_CHART, RACK_RACE, BALL_COUNT):
                     raise TournamentError("Pick how races are set.")
+                if race_charts.supports(method, s.team_size):
+                    raise TournamentError(race_charts.supports(method, s.team_size))
                 s.race_method = method
+                version = f.get("race_chart", s.race_chart)
+                if version not in (STANDARD, ADJUSTED):
+                    raise TournamentError("Pick the standard or adjusted race chart.")
+                s.race_chart = version
+                if method == BALL_COUNT and s.team_size > 1 and s.skill_game != "9":
+                    raise TournamentError("Doubles ball count races use 9-Ball skill levels: set Skill levels from the "
+                                          "player list to 9-Ball.")
                 for e in t.entries.values():
                     e.division = t.preview_division(e)
                 s.require_checkin = f.get("require_checkin") == "1"
@@ -319,7 +327,7 @@ def register(app, h) -> dict:
     @app.post("/t/<event>/entry/<entry_id>/score")
     def b_entry_score(entry_id):
         side, delta = request.form.get("side"), request.form.get("delta", "1")
-        if side not in ("a", "b") or delta not in ("1", "-1"):
+        if side not in ("a", "b") or delta not in ("1", "-1", "2"):
             abort(400)
         try:
             m = own_match(entry_id)
@@ -473,9 +481,24 @@ def register(app, h) -> dict:
 
     def side_and_delta():
         side, delta = request.form.get("side"), request.form.get("delta", "1")
-        if side not in ("a", "b") or delta not in ("1", "-1"):
+        if side not in ("a", "b") or delta not in ("1", "-1", "2"):
             abort(400)
         return side, int(delta)
+
+    @app.post("/t/<event>/admin/m/<match_id>/race")
+    @admin_required
+    def b_set_race(match_id):
+        """Change one match's race, with a note; or put it back to the usual race."""
+        f = request.form
+        if f.get("usual") == "1":
+            act("Usual race", lambda t: t.clear_race(match_id), "The race is back to the usual one.")
+        else:
+            a, b = f.get("race_a", "").strip(), f.get("race_b", "").strip()
+            if not (a.isdigit() and b.isdigit()):
+                flash("Races must be whole numbers.", "error")
+            else:
+                act("Change race", lambda t: t.set_race(match_id, int(a), int(b), f.get("note", "")), "Race changed.")
+        return redirect(back("tables"))
 
     @app.post("/t/<event>/admin/m/<match_id>/score")
     @admin_required
@@ -575,6 +598,9 @@ def register(app, h) -> dict:
     app.jinja_env.globals.setdefault("max_team_size", MAX_TEAM_SIZE)
     app.jinja_env.globals.setdefault("skill_groups_text", skill_groups_text)
     app.jinja_env.globals.setdefault("RACK_CHART", RACK_CHART)
+    app.jinja_env.globals.setdefault("RACK_RACE", RACK_RACE)
+    app.jinja_env.globals.setdefault("BALL_COUNT", BALL_COUNT)
+    app.jinja_env.globals.setdefault("race_charts", race_charts)
     app.jinja_env.globals.setdefault("CONTINUOUS", CONTINUOUS)
     app.jinja_env.globals.setdefault("READY", READY)
     app.jinja_env.globals.setdefault("MODIFIED", MODIFIED)

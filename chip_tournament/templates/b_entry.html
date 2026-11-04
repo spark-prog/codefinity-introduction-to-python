@@ -73,14 +73,18 @@
         <form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
           <button class="button secondary square">−</button></form>
-        <b class="score big-score">{{ sc }}</b>
+        <b class="score big-score">{{ sc }}{% if t.ball_count %}<small class="muted"> of {{ t.race_of(match, side) }}</small>{% endif %}</b>
         <form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
           <button class="button square">+</button></form>
+        {% if t.ball_count %}<form method="post" action="{{ url_for('b_entry_score', entry_id=entry.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="2">
+          <button class="button square" aria-label="Add 2 points (the 9)">+2</button></form>{% endif %}
       </div>
-      {% else %}<b class="score big-score">{{ sc }}</b>{% endif %}
+      {% else %}<b class="score big-score">{{ sc }}{% if t.ball_count %}<small class="muted"> of {{ t.race_of(match, side) }}</small>{% endif %}</b>{% endif %}
     </div>
     {% endfor %}
+    {% if keeper and t.ball_count and not match.sent_at %}<p class="muted">Ball count: tap + for each ball a player makes, +2 for the 9.</p>{% endif %}
     {% set winner = t.race_winner(match) %}
     {% if match.sent_at %}
     <div class="banner await-banner"><b>Result sent to the director</b>{% if winner %}: {{ t.name_of(winner) }} won {{ [match.score_a, match.score_b]|max }}-{{ [match.score_a, match.score_b]|min }}{% endif %}.

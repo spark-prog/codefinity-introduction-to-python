@@ -18,6 +18,7 @@ from chips import pool as pool_mod
 from chips import series as series_mod
 from chips import waitlist as waitlist_mod
 from chips import history as history_mod
+from chips.bracket import asks_two_levels
 from chips.engine import Player, TournamentError
 from chips.accounts import LOGIN_DAYS, Accounts, CodeJustSent, LoginError, mask_email
 from chips.throttle import Throttle
@@ -672,7 +673,7 @@ def register_registration(app) -> None:
             return redirect(url_for("register"))  # doubles: the register page, filled in, with the partner search
         fill = my_prefill(t0)
         form = {"player_member_0": me["member"]}
-        two = bool(t0.settings.skill_groups or t0.settings.race_method == "rack_chart")
+        two = asks_two_levels(t0.settings)
         player = Player(name=fill["name"], phone=fill["phone"], skill=0 if two else int(fill["skill"] or 0),
                         skill_8=int(fill["skill8"] or 0) if two else 0, skill_9=int(fill["skill9"] or 0) if two else 0)
         if request.form.get("sms_consent") == "1" and player.phone:

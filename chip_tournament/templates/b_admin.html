@@ -87,11 +87,13 @@
   {% if m and m.status == READY %}
   <div class="card match ready-to-call" id="table-{{ m.table }}">
     <div class="match-head"><span class="table-label">Table {{ m.table }}</span><span class="muted">ready to call</span></div>
-    <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }}</p>
+    <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</p>
+    {% if m.race_note %}<p class="race-note">{{ m.race_note }}</p>{% endif %}
     {% for id in (m.a, m.b) %}{% set e = t.entries[id] %}
     <div class="score-row"><div class="team-name">{{ e.name }}{% if e.shows_names %}<small class="muted names">{{ e.first_names }}</small>{% endif %}</div></div>
     {% endfor %}
-    {% if not is_viewer %}<form method="post" action="{{ url_for('b_call_match', match_id=m.id) }}" class="button-row"><button class="button">Call match</button></form>{% endif %}
+    {% if not is_viewer %}<div class="button-row"><form method="post" action="{{ url_for('b_call_match', match_id=m.id) }}" class="inline"><button class="button">Call match</button></form>
+      {% include "_b_race_change.html" %}</div>{% endif %}
   </div>
   {% elif m %}
   {% set mins = t.match_minutes_played(m) %}
@@ -101,6 +103,7 @@
       <span class="elapsed" data-since="{{ m.called_at }}" data-over="{{ s.no_rack_minutes if not (m.score_a or m.score_b) else 100000 }}" data-long="{{ s.long_match_minutes }}"></span>
     </div>
     <p class="muted card-meta">#{{ m.num }} · {{ t.match_label(m) }} · {{ t.race_text(m) }}</p>
+    {% if m.race_note %}<p class="race-note">{{ m.race_note }}</p>{% endif %}
     {% if t.needs_a_look(m) %}<p class="look-note">No rack scored yet: worth a walk over.</p>{% endif %}
     {% if m.sent_at %}<p class="sent-note">Result sent by {{ m.sent_by }}: approve it above, or fix the score first.</p>{% endif %}
     {% if m.table in s.tables_closing %}<p class="look-note">Closing after this match.
@@ -113,10 +116,13 @@
         <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="-1">
           <button class="button secondary small square" {% if is_viewer %}disabled{% endif %}>−</button></form>
-        <b class="score">{{ sc }}</b>
+        <b class="score">{{ sc }}{% if t.ball_count %}<small class="muted"> of {{ t.race_of(m, side) }}</small>{% endif %}</b>
         <form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
           <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="1">
           <button class="button small square" {% if is_viewer %}disabled{% endif %}>+</button></form>
+        {% if t.ball_count %}<form method="post" action="{{ url_for('b_score', match_id=m.id) }}" class="inline">
+          <input type="hidden" name="side" value="{{ side }}"><input type="hidden" name="delta" value="2">
+          <button class="button small square" aria-label="Add 2 points (the 9)" {% if is_viewer %}disabled{% endif %}>+2</button></form>{% endif %}
       </div>
     </div>
     {% endfor %}
@@ -150,6 +156,7 @@
           <select name="table" aria-label="Move to table" required><option value="" selected disabled>Move to…</option>{% for x in free %}<option value="{{ x }}">Table {{ x }}</option>{% endfor %}</select>
           <button class="button small secondary">Move</button></form></div>
       {% endif %}
+      <div class="more-group"><span class="muted">Race</span>{% include "_b_race_change.html" %}</div>
       {% if m.table not in s.tables_closing %}
       <div class="more-group"><span class="muted">Table {{ m.table }}</span>
         <form method="post" action="{{ url_for('b_table', table=m.table) }}" class="inline"
@@ -186,7 +193,8 @@
     <table class="grid small">
       {% for m in queue %}
       <tr><td>#{{ m.num }}</td><td><b>{{ t.name_of(m.a) }}</b> vs <b>{{ t.name_of(m.b) }}</b>{% if m.priority %} <span class="tag call">next</span>{% endif %}
-          <div class="muted">{{ t.match_label(m) }}</div></td>
+          <div class="muted">{{ t.match_label(m) }}{% if m.race_a %} · {{ t.race_text(m) }}{% endif %}</div>
+          {% if m.race_note %}<div class="race-note">{{ m.race_note }}</div>{% endif %}</td>
         <td class="nowrap">
           {% set free = t.free_tables() %}
           {% if free %}
@@ -195,6 +203,7 @@
             <button class="button small">Send</button></form>
           {% endif %}
           {% if not m.priority %}<form method="post" action="{{ url_for('b_front', match_id=m.id) }}" class="inline"><button class="button small secondary">To the front</button></form>{% endif %}
+          {% include "_b_race_change.html" %}
           <details class="inline-details"><summary class="button small secondary">Forfeit</summary>
             {% for id in (m.a, m.b) %}
             <form method="post" action="{{ url_for('b_winner', match_id=m.id) }}" class="inline">
@@ -470,14 +479,23 @@
       </div>
     </details>
     <details class="settings-section" data-key="races">
-      <summary><span class="settings-title">Races</span><span class="settings-sum">{% if s.race_method == RACK_CHART %}Rack race chart{% else %}Race to {{ s.race_winners }}{% if s.race_losers != s.race_winners %} · losers {{ s.race_losers }}{% endif %}{% if s.race_finals != s.race_winners %} · finals {{ s.race_finals }}{% endif %}{% endif %}</span></summary>
+      <summary><span class="settings-title">Races</span><span class="settings-sum">{% if s.race_method == RACK_CHART %}Original rack race chart{% elif s.race_method in (RACK_RACE, BALL_COUNT) %}{{ race_charts.method_label(s.race_method, s.race_chart) }}{% else %}Race to {{ s.race_winners }}{% if s.race_losers != s.race_winners %} · losers {{ s.race_losers }}{% endif %}{% if s.race_finals != s.race_winners %} · finals {{ s.race_finals }}{% endif %}{% endif %}</span></summary>
       <div class="settings section-fields">
     <label class="wide">How races are set
       <select name="race_method" {% if not setup %}disabled{% endif %}>
-        <option value="straight" {% if s.race_method != RACK_CHART %}selected{% endif %}>Straight race: the numbers below</option>
-        <option value="rack_chart" {% if s.race_method == RACK_CHART %}selected{% endif %}>Rack race chart: each player's race from both skill levels (singles)</option>
+        <option value="straight" {% if s.race_method == "straight" %}selected{% endif %}>Straight race: the numbers below</option>
+        <option value="rack_race" {% if s.race_method == RACK_RACE %}selected{% endif %}>Rack race chart (8-Ball &amp; Saratoga): racks from both skill levels</option>
+        <option value="ball_count" {% if s.race_method == BALL_COUNT %}selected{% endif %}>Ball count chart (9-Ball): points from each skill level</option>
+        {% if s.race_method == RACK_CHART %}<option value="rack_chart" selected>Original rack race chart, SL 1–9 (singles)</option>{% endif %}
       </select></label>
-    {% if s.race_method == RACK_CHART %}<p class="muted wide">The rack race chart sets every race, so the numbers below aren't used.</p>{% endif %}
+    <label class="wide">Chart
+      <select name="race_chart" {% if not setup %}disabled{% endif %}>
+        {% for v, label in race_charts.VERSIONS %}<option value="{{ v }}" {% if s.race_chart == v %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <p class="muted wide">Rack race charts work for singles, doubles (combined skill level) and 3-player teams; ball count charts for singles and doubles.
+      A player with no 8-Ball skill level races by their 9-Ball level. A team over the skill cap races 1 rack (or 4 points) more.
+      You can change any match's race from its card, with a note.</p>
+    {% if s.race_method != "straight" %}<p class="muted wide">The chart sets every race, so the numbers below aren't used.</p>{% endif %}
     <label>Winners side / main race to <input name="race_winners" type="number" min="1" value="{{ s.race_winners }}"></label>
     <label>Losers side race to <input name="race_losers" type="number" min="1" value="{{ s.race_losers }}"></label>
     <label>Final(s) race to <input name="race_finals" type="number" min="1" value="{{ s.race_finals }}"></label>

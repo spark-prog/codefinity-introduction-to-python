@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .bracket import DOUBLE, MAX_TEAM_SIZE, MODIFIED, RACK_CHART, ROUND_ROBIN, SINGLE, STRAIGHT, entries_label
+from .race_charts import ADJUSTED, BALL_COUNT, RACK_RACE, method_label, supports
 from .engine import TournamentError
 from .hub import BRACKET, CHIP
 
@@ -195,11 +196,16 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
         m = re.search(r"combined skill level\s*(\d+)", elig.get("skill_level_limit") or "", re.IGNORECASE)
         if m and per and per > 1:
             s["team_skill_cap"] = int(m.group(1))
-        if "chart" in method or "rack race" in method:
-            s["race_method"] = RACK_CHART
-        elif "ball" in method:
-            warnings.append("Ball-count races aren't built yet: set the races by hand.")
+        if "ball" in method and "count" in method:
+            s["race_method"] = BALL_COUNT
+        elif "chart" in method or "rack race" in method:
+            s["race_method"] = RACK_RACE
         else:
+            s["race_method"] = STRAIGHT
+        if s["race_method"] != STRAIGHT and ("short" in method or "adjust" in method):
+            s["race_chart"] = ADJUSTED
+        if supports(s["race_method"], s.get("team_size", 1)):
+            warnings.append(supports(s["race_method"], s.get("team_size", 1)) + " Set the races by hand.")
             s["race_method"] = STRAIGHT
         if race and s.get("race_method") == STRAIGHT:
             s["race_winners"] = s["race_losers"] = s["race_finals"] = race
@@ -253,7 +259,9 @@ def plan(doc: dict, rule_sets: list[dict] | None = None) -> Plan:
         ("Field cap", str(s.get("field_cap") or "No limit")),
         ("Tables", f"{len(s['tables'])} (1–{len(s['tables'])})" if s.get("tables") else "Not set"),
         ("Race", (f"Race to {race}" if race and s.get("race_method", STRAIGHT) == STRAIGHT
-                  else "Rack race chart" if s.get("race_method") == RACK_CHART else "Not set")),
+                  else "Rack race chart" if s.get("race_method") == RACK_CHART
+                  else method_label(s["race_method"], s.get("race_chart", "standard")) if s.get("race_method") in (RACK_RACE, BALL_COUNT)
+                  else "Not set")),
         ("Registration", " to ".join(x for x in (
             f"opens {_nice_day(s['registration_opens'][:10])}" if s["registration_opens"] else "",
             f"closes {_nice_day(s['registration_closes'][:10])} (end of day)" if s["registration_closes"] else "")

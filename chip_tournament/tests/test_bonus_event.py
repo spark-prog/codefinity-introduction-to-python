@@ -9,7 +9,8 @@ import pytest
 
 from app import create_app
 from chips import bonus_event
-from chips.bracket import MODIFIED, RACK_CHART
+from chips.bracket import MODIFIED
+from chips.race_charts import RACK_RACE
 from chips.engine import TournamentError
 from chips.rules import DEFAULT_RULE_SETS, slugify
 
@@ -42,7 +43,7 @@ def test_a_skill_group_bracket():
     doc["source"]["approval_status"] = "Pending"
     p = bonus_event.plan(doc, RULES)
     s = p.settings
-    assert p.kind == "bracket" and s["format"] == MODIFIED and s["team_size"] == 1 and s["race_method"] == RACK_CHART
+    assert p.kind == "bracket" and s["format"] == MODIFIED and s["team_size"] == 1 and s["race_method"] == RACK_RACE
     assert s["entry_fee_cents"] == 0 and "race_winners" not in s
     text = " ".join(p.warnings)
     assert "skill groups" in text and "Payouts" in text and "not Approved" in text.replace("'Pending', not", "not")

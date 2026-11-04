@@ -60,6 +60,8 @@ from datetime import datetime
 from . import engine
 from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, known, money, now
 from .races import group_for, group_label, rack_race
+from . import race_charts
+from .race_charts import BALL_COUNT, CHART_METHODS, RACK_RACE, STANDARD
 
 BYE = "bye"
 
@@ -78,7 +80,12 @@ MAX_TEAM_SIZE = 10  # team tournaments: 3 to this many players per entry
 def entries_label(size: int) -> str:
     """'singles', 'doubles' or 'teams of 5'."""
     return "singles" if size == 1 else "doubles" if size == 2 else f"teams of {size}"
-STRAIGHT, RACK_CHART = "straight", "rack_chart"  # race methods
+STRAIGHT, RACK_CHART = "straight", "rack_chart"  # race methods (and RACK_RACE, BALL_COUNT from race_charts)
+
+
+def asks_two_levels(s) -> bool:
+    """Singles events that place or race players by skill ask for 8-Ball and 9-Ball levels."""
+    return s.team_size == 1 and bool(s.skill_groups or s.race_method in (RACK_CHART, RACK_RACE, BALL_COUNT))
 
 # Entry statuses
 REGISTERED = "registered"
@@ -211,6 +218,8 @@ class BMatch:
     race_to: int = 0
     race_a: int = 0  # with a rack race chart: each side's own race (0 = both race to race_to)
     race_b: int = 0
+    race_note: str = ""  # why the race isn't simply the chart's (off the chart, over the cap, the director's change)
+    race_set: bool = False  # the director set this match's race: new race settings leave it alone
     table: str | None = None
     score_a: int = 0
     score_b: int = 0
@@ -302,7 +311,9 @@ class BracketSettings:
         from .schedule import OPEN, reg_window
         return reg_window(self)[0] != OPEN
     skill_groups: list[list[int]] = field(default_factory=list)  # [[1, 3], [4, 4], ...]; [] = one bracket
-    race_method: str = STRAIGHT  # STRAIGHT: the race_* numbers; RACK_CHART: each side from the rack race chart
+    race_method: str = STRAIGHT  # STRAIGHT: the race_* numbers; RACK_CHART: the original SL 1-9 rack race chart;
+    # RACK_RACE / BALL_COUNT: each side from the league's charts (chips/race_charts.py), in race_chart's version
+    race_chart: str = STANDARD  # "standard" or "adjusted"
     match_minutes: int = 30  # amber after this
     long_match_minutes: int = 45  # red after this
 
@@ -793,7 +804,9 @@ class BracketTournament:
         if s.format == ROUND_ROBIN and s.skill_groups:
             raise TournamentError("Skill groups work with single, double and modified single elimination.")
         if (s.skill_groups or s.race_method == RACK_CHART) and s.team_size != 1:
-            raise TournamentError("Skill groups and the rack race chart are for singles events.")
+            raise TournamentError("Skill groups and the original rack race chart are for singles events.")
+        if race_charts.supports(s.race_method, s.team_size):
+            raise TournamentError(race_charts.supports(s.race_method, s.team_size))
         if s.format == ROUND_ROBIN:
             if s.groups < 1:
                 raise TournamentError("Round robin needs at least 1 group.")
@@ -819,6 +832,13 @@ class BracketTournament:
         missing = [self.entries[i].name for i in ids if needs_skill and not self.entries[i].skill]
         if missing:
             raise TournamentError(f"Add a skill level first (Edit under Entries): {', '.join(missing[:5])}.")
+        if self.settings.race_method in CHART_METHODS:
+            game = "9-Ball" if self.settings.race_method == BALL_COUNT else "8-Ball or 9-Ball"
+            missing = [n for i in ids for n in race_charts.missing_levels(
+                self.settings.race_method, self.entries[i].players, self.settings.skill_game)]
+            if missing:
+                raise TournamentError(f"The race chart needs a {game} skill level for: {', '.join(missing[:5])} "
+                                      "(Edit under Entries).")
         divisions = self._divisions(ids)  # checks every group can make a bracket before anything changes
         self.order = ids + [i for i in self.order if i not in ids]
         for n, entry_id in enumerate(ids, 1):
@@ -1056,18 +1076,89 @@ class BracketTournament:
         return s.race_winners
 
     def _set_race(self, m: BMatch) -> None:
+        if m.race_set:
+            return  # the director's race for this match stands
+        s = self.settings
         m.race_to = self._race_for(m)
         m.race_a = m.race_b = 0
-        if self.settings.race_method == RACK_CHART and m.a not in (None, BYE) and m.b not in (None, BYE):
+        m.race_note = ""
+        if m.a in (None, BYE) or m.b in (None, BYE):
+            return
+        notes: list[str] = []
+        if s.race_method == RACK_CHART:
             m.race_a, m.race_b = rack_race(self.entries[m.a].skill, self.entries[m.b].skill)
+        elif s.race_method in CHART_METHODS:
+            ea, eb = self.entries[m.a], self.entries[m.b]
+            m.race_a, m.race_b, notes = race_charts.races(s.race_method, s.race_chart, s.team_size, ea.players,
+                                                          eb.players, s.skill_game, ea.name, eb.name)
+        for side in ("a", "b"):  # a team over the skill cap races longer
+            e = self.entries[getattr(m, side)]
+            if self.over_cap(e):
+                if not m.race_a:
+                    m.race_a = m.race_b = m.race_to
+                extra = race_charts.OVER_CAP_POINTS if s.race_method == BALL_COUNT else race_charts.OVER_CAP_RACKS
+                setattr(m, f"race_{side}", getattr(m, f"race_{side}") + extra)
+                notes.append(f"{e.name} is over the skill cap ({self.combined_skill(e)} of {s.team_skill_cap}): "
+                             f"{extra} more {'points' if s.race_method == BALL_COUNT else 'rack'}")
+        if m.race_a:
             m.race_to = max(m.race_a, m.race_b)
+        m.race_note = "; ".join(notes)
+
+    @staticmethod
+    def combined_skill(e: Entry) -> int:
+        return sum(p.skill for p in e.players)
+
+    def over_cap(self, e: Entry) -> bool:
+        cap = self.settings.team_skill_cap
+        return bool(cap and len(e.players) > 1 and self.combined_skill(e) > cap)
+
+    @property
+    def ball_count(self) -> bool:
+        """Races are points (9-Ball ball count), not racks."""
+        return self.settings.race_method == BALL_COUNT
+
+    def set_race(self, match_id: str, race_a: int, race_b: int, note: str) -> BMatch:
+        """Director: change one match's race (each side's own number), with a note saying why."""
+        m = self.match(match_id)
+        if m.status not in (READY, CALLED) or m.is_bye:
+            raise TournamentError("Only a match waiting for or on a table can have its race changed.")
+        if race_a < 1 or race_b < 1:
+            raise TournamentError("Each side's race must be at least 1.")
+        if race_a < m.score_a or race_b < m.score_b:
+            raise TournamentError(f"The score is already {m.score_a}-{m.score_b}: a race can't be lower than that.")
+        note = " ".join(note.split())
+        if not note:
+            raise TournamentError("Add a note saying why the race changed.")
+        m.race_a, m.race_b, m.race_to = race_a, race_b, max(race_a, race_b)
+        m.race_set, m.race_note = True, f"Set by the director: {note}"
+        unit = "points" if self.ball_count else "racks"
+        self._say(f"#{m.num} race changed: {self.name_of(m.a)} {race_a} · {self.name_of(m.b)} {race_b} {unit} ({note}).")
+        if m.status == CALLED:
+            for me, mine, theirs in ((m.a, "a", "b"), (m.b, "b", "a")):
+                self._text(self.entries[me], f"Match #{m.num} race changed: you need {self.race_of(m, mine)}, "
+                                             f"they need {self.race_of(m, theirs)} {unit}.")
+        return m
+
+    def clear_race(self, match_id: str) -> BMatch:
+        """Director: back to the race the settings give."""
+        m = self.match(match_id)
+        if m.status not in (READY, CALLED):
+            raise TournamentError("Only a match waiting for or on a table can have its race changed.")
+        m.race_set = False
+        self._set_race(m)
+        if self.race_of(m, "a") < m.score_a or self.race_of(m, "b") < m.score_b:
+            raise TournamentError("The score is already past the usual race. Fix the score first.")
+        self._say(f"#{m.num} race is back to the usual one: {self.race_text(m)}.")
+        return m
 
     def race_of(self, m: BMatch, side: str) -> int:
         """Racks side 'a' or 'b' needs to win the match."""
         return getattr(m, f"race_{side}") or m.race_to
 
     def race_text(self, m: BMatch) -> str:
-        """'race to 3', or with a rack race chart 'Ann 3 · Bob 2'."""
+        """'race to 3', or with a rack race chart 'Ann races to 3 · Bob to 2', or 'Ann 38 points · Bob 25 points'."""
+        if self.ball_count and m.race_a:
+            return f"{self.name_of(m.a)} {m.race_a} points · {self.name_of(m.b)} {m.race_b} points"
         if not (m.race_a or m.race_b):
             return f"race to {m.race_to}"
         return f"{self.name_of(m.a)} races to {m.race_a} · {self.name_of(m.b)} to {m.race_b}"
@@ -1329,6 +1420,7 @@ class BracketTournament:
         self._say(f"#{m.num} called to table {table}: {self.name_of(m.a)} vs {self.name_of(m.b)}.")
         for me, them, mine, theirs in ((m.a, m.b, "a", "b"), (m.b, m.a, "b", "a")):
             race = (f"race to {m.race_to}" if not m.race_a else
+                    f"you need {self.race_of(m, mine)} points, they need {self.race_of(m, theirs)}" if self.ball_count else
                     f"you race to {self.race_of(m, mine)}, they race to {self.race_of(m, theirs)}")
             opp = self.entries[them]
             who = f"{opp.name} ({opp.first_names})" if opp.shows_names else opp.name
@@ -1435,6 +1527,10 @@ class BracketTournament:
             raise TournamentError("Pick a side.")
         attr, other_side = f"score_{side}", "b" if side == "a" else "a"
         value = getattr(m, attr) + delta
+        if self.ball_count and delta > 0:
+            value = min(value, self.race_of(m, side))  # the 9 is worth 2, but a player only needs their points
+            if value == getattr(m, attr):
+                raise TournamentError("That side already has its points. Submit the result or press −.")
         if value < 0 or value > self.race_of(m, side):
             raise TournamentError(f"Scores go from 0 to {self.race_of(m, side)}.")
         other = getattr(m, f"score_{other_side}")
@@ -1624,6 +1720,7 @@ class BracketTournament:
                     setattr(d, side, None)
             d.status, d.winner, d.loser, d.ready_at, d.finished_at, d.table = PENDING, None, None, None, None, None
             d.score_a = d.score_b = 0
+            d.race_set, d.race_note = False, ""  # new players: the director's race for the old pairing doesn't carry over
 
     def call_to_table(self, match_id: str, table: str) -> BMatch:
         m = self.match(match_id)

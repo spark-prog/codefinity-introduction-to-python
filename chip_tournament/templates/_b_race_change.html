@@ -1,0 +1,14 @@
+{# Director: change one match's race (each side's own number) with a note, or put it back. Needs t, m. #}
+{% set unit = "points" if t.ball_count else "racks" %}
+<details class="inline-details race-change"><summary class="button small secondary">Change race</summary>
+  <form method="post" action="{{ url_for('b_set_race', match_id=m.id) }}" class="form race-change-form">
+    <label>{{ t.name_of(m.a) }} needs <input name="race_a" type="number" min="1" inputmode="numeric" value="{{ t.race_of(m, 'a') }}" required> {{ unit }}</label>
+    <label>{{ t.name_of(m.b) }} needs <input name="race_b" type="number" min="1" inputmode="numeric" value="{{ t.race_of(m, 'b') }}" required> {{ unit }}</label>
+    <label>Why <input name="note" maxlength="200" placeholder="e.g. both players agreed to a shorter race" required></label>
+    <button class="button small">Change race</button>
+  </form>
+  {% if m.race_set %}
+  <form method="post" action="{{ url_for('b_set_race', match_id=m.id) }}" class="inline">
+    <input type="hidden" name="usual" value="1"><button class="button small secondary">Back to the usual race</button></form>
+  {% endif %}
+</details>

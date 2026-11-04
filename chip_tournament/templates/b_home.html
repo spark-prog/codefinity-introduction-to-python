@@ -23,6 +23,8 @@
         <br><span class="muted">You play in the group for the higher of your 8-Ball and 9-Ball skill levels. Each group has its own bracket and champion.</span></span></li>{% endif %}
       <li><span class="k">Races</span><span class="v">
         {% if s.race_method == RACK_CHART %}Rack race chart: each player's race is set by both players' skill levels
+        {% elif s.race_method == RACK_RACE %}{{ race_charts.method_label(s.race_method, s.race_chart) }}: each {{ "player's" if s.team_size == 1 else "team's" }} race is set by both {{ "players' skill levels" if s.team_size == 1 else "teams' combined skill levels" }}
+        {% elif s.race_method == BALL_COUNT %}{{ race_charts.method_label(s.race_method, s.race_chart) }}: each {{ "player" if s.team_size == 1 else "team" }} needs the points for {{ "their 9-Ball skill level" if s.team_size == 1 else "its combined 9-Ball skill level" }} (1 per ball, 2 for the 9)
         {% elif s.format == "round_robin" %}Race to {{ s.race_winners }}{% if s.advance %} · playoff final race to {{ s.race_finals }}{% endif %}
         {% elif s.format == "single" %}Race to {{ s.race_winners }} · final race to {{ s.race_finals }}
         {% else %}Winners side race to {{ s.race_winners }} · losers side race to {{ s.race_losers }} · {{ "finals" if s.format == "double" else "final" }} race to {{ s.race_finals }}{% endif %}</span></li>

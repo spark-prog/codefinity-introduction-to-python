@@ -115,7 +115,7 @@ class Hub:
     # Settings that belong to one event's history, not its setup: a copy starts without them.
     NOT_COPIED = ("name", "date", "bonus_event_id", "registration_closed", "elig_audit", "elig_locked_at",
                   "elig_overrides", "elig_snapshot", "review_requests", "member_exceptions", "partner_seekers",
-                  "tables_down", "tables_closing", "push_to")
+                  "tables_down", "tables_closing", "push_to", "reminders_sent")
 
     def copy(self, event_id: str, name: str, date: str = "") -> tuple[Event, list[str]]:
         """A new event with the same type and settings as `event_id`: no players, results or history. The

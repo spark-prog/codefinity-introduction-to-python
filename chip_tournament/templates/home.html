@@ -19,6 +19,7 @@
   <div class="card">
     <p class="eyebrow">Event details</p>
     <ul class="facts">
+      {% set cal = calendar_links(g.event.id, t) if t.status == "setup" else none %}{% if cal %}<li><span class="k">Calendar</span><span class="v">{% include "_calendar_links.html" %}</span></li>{% endif %}
       <li><span class="k">Entry</span><span class="v">{{ s.entry_fee_cents|money }} per team{% if s.added_money_cents %} · {{ s.added_money_cents|money }} added{% endif %}</span></li>
       <li><span class="k">Format</span><span class="v">Teams of {{ TEAM_SIZE }} · race to {{ s.race_to }}</span></li>
       {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} <span class="muted">at the tournament desk. Teams not checked in may lose their spot to the waiting list.</span></span></li>{% endif %}

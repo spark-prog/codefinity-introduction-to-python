@@ -18,6 +18,7 @@
   <div class="card">
     <p class="eyebrow">Event details</p>
     <ul class="facts">
+      {% set cal = calendar_links(g.event.id, t) if t.status == "setup" else none %}{% if cal %}<li><span class="k">Calendar</span><span class="v">{% include "_calendar_links.html" %}</span></li>{% endif %}
       <li><span class="k">Format</span><span class="v">{{ t.format_name }} · {{ t.entries_label }}</span></li>
       {% if s.skill_groups %}<li><span class="k">Skill groups</span><span class="v">{% for lo, hi in s.skill_groups %}<span class="pill">SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}</span>{% endfor %}
         <br><span class="muted">You play in the group for the higher of your 8-Ball and 9-Ball skill levels. Each group has its own bracket and champion.</span></span></li>{% endif %}

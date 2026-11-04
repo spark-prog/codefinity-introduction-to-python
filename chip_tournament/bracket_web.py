@@ -151,6 +151,8 @@ def register(app, h) -> dict:
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.checkin_by = f.get("checkin_by", "").strip()
             s.sms_name = f.get("sms_name", "").strip()
+            if f.get("reminders_shown"):
+                s.reminders, s.reminder_texts = f.get("reminders") == "1", f.get("reminder_texts") == "1"
             s.contact_phone = f.get("contact_phone", "").strip()
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))

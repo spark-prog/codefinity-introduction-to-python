@@ -301,6 +301,9 @@ class Settings:
     # them and start the clock. CONTINUOUS: matches are called the moment a table is free.
     call_mode: str = DIRECTOR_CALLS
     test_event: bool = False  # a practice event: never texts anyone and is hidden from the public lists
+    reminders: bool = True  # email registered players the day before and 2 hours before (chips/reminders.py)
+    reminder_texts: bool = False  # and text them (players who agreed to texts)
+    reminders_sent: dict = field(default_factory=dict)  # {"day" / "2h": when it went out}: bookkeeping
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
     member_exceptions: list[dict] = field(default_factory=list)

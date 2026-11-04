@@ -1062,3 +1062,22 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
 .flash-toast-close { position: absolute; top: 4px; right: 6px; background: none; border: 0; color: inherit;
   font-size: 1.5rem; line-height: 1; padding: 6px 10px; cursor: pointer; color: #fff; }
 .button-row > .race-change { align-self: center; }
+
+/* ---------- Table QR codes (sticker sheet and the page a scan opens) ---------- */
+.qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; margin-top: 16px; }
+.qr-sticker { background: #fff; color: #111; border-radius: 14px; padding: 14px 14px 10px; text-align: center; break-inside: avoid; }
+.qr-sticker p { margin: 0; color: #111; text-shadow: none; }
+.qr-venue { font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.qr-table { font-size: 2rem; font-weight: 800; line-height: 1.1; margin: 2px 0 6px !important; }
+.qr-code svg { display: block; width: 100%; max-width: 220px; height: auto; margin: 0 auto; }
+.qr-hint { font-weight: 700; font-size: 1.05rem; margin-top: 4px !important; }
+.qr-link { font-size: .7rem; color: #555 !important; word-break: break-all; }
+.scan-sides { display: grid; gap: 12px; margin-top: 12px; }
+.scan-sides .button small { display: block; font-size: .8rem; font-weight: 500; opacity: .85; text-transform: none; letter-spacing: 0; }
+@media print {
+  body:has(.qr-sheet) .site-footer, body:has(.qr-sheet) .test-banner, body:has(.qr-sheet) .player-view-bar { display: none !important; }
+  body:has(.qr-sheet) { background: #fff !important; background-image: none !important; }
+  .qr-sheet { grid-template-columns: repeat(2, 1fr); gap: .3in; margin: 0; }
+  .qr-sticker { border: 1.5px dashed #999; padding: .2in; }
+  .qr-code svg { max-width: 2.6in; }
+}

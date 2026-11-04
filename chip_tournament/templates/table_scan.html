@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Table {{ table }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Scanned at the table</p>
+  <h1>Table {{ table }}</h1>
+</section>
+
+{% for row in playing %}{% set m = row.m %}
+<section class="card table-scan">
+  <p class="eyebrow">{{ row.t.settings.name }}{% if row.t.settings.test_event %} · test event{% endif %}</p>
+  <h2>{{ row.sides[0].name }} vs {{ row.sides[1].name }}</h2>
+  <p class="muted">{{ row.race }}</p>
+  <p><b>Which side are you on?</b> Tap your {{ "name" if row.event.kind == "bracket" and row.t.settings.team_size == 1 else "team" }} to keep score{% if not g.player %} (you'll enter your PIN, or <a href="{{ url_for('player_login', next=request.full_path) }}">log in</a> to skip it next time){% endif %}.</p>
+  <div class="scan-sides">
+    {% for s in row.sides %}
+    <a class="button big block" href="{{ s.url }}">{{ s.name }}{% if s.names %}<small>{{ s.names }}</small>{% endif %}</a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+{% if not playing %}
+<section class="card">
+  <h2>No match on this table right now</h2>
+  {% if next_up %}
+    {% for row in next_up %}<p>Up next here: <b>{{ row.sides|map(attribute="name")|join(" vs ") }}</b> ({{ row.t.settings.name }}). The director will call it shortly: scan again once it's called.</p>{% endfor %}
+  {% elif events %}
+    <p class="muted">Nothing is set for Table {{ table }} yet. Check the board for your next match.</p>
+  {% else %}
+    <p class="muted">There's no tournament running here right now.</p>
+  {% endif %}
+  {% if events %}<div class="button-row">{% for ev, et in events %}<a class="button secondary" href="{{ url_for('board', event=ev.id) }}">{{ et.settings.name }}: board</a>{% endfor %}</div>
+  {% else %}<p><a class="button secondary" href="{{ url_for('index') }}">All events</a></p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

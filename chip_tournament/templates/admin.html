@@ -64,6 +64,7 @@
 <section id="matches" class="jump-target">
   {% set ready = t.assigned_matches() %}
   <div class="section-head"><h2>Tables</h2>
+    <a class="button small secondary" href="{{ url_for('admin_table_qr') }}" target="_blank" rel="noopener">Table QR codes ↗</a>
     {% if ready and not is_viewer %}<form method="post" action="{{ url_for('admin_call_all') }}" class="inline"
         data-dialog-title="Call all {{ ready|length }} match(es)?" data-dialog-text="Every team set for a table is texted its table now." data-dialog-ok="Call all">
       <button class="button small">Call all ({{ ready|length }})</button></form>{% endif %}
@@ -559,6 +560,7 @@
     <label>Catch-up: move a team up when it's this many matches behind <input name="catchup_matches" type="number" min="1" value="{{ s.catchup_matches }}"></label>
     <label>Race to <input name="race_to" type="number" min="1" value="{{ s.race_to }}"></label>
     <label>Tables (comma separated) <input name="tables" value="{{ s.tables|join(', ') }}"></label>
+    <p class="muted wide"><a href="{{ url_for('admin_table_qr') }}" target="_blank" rel="noopener">Print table QR codes ↗</a>: one sticker per table. Players scan it to open their match and keep score.</p>
       </div>
     </details>
     <details class="settings-section" data-key="texts">

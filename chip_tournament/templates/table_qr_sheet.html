@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Table QR codes · {{ t.settings.name }}{% endblock %}
+{% block content %}
+<section class="card noprint">
+  <h1>Table QR codes</h1>
+  <p>Print this page and stick one code on each table. Players scan it with their phone camera to open the match
+    on that table and keep score: they tap their side, then enter their PIN (or go straight in when they're logged in).</p>
+  <p class="muted">{% if venue %}The codes are for <b>{{ venue }}</b>, not this event: they keep working for every event held there,
+    as long as the event's venue is spelled the same way.{% else %}This event has no venue set, so the codes work for any running event
+    (set the venue in Settings first if the venue hosts events on the same night as another venue).{% endif %}</p>
+  <form method="get" class="form inline-form">
+    <label>Tables <input name="tables" value="{{ tables_text }}" size="40"></label>
+    <button class="button secondary">Update</button>
+    <button type="button" class="button" onclick="window.print()">Print</button>
+  </form>
+</section>
+<div class="qr-sheet">
+  {% for s in stickers %}
+  <div class="qr-sticker">
+    {% if venue %}<p class="qr-venue">{{ venue }}</p>{% endif %}
+    <p class="qr-table">Table {{ s.table }}</p>
+    <div class="qr-code">{{ s.qr }}</div>
+    <p class="qr-hint">Scan to keep score</p>
+    <p class="qr-link">{{ s.short }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

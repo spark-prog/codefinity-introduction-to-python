@@ -48,6 +48,11 @@
           <form method="post" action="{{ url_for('admin_overrides') }}" class="correct-form" style="margin-top: 6px">
             <input type="hidden" name="member" value="{{ r.member }}"><input type="hidden" name="back" value="{{ url_for('admin_skill_check') }}">
             <input name="note" required placeholder="Why" aria-label="Why"><button class="button small secondary">Override</button></form>{% endif %}
+          {% if can_fix and not is_viewer %}
+          <form method="post" action="{{ url_for('admin_eligibility_remove') }}" class="inline remove-ineligible"
+                onsubmit="return confirm('Remove {{ grp.name|replace("'", "’")|e }}{{ ' (the whole team)' if grp.players|length > 1 else '' }} from {{ s.name|replace("'", "’")|e }}? They\'re emailed and texted why, and the next on the waiting list moves in.')">
+            <input type="hidden" name="id" value="{{ grp.id }}"><input type="hidden" name="reason" value="{{ r.elig.no|join(' ') }}">
+            <button class="button small danger-outline">Remove{{ " team" if grp.players|length > 1 else "" }}</button></form>{% endif %}
         {% elif r.elig and r.elig.review %}<span class="check-badge differs">Check</span><br>{{ r.elig.review|join("; ") }}
         {% elif r.elig %}<span class="check-badge ok">Eligible</span>{% if r.elig.grace %}<br><span class="muted">one-time grace ({{ r.elig.grace }})</span>{% endif %}{% else %}—{% endif %}
         {% if r.elig and r.elig.locked %}<br><span class="muted">as of the lock</span>{% endif %}

@@ -6,6 +6,7 @@ a player on the same phone doesn't stay a director for 90 days.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime
 
@@ -751,7 +752,15 @@ def register_registration(app) -> None:
                 fit = my_eligibility(t)
                 if not fit or fit["ok"]:
                     raise TournamentError("You're eligible already: go ahead and register.")
-                eligibility.request_review(t, me["member"], full_name(me), fit["no"], request.form.get("message", ""))
+                req = eligibility.request_review(t, me["member"], full_name(me), fit["no"],
+                                                 request.form.get("message", ""))
+                name = t.settings.name
+            email_office(f"Review requested: {req['name']} for {name}",
+                         f"{req['name']} (member {req['member']}) asked for a review for {name}.\n\n"
+                         f"Why they're not eligible: {' '.join(req['reasons'])}\n"
+                         + (f"Their message: {req['message']}\n" if req["message"] else "")
+                         + f"\nApprove or decline it in the Eligibility section: "
+                         f"{request.url_root.rstrip('/')}{url_for('admin')}#eligibility")
             flash("Sent to the league office. You'll get an email when they decide.", "ok")
         except TournamentError as exc:
             flash(str(exc), "error")
@@ -777,6 +786,58 @@ def register_registration(app) -> None:
             flash(str(exc), "error")
         return redirect(url_for("admin") + "#eligibility")
 
+    def email_office(subject: str, text: str) -> bool:
+        """Alert the league office (DIRECTOR_EMAIL, else the support address)."""
+        mailer = backup.Mailer.from_env()
+        to = os.environ.get("DIRECTOR_EMAIL", "").strip() or app.jinja_env.globals["legal"]["email"]
+        if mailer is None or not to:
+            return False
+        try:
+            mailer.send_to(to, subject, text, sender="Control Table")
+            return True
+        except backup.BackupError:
+            return False
+
+    @app.post("/t/<event>/admin/eligibility-remove")
+    def admin_eligibility_remove():
+        """From the eligibility check: take an entry or team out because a player isn't eligible, and tell them."""
+        if (stop := admin_only()) is not None:
+            return stop
+        group_id, reason = request.form.get("id", ""), " ".join(request.form.get("reason", "").split())
+        try:
+            with g.event.store.change("Removed (not eligible)") as t:
+                groups = getattr(t, "teams", None) if g.event.kind == "chip" else t.entries
+                grp = (groups or {}).get(group_id)
+                if grp is None:
+                    raise TournamentError("That entry isn't registered any more.")
+                name, event_name, players_ = grp.name, t.settings.name, list(grp.players)
+                why = reason or "a player doesn't meet this event's eligibility requirements."
+                notice = (f"{name} has been removed from {event_name} by the league office: {why}")
+                if g.event.kind == "chip":
+                    t._text_team(grp, notice)
+                    t.remove_team(group_id)
+                else:
+                    t._text(grp, notice)
+                    t.remove_entry(group_id)
+                for p in players_:
+                    eligibility.audit(t, "removed (not eligible)", p.member, p.name, why)
+                messages, t.outbox, test = list(t.outbox), [], t.settings.test_event
+            for m in messages:
+                g.event.sms.send(m.to, m.body, test=test)
+            link = request.url_root.rstrip("/") + url_for("register")
+            emailed = 0
+            for p in players_:
+                if p.member and email_player(p.member, f"{event_name}: you've been removed",
+                                             f"{notice}\n\nIf you think this is a mistake, log in and ask the league "
+                                             f"office for a review on the registration page: {link}"):
+                    emailed += 1
+            flash(f"Removed {name}." + (f" Emailed {emailed} player{'s' if emailed != 1 else ''}." if emailed else
+                                         " Nobody had an email on file, so let them know yourself.")
+                  + (" They were texted too." if messages and not test else ""), "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_skill_check"))
+
     @app.post("/t/<event>/admin/overrides")
     def admin_overrides():
         if (stop := admin_only()) is not None:
@@ -792,8 +853,23 @@ def register_registration(app) -> None:
                     eligibility.remove_override(t, member)
                     msg = f"Removed the override for {name}."
                 else:
-                    eligibility.add_override(t, member, name, request.form.get("note", ""))
+                    note = request.form.get("note", "")
+                    eligibility.add_override(t, member, name, note)
+                    for req in [r for r in eligibility.open_reviews(t) if r["member"] == member]:
+                        eligibility.decide_review(t, req["id"], True, note)  # the override answers their request
                     msg = f"{name} is eligible for this event (override)."
+                    registered = any(p.member == member for grp in (getattr(t, "teams", None) or t.entries).values()
+                                     for p in grp.players)
+                    event_name = t.settings.name
+            if request.form.get("action") != "remove":
+                link = request.url_root.rstrip("/") + url_for("register")
+                body = (f"Good news: the league office approved you for {event_name}. "
+                        + ("You're registered and cleared to play." if registered else f"Register here: {link}")
+                        + f"\n\nNote: {note.strip()}")
+                if email_player(member, f"{event_name}: you're approved", body):
+                    msg += " They've been emailed."
+                else:
+                    msg += " (No email on file, so let them know yourself.)"
             flash(msg, "ok")
         except TournamentError as exc:
             flash(str(exc), "error")

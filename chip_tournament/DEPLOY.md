@@ -33,6 +33,7 @@ Cost: the Hobby plan is about $5/month, and that includes usage credit that shou
    | `GOOGLE_SERVICE_ACCOUNT_JSON` | The whole service-account key file (JSON), pasted in. Used to read the player list from the restricted Google Sheet and to save backups to Google Drive. Share the sheet and the backup folder with the service account's email address. |
    | `BACKUP_DRIVE_FOLDER_ID` | Optional. The Google Drive folder for nightly backups (the ID or the folder's link). It must be in a **Shared drive** the service account belongs to; if Drive fails or this isn't set, backups are emailed instead. |
    | `BACKUP_EMAIL` | Optional. Where emailed backups go. Defaults to `GMAIL_ADDRESS`. |
+   | `DIRECTOR_EMAIL` | Optional. Where director alerts go (a player asked for an eligibility review). Defaults to the support address (`SUPPORT_EMAIL`, firstcoast@apaleagues.com). |
    | `TRUSTED_IP_HEADER` | Optional. When the site sits behind a CDN such as Cloudflare, the header that carries the real visitor's address (`CF-Connecting-IP` for Cloudflare), so login limits count each visitor separately. Check what your host sends at `/admin/whoami` (director only) before setting it, and only set it if every request really comes through that CDN. |
    | `FLASK_DEBUG` | Local testing only (`python app.py`). Never set it on the live server. |
 

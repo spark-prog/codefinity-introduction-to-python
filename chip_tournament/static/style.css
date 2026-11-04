@@ -1086,3 +1086,11 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
 .cal-menu { display: inline-block; }
 .cal-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .cal-menu > summary { display: inline-flex; align-items: center; min-height: 0; }
+
+/* Seed by skill: the game picker next to its button, and the groups preview */
+.seed-skill-form { display: inline-flex; align-items: center; gap: 8px; }
+.seed-skill-form select { min-height: 38px; padding: 0 10px; font: inherit; font-size: .9rem; color: var(--ink);
+  background: rgba(0, 0, 0, .3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+.seed-skill-form select option { background: var(--surface-solid); color: var(--ink); }
+.tier-preview .pill { margin: 2px 6px 2px 0; }
+.seed-note { font-style: normal; }

@@ -63,22 +63,57 @@ def test_player_goes_in_the_group_for_their_higher_level():
         t.register_entry("", [Player("Di", skill_8=8)])  # 8-Ball levels go 2 to 7
 
 
-def test_small_groups_join_the_neighbor_with_fewer_players():
-    t = event({2: 6, 4: 2, 5: 7, 6: 5, 8: 3})
-    t.start(random.Random(1))
-    assert t.division_names == ["SL 1–4", "SL 5", "SL 6–9"]
-    sizes = {d: len(t.division_entries(d)) for d in t.division_names}
-    assert sizes == {"SL 1–4": 8, "SL 5": 7, "SL 6–9": 8}
-    assert any("SL 4 (2) was too small" in line for line in t.log)
+def play_out(t, seed=3):
+    rng = random.Random(seed)
+    while t.status == "running":
+        m = next(m for m in t.matches if m.status == "called")
+        while not t.race_winner(m):
+            t.score(m.id, rng.choice("ab"), 1)
+        t.submit_result(m.id)
 
 
-def test_a_tie_joins_the_lower_group_and_merges_repeat():
-    t = event({4: 6, 5: 1, 6: 6})
+def test_groups_never_merge_and_a_small_one_plays_single_elimination():
+    t = event({2: 6, 4: 2, 5: 7, 6: 5, 8: 3})  # modified single elimination to a final 4: SL 4 and SL 7-9 are small
     t.start(random.Random(1))
-    assert t.division_names == ["SL 4–5", "SL 6"]
-    t = event({2: 2, 4: 2, 5: 2})  # every group small: they keep joining until one can play
+    assert t.division_names == ["SL 1–3", "SL 4", "SL 5", "SL 6", "SL 7–9"]
+    assert {d: len(t.division_entries(d)) for d in t.division_names} == {"SL 1–3": 6, "SL 4": 2, "SL 5": 7, "SL 6": 5,
+                                                                         "SL 7–9": 3}
+    assert t.division_formats == {"SL 4": "single", "SL 7–9": "single"}
+    assert any("SL 4 has 2 players, too few for modified single elimination, so it plays single elimination" in x
+               for x in t.log)
+    assert t.round_title("W", 1, "SL 4") == "Final" and t.stage_title("W", "SL 4") == "Bracket"  # no "Winners round"
+    assert t.stage_title("W", "SL 5") == "Winners side"
+    play_out(t)
+    places = t.places()
+    for d in t.division_names:
+        members = t.division_entries(d)
+        assert [e.status for e in members].count("champion") == 1
+        assert sorted(places[e.id][0] for e in members)[:2] == [1, 2]
+
+
+def test_a_one_player_group_joins_the_neighbor_with_the_fewest_players():
+    t = event({2: 6, 4: 1, 5: 7, 6: 3})  # SL 4's neighbors: SL 1-3 (6) and SL 5 (7)
     t.start(random.Random(1))
-    assert t.division_names == ["SL 1–5"]
+    assert t.division_names == ["SL 1–4", "SL 5", "SL 6"]
+    assert any("SL 4 has one player, so it joins the group next to it with the fewest players: SL 1–4" in x
+               for x in t.log)
+    t = event({2: 5, 4: 1, 5: 5})  # a tie goes to the lower group
+    t.start(random.Random(1))
+    assert t.division_names == ["SL 1–4", "SL 5"]
+    t = event({4: 1, 5: 7, 6: 1})  # two one-player groups: each joins in turn
+    t.start(random.Random(1))
+    assert t.division_names == ["SL 4–6"]
+    play_out(t)
+    assert t.status == "finished"
+
+
+def test_the_director_sees_the_groups_before_the_draw():
+    t = event({2: 6, 4: 2, 8: 1, 6: 5})
+    plan = t.tier_preview()
+    assert plan["error"] == "" and plan["rows"] == [("SL 1–3", 6, "modified"), ("SL 4", 2, "single"),
+                                                    ("SL 6–9", 6, "modified")]
+    assert any("SL 7–9 has one player" in n for n in plan["notes"]) and not any("SL 7–9 has one player" in x for x in t.log)
+    assert t.status == "setup" and not t.matches  # looking changes nothing
 
 
 def test_each_group_plays_its_own_bracket_to_its_own_champion():

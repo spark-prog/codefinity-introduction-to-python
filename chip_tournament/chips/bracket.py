@@ -43,8 +43,10 @@ Skill groups and rack races (singles)
 * With skill groups set (e.g. SL 1-3, 4, 5, 6, 7-9), each player goes in the
   group for their skill level (the higher of their 8-Ball and 9-Ball levels)
   and each group plays its own bracket with its own champion; the groups share
-  the tables. At the draw, a group too small for the format joins whichever
-  neighboring group has fewer players.
+  the tables. Groups never merge, except that a group with one player joins the
+  neighboring group with the fewest players. A group too small for the format
+  (modified single elimination needs more than its final) plays single
+  elimination instead.
 * With the rack race chart, each side of a match gets its own race from the
   two players' skill levels (see races.py).
 """
@@ -60,7 +62,7 @@ from datetime import datetime
 from . import engine
 from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, known, money, now
 from .races import group_for, group_label, rack_race
-from . import race_charts
+from . import race_charts, seeding
 from .race_charts import BALL_COUNT, CHART_METHODS, RACK_RACE, STANDARD
 
 BYE = "bye"
@@ -163,6 +165,7 @@ class Entry:
     payout_texted: bool = False
     payout_texted_cents: int = 0  # the amount in that text, so a later correction can be texted
     division: str = ""  # skill group label ("SL 4"); "" when the event has one bracket
+    seed_note: str = ""  # why "Seed by skill" put it where it did (shown before the draw)
     offer_until: str = ""  # waiting list: offered an open spot until this time (chips/waitlist.py)
     offer_emailed: str = ""  # the offer (its deadline) the players were emailed about
 
@@ -330,6 +333,7 @@ class BracketTournament:
     order: list[str] = field(default_factory=list)  # entry ids in seed / sign-up order
     waitlist: list[str] = field(default_factory=list)
     groups: dict[str, list[str]] = field(default_factory=dict)
+    division_formats: dict[str, str] = field(default_factory=dict)  # a skill group that plays another format than the event's
     matches: list[BMatch] = field(default_factory=list)
     status: str = SETUP
     site_url: str = ""
@@ -786,7 +790,30 @@ class BracketTournament:
         ids = [e.id for e in self.field_entries]
         (rng or random).shuffle(ids)
         self.order = ids + [i for i in self.order if i not in ids]
+        for e in self.entries.values():
+            e.seed_note = ""
         self._say("Shuffled the entry order.")
+
+    def seed_by_skill(self, game: str, record_for) -> int:
+        """Put the field in seed order: skill level in `game` ("8" or "9"), then the other game's level if played in
+        the 4 months before the event, then first name (chips/seeding.py). Switches to manual seeding so the draw
+        keeps this order; the director can still move people. Returns how many entries were seeded."""
+        if self.status != SETUP:
+            raise TournamentError("The order is set once the bracket is drawn.")
+        if self.settings.team_size != 1:
+            raise TournamentError("Seeding by skill level is for singles events.")
+        if game not in seeding.GAMES:
+            raise TournamentError("Pick 8-Ball or 9-Ball.")
+        ids = [e.id for e in self.field_entries]
+        if len(ids) < 2:
+            raise TournamentError("Add at least 2 entries first.")
+        ranked = seeding.rank(self, ids, game, record_for)
+        self.order = [i for i, _ in ranked] + [i for i in self.order if i not in ids]
+        for entry_id, note in ranked:
+            self.entries[entry_id].seed_note = note
+        self.settings.seeding = "manual"
+        self._say(f"Seeded {len(ids)} entries by {seeding.GAMES[game]} skill level.")
+        return len(ids)
 
     # ------------------------------------------------------------- the draw
 
@@ -842,7 +869,7 @@ class BracketTournament:
             if missing:
                 raise TournamentError(f"The race chart needs a {game} skill level for: {', '.join(missing[:5])} "
                                       "(Edit under Entries).")
-        divisions = self._divisions(ids)  # checks every group can make a bracket before anything changes
+        divisions, notes, small = self._plan_divisions(ids)  # checks every group can make a bracket before anything changes
         self.order = ids + [i for i in self.order if i not in ids]
         for n, entry_id in enumerate(ids, 1):
             entry = self.entries[entry_id]
@@ -850,10 +877,15 @@ class BracketTournament:
         for entry_id in list(self.waitlist):
             self._text(self.entries[entry_id], f"The bracket for {self.settings.name} is drawn and the field is set. "
                                                "Sorry we couldn't fit you in this time.")
-        self.matches, self.groups = [], {}
-        builder = {SINGLE: self._build_single_event, DOUBLE: self._build_double,
-                   MODIFIED: self._build_double, ROUND_ROBIN: self._build_round_robin}[self.settings.format]
-        for label, members in divisions:
+        self.matches, self.groups, self.division_formats = [], {}, {}
+        builders = {SINGLE: self._build_single_event, DOUBLE: self._build_double,
+                    MODIFIED: self._build_double, ROUND_ROBIN: self._build_round_robin}
+        for note in notes + small:
+            self._say(note)
+        for label, members, fmt in divisions:
+            builder = builders[fmt]
+            if fmt != self.settings.format:
+                self.division_formats[label] = fmt
             first = len(self.matches)
             for entry_id in members:
                 self.entries[entry_id].division = label
@@ -872,16 +904,18 @@ class BracketTournament:
         except TournamentError:
             return False
 
-    def _divisions(self, ids: list[str]) -> list[tuple[str, list[str]]]:
-        """Split the field (in draw order) into skill groups, merging any group too small to play.
+    def _plan_divisions(self, ids: list[str]) -> tuple[list[tuple[str, list[str], str]], list[str], list[str]]:
+        """Split the field (in seed order) into skill groups: [(label, entry ids, format)] from the lowest group up,
+        the notes about groups that joined another, and the notes about groups that play single elimination.
 
-        A group too small for the format joins whichever neighboring group has fewer players
-        (the lower one on a tie). Returns [(label, entry ids)] from the lowest group up.
+        Groups never merge, except a group with one player (it can't make a bracket): that player's group joins the
+        neighboring group with the fewest players (the lower one on a tie). Any other group plays its own bracket; if
+        it's too small for the event's format it plays single elimination.
         """
-        groups = self.settings.skill_groups
-        if not groups:
-            return [("", ids)]
-        buckets = [[lo, hi, []] for lo, hi in groups]
+        s, notes, small = self.settings, [], []
+        if not s.skill_groups:
+            return [("", ids, s.format)], notes, small
+        buckets = [[lo, hi, []] for lo, hi in s.skill_groups]
         for entry_id in ids:
             skill = self.entries[entry_id].skill
             bucket = next((b for b in buckets if b[0] <= skill <= b[1]), None)
@@ -889,22 +923,43 @@ class BracketTournament:
                 raise TournamentError(f"{self.entries[entry_id].name} (SL {skill}) isn't in any skill group.")
             bucket[2].append(entry_id)
         buckets = [b for b in buckets if b[2]]
-        while True:
-            small = [b for b in buckets if not self._fits(len(b[2]))]
-            if not small:
+        while len(buckets) > 1:
+            single = [b for b in buckets if len(b[2]) == 1]
+            if not single:
                 break
-            if len(buckets) == 1:
-                self.check_format(len(buckets[0][2]))  # raises with the reason
-            b = min(small, key=lambda x: (len(x[2]), x[0]))
+            b = min(single, key=lambda x: x[0])
             i = buckets.index(b)
             neighbors = [buckets[j] for j in (i - 1, i + 1) if 0 <= j < len(buckets)]
             into = min(neighbors, key=lambda x: (len(x[2]), x[0]))
             into[0], into[1] = min(into[0], b[0]), max(into[1], b[1])
-            into[2] = [x for x in ids if x in set(into[2]) | set(b[2])]  # keep the draw order
+            into[2] = [x for x in ids if x in set(into[2]) | set(b[2])]  # keep the seed order
             buckets.remove(b)
-            self._say(f"Skill group {group_label(b[0], b[1])} ({len(b[2])}) was too small, so it joined the next group "
-                      f"to make {group_label(into[0], into[1])}.")
-        return [(group_label(lo, hi), members) for lo, hi, members in buckets]
+            notes.append(f"Skill group {group_label(b[0], b[1])} has one player, so it joins the group next to it "
+                         f"with the fewest players: {group_label(into[0], into[1])}.")
+        if len(buckets) == 1:
+            self.check_format(len(buckets[0][2]))  # raises with the reason
+        out = []
+        for lo, hi, members in buckets:
+            fmt = s.format if self._fits(len(members)) else SINGLE
+            if fmt != s.format:
+                small.append(f"Skill group {group_label(lo, hi)} has {len(members)} players, too few for "
+                             f"{FORMAT_NAMES[s.format].lower()}, so it plays single elimination.")
+            out.append((group_label(lo, hi), members, fmt))
+        return out, notes, small
+
+    def tier_preview(self) -> dict:
+        """What the draw would make of the field now, for the director: {'rows': [(label, count, format)], 'notes': [...],
+        'error': ''}."""
+        ids = [e.id for e in self.field_entries]
+        try:
+            divisions, notes, _ = self._plan_divisions(ids)
+        except TournamentError as exc:
+            return {"rows": [], "notes": [], "error": str(exc)}
+        return {"rows": [(label, len(members), fmt) for label, members, fmt in divisions], "notes": notes, "error": ""}
+
+    def format_of(self, division: str) -> str:
+        """The format a skill group plays (the event's, unless the group was too small for it)."""
+        return self.division_formats.get(division, self.settings.format)
 
     @property
     def division_names(self) -> list[str]:
@@ -1448,23 +1503,24 @@ class BracketTournament:
         return max((m.round for m in self.matches if m.stage == stage and m.division == division), default=0)
 
     def round_title(self, stage: str, rnd: int, division: str = "") -> str:
-        last = self.stage_rounds(stage, division)
-        if stage == "W" and self.settings.format == SINGLE:
+        last, fmt = self.stage_rounds(stage, division), self.format_of(division)
+        if stage == "W" and fmt == SINGLE:
             return round_name(last - rnd)
         if stage == "P":
             return round_name(last - rnd)
         if stage == "W":
-            return "Winners final" if rnd == last and self.settings.format == DOUBLE else f"Winners round {rnd}"
+            return "Winners final" if rnd == last and fmt == DOUBLE else f"Winners round {rnd}"
         if stage == "L":
-            return "Losers final" if rnd == last and self.settings.format == DOUBLE else f"Losers round {rnd}"
+            return "Losers final" if rnd == last and fmt == DOUBLE else f"Losers round {rnd}"
         if stage == "F":
             return "Grand final" if rnd == 1 else "Grand final (reset)"
         return f"Round {rnd}"
 
-    def stage_title(self, stage: str) -> str:
-        if stage == "W" and self.settings.format == SINGLE:
+    def stage_title(self, stage: str, division: str = "") -> str:
+        fmt = self.format_of(division)
+        if stage == "W" and fmt == SINGLE:
             return "Bracket"
-        if stage == "P" and self.settings.format == MODIFIED:
+        if stage == "P" and fmt == MODIFIED:
             return f"Final {self.settings.final_cut} (single elimination)"
         return STAGE_NAMES.get(stage, stage)
 
@@ -1491,7 +1547,7 @@ class BracketTournament:
             for r in range(1, self.stage_rounds(stage, division) + 1):
                 rounds.append({"title": self.round_title(stage, r, division),
                                "matches": sorted((m for m in ms if m.round == r), key=lambda m: m.index)})
-            out.append({"stage": stage, "title": self.stage_title(stage), "rounds": rounds})
+            out.append({"stage": stage, "title": self.stage_title(stage, division), "rounds": rounds})
         return out
 
     def next_for(self, entry_id: str) -> dict:

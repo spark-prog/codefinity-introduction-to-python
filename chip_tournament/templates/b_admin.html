@@ -237,9 +237,22 @@
 <section id="entries" class="card jump-target">
   <div class="section-head"><h2>Entries</h2>
     {% if not is_viewer and t.entries %}<a class="button small secondary" href="{{ url_for('admin_export') }}" download>Download entries (CSV)</a>{% endif %}{% if t.entries %}<a class="button small secondary" href="{{ url_for('admin_skill_check') }}">Skill &amp; eligibility check</a>{% endif %}
-    {% if setup and not is_viewer %}<form method="post" action="{{ url_for('b_shuffle') }}" class="inline"><button class="button small secondary">Shuffle order</button></form>{% endif %}</div>
+    {% if setup and not is_viewer %}<form method="post" action="{{ url_for('b_shuffle') }}" class="inline"><button class="button small secondary">Shuffle order</button></form>{% endif %}
+    {% if setup and not is_viewer and s.team_size == 1 and t.field_entries|length > 1 %}
+    <form method="post" action="{{ url_for('b_seed_by_skill') }}" class="inline seed-skill-form"
+          data-dialog-title="Seed by skill?" data-dialog-ok="Seed"
+          data-dialog-text="Puts everyone in seed order, best skill level first. It replaces the order below and switches this event to manual seeding. You can still move anyone with ↑ and ↓.">
+      <select name="game" aria-label="Seed by this game's skill level">{% for key, label in seed_games.items() %}<option value="{{ key }}" {% if key == seed_game(s) %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <button class="button small">Seed by skill</button></form>{% endif %}</div>
+  {% if setup and s.skill_groups and t.field_entries %}{% set plan = t.tier_preview() %}
+  <div class="tier-preview">
+    {% if plan.error %}<p class="muted small-note">{{ plan.error }}</p>{% else %}
+    <p class="muted small-note">At the draw, each skill group plays its own bracket:
+      {% for label, count, fmt in plan.rows %}<span class="pill">{{ label }} · {{ count }}{% if fmt != s.format %} · single elimination{% endif %}</span>{% endfor %}</p>
+    {% for note in plan.notes %}<p class="muted small-note">{{ note }}</p>{% endfor %}{% endif %}
+  </div>{% endif %}
   {% if setup %}
-  <p class="muted">{{ "With manual seeding, the order below is the seed order (1 at the top): byes go to the top seeds."
+  <p class="muted">{{ "With manual seeding, the order below is the seed order (1 at the top): byes go to the top seeds. Skill groups take their own players from this order."
      if s.seeding == "manual" else "Seeding is a random draw at the start. Switch to manual seeding in Settings to set the order yourself." }}</p>
   {% endif %}
   <div class="table-wrap"><table class="grid team-table entry-table">
@@ -249,6 +262,7 @@
       <td class="seed-cell">{{ e.seed or (loop.index if e.status not in ("waitlisted", "no_show") else "") }}</td>
       <td class="team-cell"><a href="{{ url_for('b_entry', entry_id=e.id) }}"><b>{{ e.name }}</b></a>
         {% if s.team_size > 1 and e.partners != e.name %}<div class="muted">{{ e.partners }}</div>{% endif %}
+        {% if setup and e.seed_note %}<div class="muted small-note seed-note">{{ e.seed_note }}</div>{% endif %}
         {% if asks_two_levels(s) %}{% set p = e.players[0] %}<div class="muted small-note">8-Ball {{ p.skill_8 or "—" }} · 9-Ball {{ p.skill_9 or "—" }}{% if not p.skill_8 and not p.skill_9 and p.skill %} · SL {{ p.skill }}{% endif %}{% if e.division %} · <b>{{ e.division }}</b>{% elif not e.skill %} · <b>needs a skill level</b>{% endif %}</div>{% endif %}
         {% if not is_viewer %}<div class="muted small-note">{% for p in e.players if p.phone %}{{ p.name }} ···{{ p.phone|last4 }}{% if p.sms_consent %} ✓texts{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
       {% if not is_viewer %}<td data-label="PIN">{{ e.pin }}</td>{% endif %}
@@ -475,7 +489,7 @@
     <label>Round robin: advance to a playoff from each group (0 = no playoff) <input name="advance" type="number" min="0" value="{{ s.advance }}" {% if not setup %}disabled{% endif %}></label>
     <label class="wide">Skill groups, singles (blank = one bracket)
       <input name="skill_groups" value="{{ skill_groups_text(s.skill_groups) }}" placeholder="1-3, 4, 5, 6, 7-9" {% if not setup %}disabled{% endif %}>
-      <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. At the draw, a group too small for the format joins whichever neighboring group has fewer players.</span></label>
+      <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. Groups never merge. A group with one player joins the neighboring group with the fewest players, and a group too small for the format plays single elimination.</span></label>
 
       </div>
     </details>

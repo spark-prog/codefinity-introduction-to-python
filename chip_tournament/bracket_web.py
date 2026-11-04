@@ -19,7 +19,7 @@ from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MAX_TEAM_SIZE, MODIFIED, NO_SHOW, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT,
     asks_two_levels, entries_label, place_text,
 )
-from chips import race_charts
+from chips import race_charts, seeding
 from chips.race_charts import ADJUSTED, BALL_COUNT, RACK_RACE, STANDARD
 from chips.engine import (
     CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Player, TournamentError, check_form_entry, money,
@@ -473,6 +473,15 @@ def register(app, h) -> dict:
         act(f"{label}: {store.load().name_of(entry_id)}", lambda t: fn(t, entry_id), done)
         return redirect(back("entries"))
 
+    @app.post("/t/<event>/admin/seed-by-skill")
+    @admin_required
+    def b_seed_by_skill():
+        game = request.form.get("game", "")
+        label = seeding.GAMES.get(game, "")
+        act("Seed by skill", lambda t: t.seed_by_skill(game, app.config["players"].get),
+            "Seeded {result} entries by " + label + " skill level. Check the order below, then move anyone with ↑ and ↓.")
+        return redirect(back("entries"))
+
     @app.post("/t/<event>/admin/shuffle")
     @admin_required
     def b_shuffle():
@@ -600,6 +609,8 @@ def register(app, h) -> dict:
     app.jinja_env.globals.setdefault("max_team_size", MAX_TEAM_SIZE)
     app.jinja_env.globals.setdefault("skill_groups_text", skill_groups_text)
     app.jinja_env.globals.setdefault("RACK_CHART", RACK_CHART)
+    app.jinja_env.globals.setdefault("seed_game", lambda s: seeding.game_for(s))
+    app.jinja_env.globals.setdefault("seed_games", seeding.GAMES)
     app.jinja_env.globals.setdefault("RACK_RACE", RACK_RACE)
     app.jinja_env.globals.setdefault("BALL_COUNT", BALL_COUNT)
     app.jinja_env.globals.setdefault("race_charts", race_charts)

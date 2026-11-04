@@ -329,6 +329,10 @@ table.grid { width: 100%; border-collapse: collapse; color: var(--ink); }
 .elapsed { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--green); }
 .match.over .elapsed { color: #ff8a1f; }
 .look-note { color: #ff8a1f; font-weight: 700; margin: 6px 0 0; }
+.race-note { font-size: .85rem; color: var(--muted, #9aa4b2); margin: 4px 0 0; }
+.race-note::before { content: "Race: "; font-weight: 700; }
+.race-change-form { display: grid; gap: 6px; margin-top: 8px; max-width: 320px; }
+.race-change-form input[type=number] { width: 5em; }
 .match.long .elapsed { color: var(--red); }
 .match-clock { margin: 4px 0 var(--space-1); font-size: 1rem; }
 .match-clock .go { font-weight: 700; color: var(--green); }

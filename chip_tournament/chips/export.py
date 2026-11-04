@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
+from .bracket import asks_two_levels
 from .engine import money
 
 # Spreadsheet apps run a cell that starts with one of these as a formula; a leading ' keeps it as text.
@@ -60,7 +61,7 @@ def chip_teams(t) -> list[list[str]]:
 def bracket_entries(t) -> list[list[str]]:
     entries = sorted(t.entries.values(), key=lambda x: x.name.lower())
     s = t.settings
-    two_levels = bool(s.team_size == 1 and (s.skill_groups or s.race_method == "rack_chart"))
+    two_levels = asks_two_levels(s)
     header = ["Entry", "PIN", "Status", "Where", "Skill group", "Seed", "Waiting list #", "Checked in", "Registered",
               "Won"]
     rows = []

@@ -1,0 +1,367 @@
+{
+  "_notes": {
+    "source": "Adjusted (shortened) rack race charts",
+    "team_3_player": "Mixed games; each rack = 1 point. Lookup [your_team_bracket][opponent_bracket] -> racks each team must win",
+    "nine_ball": "Lookup [sl] -> points that player/team must win; doubles keys are team combined SL",
+    "eight_ball": "Lookup [your_sl][opponent_sl]. Higher SL races longer. Singles only lists matchups that can occur (equal or 1 apart); skills are grouped before play"
+  },
+  "_rules": {
+    "eight_ball_doubles_max_combined_sl": 11
+  },
+  "team_3_player": {
+    "brackets": {
+      "13_or_below": [
+        0,
+        13
+      ],
+      "14-16": [
+        14,
+        16
+      ],
+      "17-20": [
+        17,
+        20
+      ],
+      "21-23": [
+        21,
+        23
+      ]
+    },
+    "races": {
+      "13_or_below": {
+        "13_or_below": {
+          "you": 4,
+          "opponent": 4
+        },
+        "14-16": {
+          "you": 4,
+          "opponent": 5
+        },
+        "17-20": {
+          "you": 4,
+          "opponent": 6
+        },
+        "21-23": {
+          "you": 4,
+          "opponent": 7
+        }
+      },
+      "14-16": {
+        "13_or_below": {
+          "you": 5,
+          "opponent": 4
+        },
+        "14-16": {
+          "you": 5,
+          "opponent": 5
+        },
+        "17-20": {
+          "you": 5,
+          "opponent": 6
+        },
+        "21-23": {
+          "you": 5,
+          "opponent": 7
+        }
+      },
+      "17-20": {
+        "13_or_below": {
+          "you": 6,
+          "opponent": 4
+        },
+        "14-16": {
+          "you": 6,
+          "opponent": 5
+        },
+        "17-20": {
+          "you": 6,
+          "opponent": 6
+        },
+        "21-23": {
+          "you": 6,
+          "opponent": 7
+        }
+      },
+      "21-23": {
+        "13_or_below": {
+          "you": 7,
+          "opponent": 4
+        },
+        "14-16": {
+          "you": 7,
+          "opponent": 5
+        },
+        "17-20": {
+          "you": 7,
+          "opponent": 6
+        },
+        "21-23": {
+          "you": 7,
+          "opponent": 7
+        }
+      }
+    }
+  },
+  "nine_ball": {
+    "singles": {
+      "1": 9,
+      "2": 13,
+      "3": 17,
+      "4": 22,
+      "5": 27,
+      "6": 33,
+      "7": 40,
+      "8": 47,
+      "9": 55
+    },
+    "doubles": {
+      "4_or_less": 15,
+      "5": 19,
+      "6": 22,
+      "7": 25,
+      "8": 28,
+      "9": 31,
+      "10": 35,
+      "11": 38,
+      "12": 42
+    }
+  },
+  "eight_ball": {
+    "singles": {
+      "2": {
+        "2": {
+          "you": 2,
+          "opponent": 2
+        },
+        "3": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "3": {
+        "2": {
+          "you": 3,
+          "opponent": 2
+        },
+        "3": {
+          "you": 2,
+          "opponent": 2
+        },
+        "4": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "4": {
+        "3": {
+          "you": 3,
+          "opponent": 2
+        },
+        "4": {
+          "you": 2,
+          "opponent": 2
+        },
+        "5": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "5": {
+        "4": {
+          "you": 3,
+          "opponent": 2
+        },
+        "5": {
+          "you": 3,
+          "opponent": 3
+        },
+        "6": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "6": {
+        "5": {
+          "you": 3,
+          "opponent": 2
+        },
+        "6": {
+          "you": 3,
+          "opponent": 3
+        },
+        "7": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "7": {
+        "6": {
+          "you": 3,
+          "opponent": 2
+        },
+        "7": {
+          "you": 3,
+          "opponent": 3
+        }
+      }
+    },
+    "doubles": {
+      "6_or_less": {
+        "6_or_less": {
+          "you": 2,
+          "opponent": 2
+        },
+        "7": {
+          "you": 2,
+          "opponent": 3
+        },
+        "8": {
+          "you": 2,
+          "opponent": 3
+        },
+        "9": {
+          "you": 2,
+          "opponent": 3
+        },
+        "10": {
+          "you": 2,
+          "opponent": 3
+        },
+        "11": {
+          "you": 2,
+          "opponent": 4
+        }
+      },
+      "7": {
+        "6_or_less": {
+          "you": 3,
+          "opponent": 2
+        },
+        "7": {
+          "you": 2,
+          "opponent": 2
+        },
+        "8": {
+          "you": 2,
+          "opponent": 2
+        },
+        "9": {
+          "you": 2,
+          "opponent": 3
+        },
+        "10": {
+          "you": 2,
+          "opponent": 3
+        },
+        "11": {
+          "you": 2,
+          "opponent": 4
+        }
+      },
+      "8": {
+        "6_or_less": {
+          "you": 3,
+          "opponent": 2
+        },
+        "7": {
+          "you": 2,
+          "opponent": 2
+        },
+        "8": {
+          "you": 2,
+          "opponent": 2
+        },
+        "9": {
+          "you": 2,
+          "opponent": 3
+        },
+        "10": {
+          "you": 2,
+          "opponent": 3
+        },
+        "11": {
+          "you": 2,
+          "opponent": 4
+        }
+      },
+      "9": {
+        "6_or_less": {
+          "you": 3,
+          "opponent": 2
+        },
+        "7": {
+          "you": 3,
+          "opponent": 2
+        },
+        "8": {
+          "you": 3,
+          "opponent": 2
+        },
+        "9": {
+          "you": 2,
+          "opponent": 2
+        },
+        "10": {
+          "you": 2,
+          "opponent": 2
+        },
+        "11": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "10": {
+        "6_or_less": {
+          "you": 3,
+          "opponent": 2
+        },
+        "7": {
+          "you": 3,
+          "opponent": 2
+        },
+        "8": {
+          "you": 3,
+          "opponent": 2
+        },
+        "9": {
+          "you": 2,
+          "opponent": 2
+        },
+        "10": {
+          "you": 2,
+          "opponent": 2
+        },
+        "11": {
+          "you": 2,
+          "opponent": 3
+        }
+      },
+      "11": {
+        "6_or_less": {
+          "you": 4,
+          "opponent": 2
+        },
+        "7": {
+          "you": 4,
+          "opponent": 2
+        },
+        "8": {
+          "you": 4,
+          "opponent": 2
+        },
+        "9": {
+          "you": 3,
+          "opponent": 2
+        },
+        "10": {
+          "you": 3,
+          "opponent": 2
+        },
+        "11": {
+          "you": 3,
+          "opponent": 3
+        }
+      }
+    }
+  }
+}

@@ -33,7 +33,7 @@ import bracket_web
 import photos_web
 import player_web
 from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
-from chips.bracket import FINAL_CUTS, FORMATS, RACK_CHART
+from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
     ACTIVE,
@@ -625,7 +625,7 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     def two_levels(t) -> bool:
         s = t.settings
-        return g.event.kind == BRACKET and s.team_size == 1 and bool(s.skill_groups or s.race_method == RACK_CHART)
+        return g.event.kind == BRACKET and asks_two_levels(s)
 
     @app.get("/t/<event>/admin/skill-check")
     @director_view

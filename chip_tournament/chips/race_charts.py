@@ -60,6 +60,11 @@ def _fallback_map() -> dict[int, int]:
     return {int(k): v for k, v in chart(STANDARD)["_rules"]["eight_ball_sl_fallback"]["map"].items()}
 
 
+def eight_ball_equivalent(nine_ball_level: int) -> int:
+    """A 9-Ball level as an 8-Ball level (1 -> 2, 8 and 9 -> 7), the way the rack race charts convert it."""
+    return _fallback_map().get(nine_ball_level, chart(STANDARD)["_rules"]["eight_ball_sl_range"][1])
+
+
 def eight_ball_level(p, skill_game: str = "8") -> tuple[int, str]:
     """(the player's 8-Ball skill level for a rack race, a note when it was worked out from 9-Ball)."""
     lo, hi = chart(STANDARD)["_rules"]["eight_ball_sl_range"]

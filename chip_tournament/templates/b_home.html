@@ -83,7 +83,7 @@
   {% set unplaced = t.field_entries|selectattr("division", "equalto", "")|list %}
   {% if unplaced %}<h3 class="division-title">Skill level needed <span class="muted">({{ unplaced|length }})</span></h3>
   <ol class="entry-list">{% for e in unplaced %}<li>{{ e.name }}</li>{% endfor %}</ol>{% endif %}
-  <p class="muted small-note">Groups are final at the draw: a group too small to play joins the neighboring group with fewer players.</p>
+  <p class="muted small-note">Each group plays its own bracket and never merges with another. A group with only one player joins the neighboring group with the fewest players at the draw.</p>
   {% else %}
   <ol class="entry-list">{% for e in t.field_entries %}<li>{{ e.name }}{% if s.team_size > 1 and e.name != e.partners %} <span class="muted">{{ e.partners }}</span>{% endif %}</li>{% endfor %}</ol>
   {% endif %}

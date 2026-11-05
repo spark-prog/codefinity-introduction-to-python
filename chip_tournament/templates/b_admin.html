@@ -378,7 +378,7 @@
   <div class="fold-body">
   {% if not is_viewer %}
   <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
-    <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="300"></textarea></label>
+    <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="{{ guest_limits.chars if is_guest_td else 300 }}"></textarea>{% set reach = broadcast_reach() %}<span class="muted small-note broadcast-reach">Goes to {{ reach }} phone{{ "" if reach == 1 else "s" }}: players who turned on text alerts, minus anyone who replied STOP.{% if is_guest_td %} Sent in First Coast APA's name and logged with yours. Event news only (schedule, tables, delays, results), {{ guest_limits.chars }} characters, up to {{ guest_limits.per_day }} a day.{% endif %}</span></label>
     <button class="button small">Send</button>
   </form>
   <form method="post" action="{{ url_for('admin_text_pins') }}" class="form"

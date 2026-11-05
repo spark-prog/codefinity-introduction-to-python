@@ -1,0 +1,17 @@
+{% set outs = sms_optouts() %}
+<details class="card fold-section" id="text-optouts">
+  <summary class="fold-head"><h2>Text opt-outs</h2><span class="muted">{{ outs|length }} number{{ "" if outs|length == 1 else "s" }} never texted</span></summary>
+  <div class="fold-body">
+    <p class="muted">Anyone who replies STOP to the league's number is never texted again by any event, until they reply START.
+      Twilio blocks them too; this list is so Control Table knows and skips them.</p>
+    {% if outs %}
+    <div class="table-wrap"><table class="grid small">
+      <thead><tr><th>Number</th><th>Since</th><th>How</th></tr></thead>
+      {% for number, rec in outs %}<tr><td>•••-•••-{{ number|last4 }}</td><td>{{ rec.at[:10] }}</td><td>{{ rec.how }}</td></tr>{% endfor %}
+    </table></div>
+    {% else %}<p class="muted">Nobody has opted out.</p>{% endif %}
+    <p class="muted small-note"><b>One-time setup in Twilio</b> so STOP replies reach this list right away: Phone Numbers → your number →
+      Messaging → "A message comes in" → Webhook, <code>{{ request.url_root.rstrip('/') }}/sms/inbound</code>, HTTP POST.
+      Without it, opt-outs still get added the first time a text to that number is refused.</p>
+  </div>
+</details>

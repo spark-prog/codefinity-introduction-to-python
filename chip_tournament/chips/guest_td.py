@@ -13,12 +13,15 @@ Everything lives in data/guest_tds.json, apart from the tournaments.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from datetime import datetime
 from pathlib import Path
 
 PENDING, APPROVED, DECLINED = "pending", "approved", "declined"
+GUEST_BROADCASTS_PER_DAY = 5  # "text everyone" messages a guest TD can send per event per day
+GUEST_BROADCAST_CHARS = 160     # one text message
 FRESH_HOURS = 16  # a guest TD signs in again at least this often to keep TD access
 
 # Blocked even inside a guest TD's own event: league-wide settings, wiping history, bulk imports.
@@ -32,6 +35,11 @@ GUEST_BLOCKED = frozenset({
 
 def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def fingerprint(text: str) -> str:
+    """SHA-256 of the exact agreement text: proves later which wording someone signed."""
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def mask_phone(phone: str) -> str:
@@ -105,7 +113,9 @@ class GuestTDs:
             self._save(data)
             return version
 
-    def accept(self, member: str, typed_name: str) -> None:
+    def accept(self, member: str, typed_name: str, ip: str = "", device: str = "") -> None:
+        """Record a signature: the typed name, when, which version, a fingerprint of the exact text signed,
+        and the network address and device it came from, so the League can show what was agreed to."""
         typed_name = " ".join((typed_name or "").split())
         with self.lock:
             data = self.load()
@@ -116,7 +126,9 @@ class GuestTDs:
                 raise GuestError("The agreement isn't ready yet. The league office will let you know.")
             if len(typed_name) < 3:
                 raise GuestError("Type your full name to accept.")
-            rec["accepted"] = {"version": agreement["version"], "at": now(), "typed_name": typed_name}
+            rec["accepted"] = {"version": agreement["version"], "at": now(), "typed_name": typed_name,
+                               "member": member, "text_sha256": fingerprint(agreement["text"]),
+                               "ip": ip[:64], "device": device[:300]}
             self._save(data)
 
     def mark_invited(self, member: str) -> None:

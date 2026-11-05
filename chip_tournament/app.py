@@ -35,7 +35,7 @@ import photos_web
 import qr_web
 import cal_web
 import player_web
-from chips import apa_rules, backup, guest_td,bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
+from chips import alerts, apa_rules, backup, bonus_event, guest_td, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -493,6 +493,22 @@ def create_app(data_dir: str | None = None) -> Flask:
         if guest_pending():  # hidden, no texts, registration closed until approved
             s.test_event, s.registration_closed = True, True
 
+    def broadcast_reach() -> int:
+        """How many phones "text everyone" reaches now: opted-in players, minus anyone who replied STOP."""
+        ev = g.get("event")
+        if ev is None:
+            return 0
+        t = ev.load()
+        if ev.kind == CHIP:
+            groups = t.active_teams if t.status == RUNNING else list(t.teams.values())
+        else:
+            groups = [e for e in t.entries.values() if e.status != "no_show"]
+        blocked = hub.optouts.all()
+        return len({alerts.normalize_phone(n) for grp in groups for n in grp.phones} - set(blocked) - {""})
+
+    app.jinja_env.globals["broadcast_reach"] = broadcast_reach
+    app.jinja_env.globals["sms_optouts"] = lambda: sorted(hub.optouts.all().items(), key=lambda kv: kv[1]["at"], reverse=True)
+    app.jinja_env.globals["guest_limits"] = {"chars": guest_td.GUEST_BROADCAST_CHARS, "per_day": guest_td.GUEST_BROADCASTS_PER_DAY}
     app.config["director_here"] = director_here
     app.jinja_env.globals["broadcasts"] = lambda: guest_td.BroadcastLog(g.event.dir).all() if g.get("event") else []
     app.config["guest_here"] = guest_here
@@ -654,6 +670,19 @@ def create_app(data_dir: str | None = None) -> Flask:
         return {"login_limits_see_you_as": request.remote_addr,
                 "trusted_ip_header": os.environ.get("TRUSTED_IP_HEADER", "") or "(not set)",
                 "headers": {h: request.headers.get(h, "") for h in heads}}
+
+    @app.post("/sms/inbound")
+    def sms_inbound():
+        """Twilio posts every text a player sends to our number here. STOP words put the number on the
+        league-wide opt-out list; START words take it off. Twilio sends the standard confirmation reply."""
+        token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+        site = os.environ.get("SITE_URL", "").strip().rstrip("/")
+        url = (site + request.full_path.rstrip("?")) if site else request.url.replace(
+            "http://", "https://" if request.headers.get("X-Forwarded-Proto") == "https" else "http://", 1)
+        if not alerts.valid_twilio_signature(token, url, request.form.to_dict(), request.headers.get("X-Twilio-Signature", "")):
+            return "Forbidden", 403
+        hub.optouts.handle_reply(request.form.get("From", ""), request.form.get("Body", ""))
+        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}
 
     @app.get("/healthz")
     def healthz():
@@ -1406,6 +1435,18 @@ def create_app(data_dir: str | None = None) -> Flask:
     @admin_required
     def admin_broadcast():
         body = request.form.get("body", "").strip()
+        if body and guest_here():  # a guest TD texts players in the League's name: keep it short and occasional
+            log = guest_td.BroadcastLog(g.event.dir)
+            today = datetime.now().date().isoformat()
+            mine = [x for x in log.all() if x["at"].startswith(today) and x["by"].endswith("(guest TD)")]
+            if len(body) > guest_td.GUEST_BROADCAST_CHARS:
+                flash(f"Keep texts to {guest_td.GUEST_BROADCAST_CHARS} characters or fewer "
+                      f"(this one is {len(body)}).", "error")
+                return redirect(url_for("admin") + "#texts")
+            if len(mine) >= guest_td.GUEST_BROADCASTS_PER_DAY:
+                flash(f"Guest TDs can send {guest_td.GUEST_BROADCASTS_PER_DAY} texts to everyone per day, and "
+                      "you've sent them all today. Ask the league office if something urgent needs to go out.", "error")
+                return redirect(url_for("admin") + "#texts")
         if body:
             sent = act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
             if sent is not None:

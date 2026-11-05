@@ -104,7 +104,9 @@ def register(app, h) -> None:
                 raise GuestError("Tick the box to say you agree.")
             if request.form.get("version") != str(guests.agreement()["version"]):
                 raise GuestError("The agreement changed while you were reading it. Read the new version below.")
-            guests.accept(member, request.form.get("typed_name", ""))
+            ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr or "")
+            guests.accept(member, request.form.get("typed_name", ""), ip=ip,
+                          device=request.headers.get("User-Agent", ""))
         except GuestError as exc:
             flash(str(exc), "error")
             return redirect(url_for("guest_home"))

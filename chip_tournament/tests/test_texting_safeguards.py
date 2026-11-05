@@ -116,3 +116,21 @@ def test_signature_record(app):
     admin.post("/admin/guests/32200001/approve")
     page = text(admin.get("/admin"))
     assert "Signature record" in page and acc["text_sha256"][:16] in page and "203.0.113.7" in page
+
+
+def test_inbound_accepts_the_onrender_address_when_site_url_is_a_custom_domain(app, monkeypatch):
+    """Production: SITE_URL is the league's own domain, but Twilio is set to the onrender.com address."""
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", TOKEN)
+    monkeypatch.setenv("SITE_URL", "https://controltable.app")
+    c = app.test_client()
+    params = {"From": "+19045550155", "Body": "STOP"}
+    onrender = {"base_url": "https://chip-tournament.onrender.com"}
+    r = c.post("/sms/inbound", data=params, **onrender,
+               headers={"X-Twilio-Signature": sign("https://chip-tournament.onrender.com/sms/inbound", params)})
+    assert r.status_code == 200 and app.config["hub"].optouts.blocked("+19045550155")
+    # The custom domain works too, and a forged request still fails.
+    params2 = {"From": "+19045550166", "Body": "STOP"}
+    assert c.post("/sms/inbound", data=params2, **onrender,
+                  headers={"X-Twilio-Signature": sign("https://controltable.app/sms/inbound", params2)}).status_code == 200
+    assert c.post("/sms/inbound", data={"From": "+19045550177", "Body": "STOP"}, **onrender,
+                  headers={"X-Twilio-Signature": sign("https://chip-tournament.onrender.com/sms/inbound", params2)}).status_code == 403

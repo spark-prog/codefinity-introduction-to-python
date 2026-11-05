@@ -676,10 +676,19 @@ def create_app(data_dir: str | None = None) -> Flask:
         """Twilio posts every text a player sends to our number here. STOP words put the number on the
         league-wide opt-out list; START words take it off. Twilio sends the standard confirmation reply."""
         token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+        # Twilio signs the exact address it was given, which may be the onrender.com one or the site's own
+        # domain (SITE_URL). Try each address this request could have been sent to; a forged request still
+        # fails every one, since only Twilio has the auth token.
+        path = request.full_path.rstrip("?")
         site = os.environ.get("SITE_URL", "").strip().rstrip("/")
-        url = (site + request.full_path.rstrip("?")) if site else request.url.replace(
-            "http://", "https://" if request.headers.get("X-Forwarded-Proto") == "https" else "http://", 1)
-        if not alerts.valid_twilio_signature(token, url, request.form.to_dict(), request.headers.get("X-Twilio-Signature", "")):
+        here = request.url_root.rstrip("/")
+        candidates = {here + path, here.replace("http://", "https://", 1) + path}
+        if site:
+            candidates.add(site + path)
+        params, signature = request.form.to_dict(), request.headers.get("X-Twilio-Signature", "")
+        if not any(alerts.valid_twilio_signature(token, url, params, signature) for url in candidates):
+            app.logger.warning("SMS reply rejected: Twilio signature didn't match %s%s", sorted(candidates),
+                               "" if token else " (TWILIO_AUTH_TOKEN isn't set)")
             return "Forbidden", 403
         hub.optouts.handle_reply(request.form.get("From", ""), request.form.get("Body", ""))
         return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}

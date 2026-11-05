@@ -63,6 +63,7 @@ from . import engine
 from .engine import CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Message, Player, TournamentError, known, money, now
 from .races import group_for, group_label, rack_race
 from . import race_charts, seeding
+from .players import level_from
 from .race_charts import BALL_COUNT, CHART_METHODS, RACK_RACE, STANDARD
 
 BYE = "bye"
@@ -581,10 +582,10 @@ class BracketTournament:
             who = f"{name}'s" if name else "The"
             raise TournamentError(f"{who} combined skill level is {total}, over this event's cap of {s.team_skill_cap}.")
 
-    @staticmethod
-    def _clean(p: Player) -> Player:
-        """A copy of a player from a form, with its skill set from the 8-Ball and 9-Ball levels if given."""
-        skill = max(p.skill_8, p.skill_9) or p.skill
+    def _clean(self, p: Player) -> Player:
+        """A copy of a player from a form, with its skill set from the 8-Ball and 9-Ball levels if given,
+        by the event's "Skill levels from the player list" setting (8-Ball, 9-Ball, or the highest)."""
+        skill = level_from(p.skill_8, p.skill_9, self.settings.skill_game) or p.skill
         return Player(name=p.name.strip(), phone=p.phone.strip(), skill=skill, skill_8=p.skill_8, skill_9=p.skill_9,
                       sms_consent=p.sms_consent, sms_consent_at=p.sms_consent_at, member=p.member, pending=p.pending, confirm=p.confirm)
 
@@ -1967,4 +1968,23 @@ class BracketTournament:
         )
         for key, value in data.items():
             setattr(t, key, value)
+        t.resync_skills()
         return t
+
+    def resync_skills(self) -> None:
+        """Before the draw, keep each player's skill in line with the event's skill-level setting.
+
+        Fixes entries saved before registration followed the setting (it always took the higher of the
+        8-Ball and 9-Ball levels), and follows the setting if the director changes it. Once the bracket
+        is drawn, skills and groups stay as they were drawn."""
+        if self.status != SETUP:
+            return
+        for e in self.entries.values():
+            changed = False
+            for p in e.players:
+                if p.skill_8 or p.skill_9:
+                    level = level_from(p.skill_8, p.skill_9, self.settings.skill_game)
+                    if level and level != p.skill:
+                        p.skill, changed = level, True
+            if changed and e.division:
+                e.division = self.preview_division(e)

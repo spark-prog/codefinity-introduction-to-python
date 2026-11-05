@@ -726,7 +726,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if not grp["fixable"] or (want != "all" and grp["id"] != want):
                 continue
             people = t.teams if g.event.kind == CHIP else t.entries
-            new = skill_check.fixed_players(people[grp["id"]], grp["players"], two)
+            new = skill_check.fixed_players(people[grp["id"]], grp["players"], two, getattr(t.settings, "skill_game", "8"))
             label = f"Skill check: {grp['name']} set to the player list's levels"
 
             def apply(tt, gid=grp["id"], new=new):

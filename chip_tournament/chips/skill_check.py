@@ -8,7 +8,7 @@ the established/converted rule; skill-group events compare both levels.
 
 from __future__ import annotations
 
-from .players import PlayerStore, event_skill
+from .players import PlayerStore, event_skill, level_from
 
 OK, DIFFERS, MISSING, NOT_FOUND, AMBIGUOUS, REVIEW = "ok", "differs", "missing", "not_found", "ambiguous", "review"
 LABELS = {OK: "Matches", DIFFERS: "Differs from the list", MISSING: "No skill level entered",
@@ -100,7 +100,7 @@ def check_event(t, store: PlayerStore, two_levels: bool, pushed=lambda member: N
     return sorted(out, key=lambda x: (not (x["issues"] or x["ineligible"]), x["name"].lower()))
 
 
-def fixed_players(group, rows: list[dict], two_levels: bool):
+def fixed_players(group, rows: list[dict], two_levels: bool, game: str = "8"):
     """Copies of the players with the list's skill levels (and member numbers found by name)."""
     import copy
 
@@ -112,7 +112,7 @@ def fixed_players(group, rows: list[dict], two_levels: bool):
             p.member = r["member"]
         if two_levels:
             p.skill_8, p.skill_9 = r["list"]["skill8"], r["list"]["skill9"]
-            p.skill = max(p.skill_8, p.skill_9)
+            p.skill = level_from(p.skill_8, p.skill_9, game)
         else:
             p.skill = r["list"]["skill"]
     return players

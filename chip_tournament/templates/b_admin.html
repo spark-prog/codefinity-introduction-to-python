@@ -446,7 +446,7 @@
     <label>Skill levels from the player list
       <select name="skill_game">
         {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
+      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.{% if asks_two_levels(s) %} In this event players enter both levels, and this also picks the one they play at: their skill group and race. Changing it before the draw updates everyone already registered.{% endif %}</span></label>
       </div>
     </details>
     <details class="settings-section" data-key="rules">

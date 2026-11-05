@@ -91,16 +91,48 @@ def _inline(text: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escape(text))
 
 
-def render(body: str) -> str:
-    """Turn the director's plain text into safe HTML blocks (each one searchable)."""
+def _plain(text: str) -> str:
+    """Heading text without the **bold** marks, for section names and link addresses."""
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", text).strip()
+
+
+def render(body: str, prefix: str = "rules") -> str:
+    """Turn the director's plain text into safe HTML blocks (each one searchable).
+
+    Every heading gets its own web address (#<prefix>--<heading>) and a link button, so a
+    section can be shared on its own. Every block carries the name of the section it sits
+    in (data-section), so a search result can show where it came from.
+    """
     out: list[str] = []
     list_tag = None
+    h3 = h4 = ""
+    used: set[str] = set()
 
     def close_list():
         nonlocal list_tag
         if list_tag:
             out.append(f"</{list_tag}>")
             list_tag = None
+
+    def anchor(text: str) -> str:
+        base = f"{prefix}--{slugify(_plain(text))}"
+        anchor_id, n = base, 2
+        while anchor_id in used:
+            anchor_id, n = f"{base}-{n}", n + 1
+        used.add(anchor_id)
+        return anchor_id
+
+    def section() -> str:
+        return escape(" › ".join(p for p in (h3, h4) if p), quote=True)
+
+    def heading(tag: str, text: str) -> str:
+        anchor_id = anchor(text)
+        return (f'<{tag} class="rule-block rule-head" id="{anchor_id}" data-section="{section()}">'
+                f'{_inline(text)}<a class="rule-link" href="#{anchor_id}" title="Link to this section"'
+                f' aria-label="Link to {escape(_plain(text), quote=True)}">#</a></{tag}>')
+
+    def block(tag: str, text: str) -> str:
+        return f'<{tag} class="rule-block" data-section="{section()}">{_inline(text)}</{tag}>'
 
     for raw in (body or "").splitlines():
         line = raw.strip()
@@ -109,24 +141,26 @@ def render(body: str) -> str:
             continue
         if line.startswith("## "):
             close_list()
-            out.append(f'<h4 class="rule-block">{_inline(line[3:])}</h4>')
+            h4 = _plain(line[3:])
+            out.append(heading("h4", line[3:]))
         elif line.startswith("# "):
             close_list()
-            out.append(f'<h3 class="rule-block">{_inline(line[2:])}</h3>')
+            h3, h4 = _plain(line[2:]), ""
+            out.append(heading("h3", line[2:]))
         elif re.match(r"^[-*•]\s+", line):
             if list_tag != "ul":
                 close_list()
                 out.append("<ul>")
                 list_tag = "ul"
-            out.append(f'<li class="rule-block">{_inline(re.sub(r"^[-*•]\s+", "", line))}</li>')
+            out.append(block("li", re.sub(r"^[-*•]\s+", "", line)))
         elif re.match(r"^\d+[.)]\s+", line):
             if list_tag != "ol":
                 close_list()
                 out.append("<ol>")
                 list_tag = "ol"
-            out.append(f'<li class="rule-block">{_inline(re.sub(r"^\d+[.)]\s+", "", line))}</li>')
+            out.append(block("li", re.sub(r"^\d+[.)]\s+", "", line)))
         else:
             close_list()
-            out.append(f'<p class="rule-block">{_inline(line)}</p>')
+            out.append(block("p", line))
     close_list()
     return "\n".join(out)

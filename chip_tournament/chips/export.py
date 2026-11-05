@@ -79,3 +79,11 @@ def to_csv(rows: list[list]) -> str:
     for row in rows:
         writer.writerow([_cell(v) for v in row])
     return "﻿" + out.getvalue()  # the BOM makes Excel read names with accents correctly
+
+
+def mask_phones(rows: list[list], mask) -> list[list]:
+    """The same sheet with every '… cell' column masked (for a guest TD's download)."""
+    if not rows:
+        return rows
+    cols = [i for i, h in enumerate(rows[0]) if str(h).endswith(" cell")]
+    return [rows[0]] + [[mask(v) if i in cols else v for i, v in enumerate(r)] for r in rows[1:]]

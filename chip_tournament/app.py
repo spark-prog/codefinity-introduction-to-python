@@ -34,7 +34,7 @@ import photos_web
 import qr_web
 import cal_web
 import player_web
-from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
+from chips import apa_rules, backup,bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -954,9 +954,11 @@ def create_app(data_dir: str | None = None) -> Flask:
         t, sets = current_t(), rule_book.load()
         if t is not None:
             sets = [r for r in sets if r["id"] == t.settings.rule_set]
-        sets = [{**r, "html": rulebook.render(r["body"])} for r in sets]
-        event_rules = rulebook.render(t.settings.event_rules) if t is not None and t.settings.event_rules else ""
-        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules)
+        sets = [{**r, "html": rulebook.render(r["body"], prefix=r["id"])} for r in sets]
+        event_rules = (rulebook.render(t.settings.event_rules, prefix="tournament")
+                       if t is not None and t.settings.event_rules else "")
+        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules,
+                               apa=apa_rules.load(), apa_sections=apa_rules.sections())
 
     def event_rule_set(rule_id: str) -> str:
         """A rule set id an event can use: one that exists, or "" for none chosen yet."""

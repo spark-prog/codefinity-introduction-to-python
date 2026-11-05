@@ -743,6 +743,24 @@ body.default-bg {
 .keep-score { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .keep-score .button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- Rules: section links, search context, official APA pages ---------- */
+.rule-head { scroll-margin-top: 150px; }
+.rule-link { margin-left: 10px; font-size: .8em; font-weight: 700; color: var(--ink-2); text-decoration: none; opacity: .45; }
+.rule-link:hover, .rule-link:focus { color: var(--accent); opacity: 1; }
+.rule-link.copied { color: var(--accent); opacity: 1; font-family: inherit; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+.rule-target { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 6px; border-radius: 4px; }
+.searching .rule-block:not(.rule-head)[data-section]:not([data-section=""])::before {
+  content: attr(data-section); display: block; font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 2px;
+}
+.apa-rules { margin-top: var(--space-3); }
+.apa-section { border-top: 1px solid var(--line); padding: 10px 0; }
+.apa-section summary { cursor: pointer; font-weight: 700; }
+.apa-list { margin: 8px 0 0; padding-left: 22px; }
+.apa-list li { margin: 6px 0; line-height: 1.5; }
+.apa-results-title { font-size: 1rem; margin: var(--space-2) 0 0; }
+.apa-verified { margin: var(--space-2) 0 0; font-size: .8rem; }
+
 /* ---------- Tournament-only rules at the top of an event's Rules page ---------- */
 .event-rules { margin-bottom: 24px; border-color: rgba(var(--accent-rgb), .55); }
 .event-rules .approved-note { margin: 0 0 14px; color: var(--accent); }

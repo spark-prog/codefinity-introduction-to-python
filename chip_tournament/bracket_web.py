@@ -403,7 +403,8 @@ def register(app, h) -> dict:
             player = request.form.get("player", "")
             label = "Take over scoring" if m.scorekeeper_device else "Keep score"
             if act(f"{label} (player)", lambda t: t.claim_scorekeeper(m.id, entry_id, player, h["scorer_device"]())):
-                flash("You're keeping score for this match. Tap + each time a rack is won.", "ok")
+                how = "Tap + for each ball made, +2 for the 9." if store.load().ball_count else "Tap + each time a rack is won."
+                flash(f"You're keeping score for this match. {how}", "ok")
         return redirect(url_for("b_entry", entry_id=entry_id))
 
     @app.post("/t/<event>/entry/<entry_id>/submit")

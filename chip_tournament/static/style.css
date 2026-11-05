@@ -1085,7 +1085,8 @@ details.settings-section > .section-fields { padding: var(--space-3) 16px 4px; }
 /* Add to calendar */
 .cal-menu { display: inline-block; }
 .cal-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.cal-menu > summary { display: inline-flex; align-items: center; min-height: 0; }
+/* A button that opens a menu (More, Forfeit, Change race, Add to calendar): keep its label centered */
+details.inline-details > summary.button { display: inline-flex; align-items: center; justify-content: center; }
 
 /* Seed by skill: the game picker next to its button, and the groups preview */
 .seed-skill-form { display: inline-flex; align-items: center; gap: 8px; }

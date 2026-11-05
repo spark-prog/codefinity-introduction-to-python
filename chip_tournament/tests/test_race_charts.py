@@ -234,3 +234,7 @@ def test_director_and_scorekeeper_pages_for_a_ball_count_match(app):
     assert (ev.load().match(m.id).race_a, ev.load().match(m.id).race_b) == (38, 25)
     entry = c.get(f"/t/{ev.id}/entry/{m.a}").get_data(as_text=True)
     assert "Ann Lee 38 points · Bo Ray 25 points" in entry
+    pin = ev.load().entries[m.a].pin  # the scorekeeper's message talks about balls, not racks
+    c.post(f"/t/{ev.id}/entry/{m.a}/login", data={"pin": pin})
+    html = c.post(f"/t/{ev.id}/entry/{m.a}/keep-score", data={"player": "Ann Lee"}, follow_redirects=True).get_data(as_text=True)
+    assert "Tap + for each ball made, +2 for the 9." in html and "each time a rack is won" not in html

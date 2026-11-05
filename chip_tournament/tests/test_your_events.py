@@ -28,6 +28,7 @@ def app(tmp_path, monkeypatch):
     movin = hub.create("Movin-On-Up", "bracket", format="modified", date="2026-11-21", start_time="1:00 PM")
     t = movin.load()
     t.settings.team_size, t.settings.skill_groups, t.settings.race_method = 1, [[1, 5], [6, 9]], "rack_chart"
+    t.settings.skill_game = "high"  # placed by the higher of the two levels
     t.register_entry("", [Player("ann lee", "9045550100", 0, skill_8=4, skill_9=6)])  # registered by name only
     movin.store.save(t)
     old = hub.create("Halloween Doubles", "chip", date="2026-10-31")

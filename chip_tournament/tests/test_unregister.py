@@ -64,6 +64,7 @@ def test_bracket_player_edits_skill_and_unregisters(app):
     ev = app.config["hub"].create("Movin", "bracket", format="modified")
     t = ev.load()
     t.settings.team_size, t.settings.skill_groups, t.settings.race_method = 1, [[1, 4], [5, 9]], "rack_chart"
+    t.settings.skill_game = "high"  # placed by the higher of the two levels
     ev.store.save(t)
     me = app.test_client()
     me.post("/t/movin/register", data={"agree_terms": "1", "player_name_0": "Ann Lee", "player_skill8_0": "4",

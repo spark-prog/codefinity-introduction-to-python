@@ -52,9 +52,10 @@ def event(counts, fmt="modified", groups=MOVIN, chart=True):
 
 
 def test_player_goes_in_the_group_for_their_higher_level():
+    """With the setting "Highest of 8-Ball & 9-Ball (no cap)", as Movin' On Up uses. Other settings: test_skill_basis.py."""
     t = BracketTournament()
     t.settings.call_mode = "continuous"
-    t.settings.skill_groups = MOVIN
+    t.settings.skill_groups, t.settings.skill_game = MOVIN, "high"
     a = t.register_entry("", [Player("Ann", skill_8=4, skill_9=6)])
     b = t.register_entry("", [Player("Bob", skill_9=2)])
     c = t.register_entry("", [Player("Cy", skill_8=7, skill_9=3)])
@@ -183,7 +184,7 @@ def test_movin_on_up_setup_and_registration(tmp_path, monkeypatch):
     admin.post(f"{base}/admin/settings", data={
         "name": s.name, "tables": "1, 2, 3", "format": "modified", "team_size": "1", "final_cut": "4",
         "skill_groups": "1-3, 4, 5, 6, 7-9", "race_method": "rack_chart", "payouts": "", "entry_fee": "0",
-        "race_winners": "3", "race_losers": "3", "race_finals": "3"})
+        "race_winners": "3", "race_losers": "3", "race_finals": "3", "skill_game": "high"})
     s = ev.load().settings
     assert s.skill_groups == MOVIN and s.race_method == "rack_chart" and s.payouts == [] and s.entry_fee_cents == 0
     player = app.test_client()

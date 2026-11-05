@@ -162,6 +162,7 @@ def register(app, h) -> dict:
             except ValueError as exc:
                 raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
+            push_before = s.push_to
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
@@ -169,6 +170,7 @@ def register(app, h) -> dict:
             if f.get("push_to") is not None:  # the event players can push to ("none" = no pushing)
                 pick = f.get("push_to", "")
                 s.push_to = pick if pick != g.event.id and app.config["hub"].get(pick) is not None else "none"
+            h["guest_lock_settings"](s, push_before)
             hours = (f.get("waitlist_offer_hours", "") or "").strip()
             if hours:
                 if not hours.isdigit() or int(hours) > 72:
@@ -206,6 +208,7 @@ def register(app, h) -> dict:
             s.call_mode = call_mode
             if f.get("test_event_shown"):
                 s.test_event = f.get("test_event") == "1"
+            h["guest_lock_settings"](s, push_before)  # again, after the test-event box: a waiting event stays hidden
             if t.status == SETUP:
                 fmt = f.get("format", s.format)
                 if fmt not in dict(FORMATS):
@@ -291,7 +294,7 @@ def register(app, h) -> dict:
         return t, (t.entries.get(entry_id) or abort(404))
 
     def signed_in(entry_id) -> bool:
-        return bool(session.get(f"entry_{entry_id}") or session.get("admin"))
+        return bool(session.get(f"entry_{entry_id}") or app.config["director_here"]())
 
     @app.get("/t/<event>/entry/<entry_id>")
     def b_entry(entry_id):
@@ -454,7 +457,12 @@ def register(app, h) -> dict:
     @app.post("/t/<event>/admin/entry/<entry_id>/edit")
     @admin_required
     def b_edit_entry(entry_id):
-        f = request.form
+        f = request.form.to_dict()
+        if app.config["guest_here"]():  # a guest TD can't see the numbers, so a blank box keeps the one on file
+            entry = store.load().entries.get(entry_id)
+            for i, p in enumerate(entry.players if entry else []):
+                if not f.get(f"player_phone_{i}", "").strip() and p.phone:
+                    f[f"player_phone_{i}"] = p.phone
         act("Edit entry", lambda t: t.update_entry(entry_id, f.get("name"), players_from_form(f, t.settings.team_size)),
             "Saved {result.name}.")
         return redirect(back("entries"))

@@ -30,11 +30,12 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
+import guest_web
 import photos_web
 import qr_web
 import cal_web
 import player_web
-from chips import apa_rules, backup,bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
+from chips import apa_rules, backup, guest_td,bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -151,6 +152,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.config["search_settings"] = search_settings
     app.config["apa_link_fetch"] = None  # tests put a stand-in here; None means the real website
     link_check_running = threading.Lock()
+    guests = guest_td.GuestTDs(data_path)  # division reps who run one event of their own
+    app.config["guests"] = guests
     player_store = players.PlayerStore(data_path)  # every APA player, kept apart from the tournaments
     pools = pool_mod.Pools(data_path)  # shared tables (Mini-Mania)
     app.config["pools"] = pools
@@ -293,6 +296,10 @@ def create_app(data_dir: str | None = None) -> Flask:
             "rule_choices": rule_book.load,
             "is_admin": session.get("admin", False),
             "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
+            "is_guest_td": guest_here(),
+            "guest_listed": guest_member() is not None,
+            "guest_pending": guest_here() and guest_pending(),
+            "hide_phones": (bool(session.get("viewer")) and not session.get("admin")) or guest_here(),
             "ACTIVE": ACTIVE,
             "CALLED": CALLED,
             "WAITING": WAITING,
@@ -450,10 +457,67 @@ def create_app(data_dir: str | None = None) -> Flask:
         if "event" not in values and g.get("event") and app.url_map.is_endpoint_expecting(endpoint, "event"):
             values["event"] = g.event.id
 
+    # ---- guest TDs: a division rep running their own event (see chips/guest_td.py)
+
+    def guest_member() -> str | None:
+        """The signed-in player's member number if they're on the guest TD list."""
+        p = g.get("player")
+        return p["member"] if p and guests.guest(p["member"]) else None
+
+    def guest_fresh() -> bool:
+        return time.time() - (g.get("login_at") or 0) < guest_td.FRESH_HOURS * 3600
+
+    def guest_here() -> bool:
+        """A guest TD may run the event in view: theirs, agreement accepted, signed in recently, not finished."""
+        if "guest_here" not in g:
+            member, ev = guest_member(), g.get("event")
+            g.guest_here = bool(member and ev and not session.get("admin") and guest_fresh()
+                                and guests.can_run(member, ev.id) and ev.load().status != FINISHED)
+        return g.guest_here
+
+    def director_here() -> bool:
+        """The league director, or the guest TD of the event in view."""
+        return bool(session.get("admin")) or guest_here()
+
+    def guest_pending() -> bool:
+        """A guest TD's event that the league office hasn't approved yet."""
+        ev = g.get("event")
+        rec = guests.event(ev.id) if ev else None
+        return bool(rec and rec["status"] == guest_td.PENDING)
+
+    def guest_lock_settings(s, before_push_to: str) -> None:
+        """What a guest TD can't change in their event's settings."""
+        if not guest_here():
+            return
+        s.push_to = before_push_to  # pushing players into another event is the league office's call
+        if guest_pending():  # hidden, no texts, registration closed until approved
+            s.test_event, s.registration_closed = True, True
+
+    app.config["director_here"] = director_here
+    app.jinja_env.globals["broadcasts"] = lambda: guest_td.BroadcastLog(g.event.dir).all() if g.get("event") else []
+    app.config["guest_here"] = guest_here
+
+    def guest_refused():
+        """A guest TD on a page they can't use: say why, and send them somewhere useful."""
+        if g.get("event") and guest_member() and request.endpoint in guest_td.GUEST_BLOCKED and guest_here():
+            flash("That's for the league office only.", "error")
+            return redirect(url_for("admin"))
+        if guest_member():
+            if not guest_fresh():
+                flash("For safety, sign in again to keep running your event.", "error")
+            else:
+                flash("Guest TD access covers only your own event, while it's running.", "error")
+            return redirect(url_for("guest_home"))
+        return None
+
     def admin_required(view):
         @wraps(view)
         def wrapper(*args, **kwargs):
+            if not session.get("admin") and guest_here() and request.endpoint not in guest_td.GUEST_BLOCKED:
+                return view(*args, **kwargs)
             if not session.get("admin"):
+                if (stop := guest_refused()) is not None:
+                    return stop
                 if session.get("viewer"):
                     flash("You're signed in view-only, so changes are turned off.", "error")
                     return redirect(url_for("admin") if g.get("event") else url_for("director"))
@@ -467,6 +531,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         @wraps(view)
         def wrapper(*args, **kwargs):
             if not (session.get("admin") or session.get("viewer")):
+                if guest_here() and request.endpoint not in guest_td.GUEST_BLOCKED:
+                    return view(*args, **kwargs)
+                if (stop := guest_refused()) is not None:
+                    return stop
                 return redirect(url_for("admin_login", next=request.path))
             return view(*args, **kwargs)
 
@@ -608,12 +676,12 @@ def create_app(data_dir: str | None = None) -> Flask:
         history = [m for m in t.matches if team_id in (m.team_a, m.team_b) and m.status == DONE]
         return render_template(
             "team.html", t=t, team=team, match=t.current_match_for(team_id), history=history,
-            is_team=bool(session.get(f"team_{team_id}") or session.get("admin")), my_device=scorer_device(),
+            is_team=bool(session.get(f"team_{team_id}") or director_here()), my_device=scorer_device(),
         )
 
     def team_match(team_id):
         """The signed-in team's match on a table, and which side it is."""
-        if not (session.get(f"team_{team_id}") or session.get("admin")):
+        if not (session.get(f"team_{team_id}") or director_here()):
             raise TournamentError("Enter your team PIN first.")
         t = store.load()
         m = t.current_match_for(team_id)
@@ -753,7 +821,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     def roster(team_id):
         t = store.load()
         team = t.teams.get(team_id) or abort(404)
-        allowed = session.get(f"team_{team_id}") or session.get("admin")
+        allowed = session.get(f"team_{team_id}") or director_here()
         if request.method == "POST" and not allowed:
             check_pin(team)
             return redirect(url_for("roster", team_id=team_id))
@@ -852,6 +920,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             except ValueError as exc:
                 raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
+            push_before = s.push_to
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
@@ -859,6 +928,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if f.get("push_to") is not None:  # the event players can push to ("none" = no pushing)
                 pick = f.get("push_to", "")
                 s.push_to = pick if pick != g.event.id and app.config["hub"].get(pick) is not None else "none"
+            guest_lock_settings(s, push_before)
             hours = (f.get("waitlist_offer_hours", "") or "").strip()
             if hours:
                 if not hours.isdigit() or int(hours) > 72:
@@ -905,6 +975,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.call_mode = call_mode
             if f.get("test_event_shown"):
                 s.test_event = f.get("test_event") == "1"
+            guest_lock_settings(s, push_before)  # again, after the test-event box: a waiting event stays hidden
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
@@ -1243,6 +1314,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         """Every team (or entry) with PINs, cells and text consent, as a spreadsheet. Directors only."""
         t = store.load()
         rows = export.chip_teams(t) if g.event.kind == CHIP else export.bracket_entries(t)
+        if guest_here():  # a guest TD never gets full phone numbers, not even in a download
+            rows = export.mask_phones(rows, guest_td.mask_phone)
         name = f"{g.event.id}-teams-{datetime.now():%Y-%m-%d}.csv"
         return app.response_class(export.to_csv(rows), mimetype="text/csv",
                                   headers={"Content-Disposition": f'attachment; filename="{name}"',
@@ -1334,7 +1407,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     def admin_broadcast():
         body = request.form.get("body", "").strip()
         if body:
-            act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
+            sent = act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
+            if sent is not None:
+                who = f"{g.player['first']} {g.player['last']} (guest TD)" if guest_here() else "League office"
+                guest_td.BroadcastLog(g.event.dir).add(who, body, sent)
         return redirect(url_for("admin") + "#texts")
 
     @app.post("/t/<event>/admin/text-pins")
@@ -1750,6 +1826,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         if request.form.get("confirm", "").strip().upper() != "DELETE":
             flash("Type DELETE to confirm.", "error")
         elif hub.delete(event_id):
+            guests.forget_event(event_id)
             flash(f"Deleted {name}, its rosters and its texts.", "ok")
         return redirect(url_for("director"))
 
@@ -1817,9 +1894,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
-        "scorer_device": scorer_device,
+        "scorer_device": scorer_device, "guest_lock_settings": guest_lock_settings,
     })
     player_web.register(app, {"device_id": device_id})
+    guest_web.register(app, {"hub": hub, "guests": guests, "players": player_store, "admin_required": admin_required,
+                             "guest_fresh": guest_fresh, "FORMATS": FORMATS, "CHIP": CHIP, "BRACKET": BRACKET})
     player_web.register_registration(app)
     photos_web.register(app, admin_required)  # header photo and flyer: every tournament type
     qr_web.register(app, director_view)  # table QR stickers: every tournament type

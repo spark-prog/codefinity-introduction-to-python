@@ -1,0 +1,60 @@
+{% set gx = guest_overview() %}
+<section class="card" id="guest-tds">
+  <div class="section-head"><h2>Guest TDs</h2></div>
+  <p class="muted">Division reps who run an event of their own. They sign in at <b>/guest</b> with their player login, accept the
+    agreement, and ask for an event. You approve it before it goes public. They never see full phone numbers, and their
+    access ends when the event finishes or you remove them.</p>
+
+  {% set waiting = gx.events|selectattr("status", "equalto", "pending")|list %}
+  {% if waiting %}
+  <h3>Waiting for your approval</h3>
+  <div class="guest-rows">
+    {% for e in waiting %}
+    <div class="guest-row">
+      <div><b>{{ e.name }}</b><div class="muted small-note">{{ e.date or "no date yet" }} · asked by {{ e.guest_name }} on {{ e.requested_at[:10] }}</div></div>
+      <div class="button-row">
+        <a class="button small secondary" href="{{ url_for('admin', event=e.id) }}">Look it over</a>
+        {% if not is_viewer %}
+        <form method="post" action="{{ url_for('admin_guest_decide', event_id=e.id, decision='approve') }}" class="inline"><button class="button small">Approve</button></form>
+        <form method="post" action="{{ url_for('admin_guest_decide', event_id=e.id, decision='decline') }}" class="inline"
+              onsubmit="return confirm('Decline {{ e.name|e }}? It stays hidden and the guest TD can\'t open it.')"><button class="button small danger-outline">Decline</button></form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h3>People</h3>
+  {% if gx.people %}
+  <div class="guest-rows">
+    {% for p in gx.people %}
+    <div class="guest-row">
+      <div><b>{{ p.name }}</b> <span class="muted small-note">· member {{ p.member }}</span>
+        <div class="small-note">{% if p.current %}Accepted v{{ p.accepted.version }} on {{ p.accepted.at[:10] }} as “{{ p.accepted.typed_name }}”
+          {% elif p.accepted %}<b>Needs to accept the new version</b>{% else %}Not accepted yet{% endif %}</div>
+        <div class="muted small-note">Events: {% for e in gx.events if e.member == p.member %}{{ e.name }} ({{ "finished" if e.finished else e.status }}){% if not loop.last %}, {% endif %}{% else %}none{% endfor %}</div></div>
+      {% if not is_viewer %}<form method="post" action="{{ url_for('admin_guest_remove', member=p.member) }}"
+          onsubmit="return confirm('Remove {{ p.name|e }} as a guest TD? Their access ends right away.')"><button class="button small danger-outline">Remove</button></form>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">No guest TDs yet.</p>{% endif %}
+
+  {% if not is_viewer %}
+  <form method="post" action="{{ url_for('admin_guest_add') }}" class="form inline-form">
+    <label>Add by member number <input name="member" inputmode="numeric" placeholder="322…" required></label>
+    <button class="button secondary">Add guest TD</button>
+  </form>
+
+  <details class="settings-section" {% if not gx.agreement.version %}open{% endif %}>
+    <summary><span class="settings-title">Confidentiality agreement</span>
+      <span class="settings-sum">{% if gx.agreement.version %}version {{ gx.agreement.version }}, published {{ gx.agreement.published_at[:10] }}{% else %}not published: guest TDs can't run events yet{% endif %}</span></summary>
+    <form method="post" action="{{ url_for('admin_guest_agreement') }}" class="form section-fields">
+      <p class="muted">Guest TDs must accept this before they can run an event. Publishing a change makes everyone accept it again.</p>
+      <label>Wording <textarea name="text" rows="14" placeholder="Paste the approved agreement here">{{ gx.agreement.text }}</textarea></label>
+      <button class="button" onclick="return confirm('Publish this wording? Every guest TD will need to accept it before running an event.')">Publish</button>
+    </form>
+  </details>
+  {% endif %}
+</section>

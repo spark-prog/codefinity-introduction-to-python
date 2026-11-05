@@ -1,0 +1,8 @@
+{% set sent = broadcasts() %}
+{% if sent %}
+<details><summary>Texts sent to everyone ({{ sent|length }})</summary>
+  <div class="table-wrap"><table class="grid small">
+    {% for b in sent|reverse %}<tr><td class="nowrap">{{ b.at[:16]|replace("T", " ") }}</td><td>{{ b.by }}</td><td>{{ b.body }}</td><td class="muted">{{ b.count }} text{{ "s" if b.count != 1 }}</td></tr>{% endfor %}
+  </table></div>
+</details>
+{% endif %}

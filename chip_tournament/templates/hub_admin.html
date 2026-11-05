@@ -30,7 +30,7 @@
     <thead><tr><th>Tournament</th><th>Type</th><th>Date</th><th>Status</th><th>Field</th><th></th></tr></thead>
     {% for r in rows %}{% set s = r.t.settings %}
     <tr>
-      <td><b>{{ s.name }}</b>{% if s.test_event %} <span class="tag-test">TEST</span>{% endif %}<div class="muted small-note">/t/{{ r.event.id }}</div></td>
+      <td><b>{{ s.name }}</b>{% set gev = guest_event(r.event.id) %}{% if gev and gev.status == "pending" %} <span class="tag-test">WAITING FOR APPROVAL</span>{% elif s.test_event %} <span class="tag-test">TEST</span>{% endif %}{% if gev %}<div class="muted small-note">Guest TD: {{ gev.guest_name }}</div>{% endif %}<div class="muted small-note">/t/{{ r.event.id }}</div></td>
       <td>{{ r.format }}</td>
       <td>{{ event_when(s.date, s.start_time) or "—" }}</td>
       <td><span class="event-status {{ r.t.status }}">{{ {"setup": "Setting up", "running": "Live", "finished": "Finished"}[r.t.status] }}</span></td>
@@ -48,6 +48,8 @@
   <p class="muted">No tournaments yet. Create the first one below.</p>
   {% endif %}
 </section>
+
+{% include "_guest_tds_card.html" %}
 
 <section class="card" id="new">
   <h2>New tournament</h2>

@@ -1,9 +1,9 @@
 {% set gx = guest_overview() %}
 <section class="card" id="guest-tds">
   <div class="section-head"><h2>Guest TDs</h2></div>
-  <p class="muted">Division reps who run an event of their own. They sign in at <b>/guest</b> with their player login, accept the
-    agreement, and ask for an event. You approve it before it goes public. They never see full phone numbers, and their
-    access ends when the event finishes or you remove them.</p>
+  <p class="muted">Division reps who run an event of their own. Add them here and the app emails them the agreement. Once they sign it
+    online, you approve their account. Then they create events from their own page, and you approve each one before it goes
+    public. They never see full phone numbers, and their access to an event ends when it finishes or when you remove them.</p>
 
   {% set waiting = gx.events|selectattr("status", "equalto", "pending")|list %}
   {% if waiting %}
@@ -31,11 +31,19 @@
     {% for p in gx.people %}
     <div class="guest-row">
       <div><b>{{ p.name }}</b> <span class="muted small-note">· member {{ p.member }}</span>
-        <div class="small-note">{% if p.current %}Accepted v{{ p.accepted.version }} on {{ p.accepted.at[:10] }} as “{{ p.accepted.typed_name }}”
-          {% elif p.accepted %}<b>Needs to accept the new version</b>{% else %}Not accepted yet{% endif %}</div>
+        <div class="small-note">
+          {% if p.approved and p.current %}<span class="guest-ok">Approved</span> · signed v{{ p.accepted.version }} on {{ p.accepted.at[:10] }} as “{{ p.accepted.typed_name }}”
+          {% elif p.approved %}<b>Approved, but needs to sign the new version</b>
+          {% elif p.current %}<b>Signed v{{ p.accepted.version }} on {{ p.accepted.at[:10] }} as “{{ p.accepted.typed_name }}” · ready for your approval</b>
+          {% elif p.invited %}Agreement emailed {{ p.invited.at[:10] }} · not signed yet
+          {% else %}Not sent the agreement yet{% endif %}</div>
         <div class="muted small-note">Events: {% for e in gx.events if e.member == p.member %}{{ e.name }} ({{ "finished" if e.finished else e.status }}){% if not loop.last %}, {% endif %}{% else %}none{% endfor %}</div></div>
-      {% if not is_viewer %}<form method="post" action="{{ url_for('admin_guest_remove', member=p.member) }}"
-          onsubmit="return confirm('Remove {{ p.name|e }} as a guest TD? Their access ends right away.')"><button class="button small danger-outline">Remove</button></form>{% endif %}
+      {% if not is_viewer %}<div class="button-row">
+        {% if p.current and not p.approved %}<form method="post" action="{{ url_for('admin_guest_approve', member=p.member) }}" class="inline"><button class="button small">Approve</button></form>{% endif %}
+        {% if gx.agreement.version and not p.current %}<form method="post" action="{{ url_for('admin_guest_email', member=p.member) }}" class="inline"><button class="button small secondary">{{ "Email it again" if p.invited else "Email the agreement" }}</button></form>{% endif %}
+        <form method="post" action="{{ url_for('admin_guest_remove', member=p.member) }}" class="inline"
+          onsubmit="return confirm('Remove {{ p.name|e }} as a guest TD? Their access ends right away.')"><button class="button small danger-outline">Remove</button></form>
+      </div>{% endif %}
     </div>
     {% endfor %}
   </div>

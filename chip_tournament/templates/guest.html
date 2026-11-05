@@ -1,36 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Guest TD — Control Table{% endblock %}
 {% block content %}
-<header class="page-head">
-  <p class="eyebrow">Guest tournament director</p>
-  <h1>My events</h1>
-  {% if rec %}<p class="lede">Hi {{ player.first }}. Run your own tournament for First Coast APA: ask for an event here, and the league office approves it.</p>{% endif %}
+<header class="page-head split center">
+  <div>
+    <p class="eyebrow">Guest tournament director</p>
+    <h1>My events</h1>
+    {% if rec %}<p class="lede">Hi {{ player.first }}. Create a tournament here and send it to the league office for approval, then run it from its director page.</p>{% endif %}
+  </div>
+  {% if rec and approved and accepted and fresh %}<div class="button-row" style="justify-content: flex-end">
+    <a class="button" href="#new-event">New tournament</a></div>{% endif %}
 </header>
 
 {% if not rec %}
 <section class="card">
   <h2>You're not set up as a guest TD</h2>
-  <p>Guest TD access is for division reps the league office has added. If you'd like to run a tournament, contact the league office.</p>
+  <p>Guest TD access is for division reps the league office has invited. If you'd like to run a tournament, contact the league office.</p>
 </section>
 
 {% elif not agreement.version %}
 <section class="card">
   <h2>Almost ready</h2>
-  <p>The league office is finishing the confidentiality agreement. You'll be able to accept it and ask for an event here soon.</p>
+  <p>The league office is finishing the agreement. You'll get an email when it's ready to sign.</p>
 </section>
 
 {% elif not accepted %}
 <section class="card guest-agreement">
-  <p class="eyebrow">Version {{ agreement.version }}{% if rec.accepted %} · updated since you last accepted{% endif %}</p>
-  <h2>Confidentiality agreement</h2>
-  <p class="muted">Read this before you run an event. You'll see players' names and registration details, and the app texts players for you on behalf of First Coast APA.</p>
+  <p class="eyebrow">Step 1 of 2 · Version {{ agreement.version }}{% if rec.accepted %} · updated since you last signed{% endif %}</p>
+  <h2>Sign the agreement</h2>
+  <p class="muted">Read it to the end. Signing here is the same as signing on paper: tick the box and type your full name.</p>
   <div class="agreement-text">{{ agreement.text }}</div>
   <form method="post" action="{{ url_for('guest_accept') }}" class="form">
     <input type="hidden" name="version" value="{{ agreement.version }}">
-    <label class="checkbox"><input type="checkbox" name="agree" value="1" required> I have read and agree to this agreement.</label>
-    <label>Type your full name <input name="typed_name" required autocomplete="name" placeholder="{{ player.first }} {{ player.last }}"></label>
-    <button class="button big">Accept</button>
+    <label class="checkbox"><input type="checkbox" name="agree" value="1" required> I have read this agreement, understand it, and agree to it.</label>
+    <label>Type your full name as your signature <input name="typed_name" required autocomplete="name" placeholder="{{ player.first }} {{ player.last }}"></label>
+    <button class="button big">Sign</button>
   </form>
+</section>
+
+{% elif not approved %}
+<section class="card">
+  <p class="eyebrow">Step 2 of 2</p>
+  <h2>Waiting for the league office</h2>
+  <p>Thanks for signing on {{ rec.accepted.at[:10] }}. The league office will approve your account, and you'll get an email when you can create events.</p>
 </section>
 
 {% else %}
@@ -40,29 +51,35 @@
 {% endif %}
 
 <section class="card">
-  <h2>Your events</h2>
-  {% if events %}
+  <div class="section-head"><h2>Tournaments</h2></div>
+  {% if rows %}
   <div class="table-wrap"><table class="grid">
-    <thead><tr><th>Event</th><th>Date</th><th>Status</th><th></th></tr></thead>
-    {% for e in events %}
+    <thead><tr><th>Tournament</th><th>Type</th><th>Date</th><th>Status</th><th>Field</th><th></th></tr></thead>
+    {% for r in rows %}{% set s = r.t.settings %}
     <tr>
-      <td><b>{{ e.name }}</b></td>
-      <td>{{ e.date or "—" }}</td>
-      <td>{% if e.finished %}Finished (access ended)
-          {% elif e.status == "pending" %}Waiting for approval
-          {% elif e.status == "approved" %}Approved
-          {% else %}Declined{% endif %}</td>
-      <td>{% if fresh and not e.finished and e.status in ("pending", "approved") %}<a class="button small" href="{{ url_for('admin', event=e.id) }}">Run it</a>{% endif %}</td>
+      <td><b>{{ s.name }}</b>
+        {% if r.approval == "pending" %} <span class="tag-test">WAITING FOR APPROVAL</span>
+        {% elif r.approval == "declined" %} <span class="tag-test">NOT APPROVED</span>{% endif %}
+        <div class="muted small-note">/t/{{ r.event.id }}</div></td>
+      <td>{{ r.format }}</td>
+      <td>{{ event_when(s.date, s.start_time) or "—" }}</td>
+      <td><span class="event-status {{ r.t.status }}">{{ {"setup": "Setting up", "running": "Live", "finished": "Finished"}[r.t.status] }}</span></td>
+      <td>{{ r.count }}</td>
+      <td class="nowrap">
+        {% if fresh and r.t.status != "finished" and r.approval in ("pending", "approved") %}<a class="button small" href="{{ url_for('admin', event=r.event.id) }}">Run it</a>{% endif %}
+        {% if r.approval == "approved" %}<a class="button small secondary" href="{{ url_for('home', event=r.event.id) }}" target="_blank" rel="noopener">Public page ↗</a>{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table></div>
-  {% else %}<p class="muted">No events yet. Ask for one below.</p>{% endif %}
+  {% else %}<p class="muted">No tournaments yet. Create one below.</p>{% endif %}
 </section>
 
 {% if fresh %}
-<form method="post" action="{{ url_for('guest_new_event') }}" class="card form">
-  <h2>Ask for an event</h2>
-  <p class="muted">It's set up right away so you can fill in the details. It stays hidden, with registration closed and no texts, until the league office approves it.</p>
+<form method="post" action="{{ url_for('guest_new_event') }}" class="card form" id="new-event">
+  <h2>New tournament</h2>
+  <p class="muted">It's created right away so you can fill in the details, and sent to the league office for approval.
+    Until it's approved it's hidden, registration is closed and no texts go out. Up to {{ max_pending }} can wait for approval at once.</p>
   <label>Tournament name <input name="name" required placeholder="e.g. Division 3 Doubles"></label>
   <label>Type
     <select name="kind" required>
@@ -74,11 +91,11 @@
     <label>Start time <input name="start_time" type="time"></label>
   </div>
   <label>Venue <input name="venue" placeholder="Host location"></label>
-  <button class="button">Ask for this event</button>
+  <button class="button">Create and send for approval</button>
 </form>
 {% endif %}
 
-<p class="muted small-note">You accepted version {{ rec.accepted.version }} of the agreement on {{ rec.accepted.at[:10] }}.
-  You'll never see full phone numbers: the app texts players for you. Your access to an event ends when it finishes.</p>
+<p class="muted small-note">You signed version {{ rec.accepted.version }} of the agreement on {{ rec.accepted.at[:10] }}.
+  You'll never see full phone numbers: the app texts players for you. Your access to a tournament ends when it finishes.</p>
 {% endif %}
 {% endblock %}

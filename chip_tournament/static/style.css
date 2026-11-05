@@ -1136,3 +1136,4 @@ details.inline-details > summary.button { display: inline-flex; align-items: cen
 .guest-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
   padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .guest-row > div:first-child { flex: 1 1 220px; min-width: 0; }
+.guest-ok { color: var(--accent); font-weight: 700; }

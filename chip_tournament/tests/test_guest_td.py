@@ -18,11 +18,14 @@ AGREEMENT = ("Confidentiality agreement for guest tournament directors. " * 6).s
 PHONES = ["9045550111", "9045550122", "9045550133", "9045550144", "9045550155"]
 
 
+SENT = []  # every email the app sent in a test: (to, subject, text)
+
+
 class FakeMailer:
     to = "office@example.com"
 
-    def send_to(self, *a, **k):
-        pass
+    def send_to(self, to, subject, text, *a, **k):
+        SENT.append((to, subject, text))
 
 
 @pytest.fixture
@@ -31,6 +34,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.delenv("VIEWER_PASSWORD", raising=False)
     monkeypatch.delenv("CHIPS_PRODUCTION", raising=False)
     monkeypatch.setattr(backup.Mailer, "from_env", classmethod(lambda cls: FakeMailer()))
+    SENT.clear()
     app = create_app(str(tmp_path))
     app.testing = True
     rows = [HEADERS, row("32200001", first="Ann", last="Lee", email="ann@example.com"),
@@ -60,13 +64,14 @@ def text(resp):
 
 
 def ready_guest(app, member="32200001"):
-    """Ann on the list, agreement published and accepted, signed in."""
+    """Ann on the list, agreement published and signed, account approved by the LO, signed in."""
     admin = director(app)
-    admin.post("/admin/guests/add", data={"member": member})
     if not app.config["guests"].agreement()["version"]:
         admin.post("/admin/guests/agreement", data={"text": AGREEMENT})
+    admin.post("/admin/guests/add", data={"member": member})
     c = player(app, member)
     c.post("/guest/accept", data={"agree": "1", "typed_name": "Ann Lee", "version": app.config["guests"].agreement()["version"]})
+    admin.post(f"/admin/guests/{member}/approve")
     return admin, c
 
 
@@ -82,7 +87,7 @@ def test_director_adds_and_removes_guest_tds(app):
     admin = director(app)
     assert "No guest TDs yet" in text(admin.get("/admin"))
     page = text(admin.post("/admin/guests/add", data={"member": "3220 0001"}, follow_redirects=True))
-    assert "Added Ann Lee as a guest TD" in page and "member 32200001" in page
+    assert "Added Ann Lee. Publish the agreement" in page and "member 32200001" in page
     page = text(admin.post("/admin/guests/add", data={"member": "32200003"}, follow_redirects=True))
     assert "Cy Day has no email" in page  # can't sign in without one
     page = text(admin.post("/admin/guests/add", data={"member": "32299999"}, follow_redirects=True))
@@ -98,12 +103,12 @@ def test_agreement_must_be_published_then_accepted(app):
     admin = director(app)
     admin.post("/admin/guests/add", data={"member": "32200001"})
     c = player(app, "32200001")
-    assert "finishing the confidentiality agreement" in text(c.get("/guest"))
+    assert "finishing the agreement" in text(c.get("/guest"))
     page = text(admin.post("/admin/guests/agreement", data={"text": "too short"}, follow_redirects=True))
     assert "too short to publish" in page
     admin.post("/admin/guests/agreement", data={"text": AGREEMENT})
     page = text(c.get("/guest"))
-    assert "Version 1" in page and "Confidentiality agreement for guest" in page and "Ask for an event" not in page
+    assert "Version 1" in page and "Confidentiality agreement for guest" in page and "New tournament" not in page
     # Must tick the box and type a name; a stale page (old version) is refused.
     assert "Tick the box" in text(c.post("/guest/accept", data={"typed_name": "Ann Lee", "version": "1"}, follow_redirects=True))
     assert "Type your full name" in text(c.post("/guest/accept", data={"agree": "1", "typed_name": "A", "version": "1"},
@@ -111,12 +116,14 @@ def test_agreement_must_be_published_then_accepted(app):
     assert "changed while you were reading" in text(c.post("/guest/accept", data={"agree": "1", "typed_name": "Ann Lee",
                                                                                    "version": "0"}, follow_redirects=True))
     c.post("/guest/accept", data={"agree": "1", "typed_name": "Ann Lee", "version": "1"})
-    assert "Ask for an event" in text(c.get("/guest"))
-    assert "Accepted v1 on" in text(admin.get("/admin")) and "as “Ann Lee”" in text(admin.get("/admin"))
-    # A new version: everyone accepts again before running anything.
+    assert "Waiting for the league office" in text(c.get("/guest"))
+    assert "ready for your approval" in text(admin.get("/admin")) and "as “Ann Lee”" in text(admin.get("/admin"))
+    admin.post("/admin/guests/32200001/approve")
+    assert "New tournament" in text(c.get("/guest"))
+    # A new version: everyone signs again before running anything.
     admin.post("/admin/guests/agreement", data={"text": AGREEMENT + " Updated."})
-    assert "updated since you last accepted" in text(c.get("/guest"))
-    assert "Needs to accept the new version" in text(admin.get("/admin"))
+    assert "updated since you last signed" in text(c.get("/guest"))
+    assert "needs to sign the new version" in text(admin.get("/admin"))
 
 
 def test_players_not_on_the_list_get_nothing(app):
@@ -124,6 +131,12 @@ def test_players_not_on_the_list_get_nothing(app):
     bo = player(app, "32200002")
     assert "not set up as a guest TD" in text(bo.get("/guest"))
     assert "not on the guest TD list" in text(bo.post("/guest/new", data={"name": "X", "kind": "single"}, follow_redirects=True))
+    # On the list and signed, but not approved yet: still no events.
+    admin = director(app)
+    admin.post("/admin/guests/add", data={"member": "32200002"})
+    bo.post("/guest/accept", data={"agree": "1", "typed_name": "Bo Ray", "version": "1"})
+    assert "hasn&#39;t approved your account" in text(bo.post("/guest/new", data={"name": "X", "kind": "single"},
+                                                              follow_redirects=True))
     assert len(app.config["hub"].events()) == 0
     assert app.test_client().get("/guest").status_code == 302  # signed out: to the login page
 
@@ -160,7 +173,7 @@ def test_declined_event_closes_to_the_guest(app):
     admin.post(f"/admin/guests/event/{ev.id}/decline")
     assert ev.load().settings.test_event
     assert c.get(f"/t/{ev.id}/admin").headers["Location"].endswith("/guest")
-    assert "Declined" in text(c.get("/guest"))
+    assert "NOT APPROVED" in text(c.get("/guest")) and "Run it" not in text(c.get("/guest"))
 
 
 def test_pending_requests_are_capped(app):
@@ -223,7 +236,7 @@ def test_access_ends(app, monkeypatch):
     with ev.store.change("finish") as t:
         t.status = "finished"
     assert c.get(f"/t/{ev.id}/admin").status_code == 302
-    assert "Finished (access ended)" in text(c.get("/guest"))
+    assert "Finished" in text(c.get("/guest")) and "Run it" not in text(c.get("/guest"))
     with ev.store.change("reopen") as t:
         t.status = "setup"
     assert c.get(f"/t/{ev.id}/admin").status_code == 200
@@ -329,3 +342,53 @@ def test_broadcasts_are_logged_with_who_sent_them(app):
 def test_mask_phone():
     assert guest_td.mask_phone("904-555-1234") == "•••-•••-1234"
     assert guest_td.mask_phone("") == ""
+
+
+# ---------------------------------------------------------------- emails
+
+def test_emails_along_the_way(app):
+    admin = director(app)
+    admin.post("/admin/guests/agreement", data={"text": AGREEMENT})
+    page = text(admin.post("/admin/guests/add", data={"member": "32200001"}, follow_redirects=True))
+    assert "emailed them the agreement to sign" in page and "Agreement emailed" in page
+    to, subject, body = SENT[-1]
+    assert to == "ann@example.com" and "guest tournament director agreement" in subject
+    assert "http://localhost/guest" in body and AGREEMENT in body
+    # Signing tells the league office.
+    c = player(app, "32200001")
+    c.post("/guest/accept", data={"agree": "1", "typed_name": "Ann Lee", "version": "1"})
+    to, subject, body = SENT[-1]
+    assert to == "firstcoast@apaleagues.com" and subject == "Guest TD agreement signed: Ann Lee"
+    assert "/admin#guest-tds" in body and 'typing their name as "Ann Lee"' in body
+    # Approving tells the rep.
+    assert "Approved Ann Lee as a guest TD" in text(admin.post("/admin/guests/32200001/approve", follow_redirects=True))
+    assert SENT[-1][0] == "ann@example.com" and "approved as a guest TD" in SENT[-1][1]
+    assert "already approved" in text(admin.post("/admin/guests/32200001/approve", follow_redirects=True))
+    # A new event goes to the league office; approving it tells the rep.
+    ev = guest_event(app, c)
+    assert SENT[-1][0] == "firstcoast@apaleagues.com" and SENT[-1][1] == "Guest TD event to approve: Div 3 Singles"
+    admin.post(f"/admin/guests/event/{ev.id}/approve")
+    assert SENT[-1] [0] == "ann@example.com" and SENT[-1][1] == "Div 3 Singles: approved"
+    # Resending the agreement.
+    admin.post("/admin/guests/agreement", data={"text": AGREEMENT + " v2"})
+    assert "Emailed Ann Lee the agreement" in text(admin.post("/admin/guests/32200001/email", follow_redirects=True))
+    assert "version 2" in SENT[-1][2]
+
+
+def test_cannot_approve_before_signing(app):
+    admin = director(app)
+    admin.post("/admin/guests/agreement", data={"text": AGREEMENT})
+    admin.post("/admin/guests/add", data={"member": "32200001"})
+    page = text(admin.post("/admin/guests/32200001/approve", follow_redirects=True))
+    assert "hasn&#39;t signed the current agreement" in page and not app.config["guests"].is_approved("32200001")
+
+
+def test_guest_page_lists_events_like_the_director_page(app):
+    admin, c = ready_guest(app)
+    ev = guest_event(app, c)
+    page = text(c.get("/guest"))
+    assert "Div 3 Singles" in page and "WAITING FOR APPROVAL" in page and "Setting up" in page and "Run it" in page
+    assert "Public page" not in page
+    admin.post(f"/admin/guests/event/{ev.id}/approve")
+    page = text(c.get("/guest"))
+    assert "WAITING FOR APPROVAL" not in page and "Public page" in page

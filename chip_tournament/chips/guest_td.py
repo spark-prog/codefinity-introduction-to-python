@@ -1,8 +1,9 @@
 """Guest tournament directors: division reps who run one event of their own.
 
-The league director keeps a short list of members who may act as guest TDs. A guest TD signs
-in with their own player login, accepts the confidentiality agreement (the director's wording,
-versioned), and asks for an event. The event stays hidden, sends no texts and keeps
+The league operators (LO) keep a short list of members who may act as guest TDs. The LO emails
+a rep the confidentiality agreement; the rep signs it online (their own player login, a tick
+and their typed name; the LO's wording, versioned); the LO then approves their account, which
+stays approved until the LO removes them. An approved guest TD asks for an event. The event stays hidden, sends no texts and keeps
 registration closed until the director approves it. A guest TD can then run that event only,
 never sees a full phone number, and loses access when the event finishes, when the director
 removes them, or when the agreement changes until they accept the new version.
@@ -71,7 +72,8 @@ class GuestTDs:
             data = self.load()
             if member in data["guests"]:
                 raise GuestError(f"{name} is already a guest TD.")
-            data["guests"][member] = {"name": name, "added_at": now(), "accepted": None}
+            data["guests"][member] = {"name": name, "added_at": now(), "accepted": None, "approved": None,
+                                      "invited": None}
             self._save(data)
 
     def remove(self, member: str) -> str:
@@ -117,6 +119,33 @@ class GuestTDs:
             rec["accepted"] = {"version": agreement["version"], "at": now(), "typed_name": typed_name}
             self._save(data)
 
+    def mark_invited(self, member: str) -> None:
+        with self.lock:
+            data = self.load()
+            rec = data["guests"].get(member)
+            if rec is not None:
+                rec["invited"] = {"at": now(), "version": data["agreement"]["version"]}
+                self._save(data)
+
+    def approve(self, member: str) -> str:
+        """The LO approves a rep who has signed. Lasts until the LO removes them."""
+        with self.lock:
+            data = self.load()
+            rec = data["guests"].get(member)
+            if rec is None:
+                raise GuestError("That member isn't a guest TD.")
+            if not self.has_accepted(member):
+                raise GuestError(f"{rec['name']} hasn't signed the current agreement yet.")
+            if rec.get("approved"):
+                raise GuestError(f"{rec['name']} is already approved.")
+            rec["approved"] = {"at": now()}
+            self._save(data)
+            return rec["name"]
+
+    def is_approved(self, member: str) -> bool:
+        rec = self.guest(member)
+        return bool(rec and rec.get("approved"))
+
     def has_accepted(self, member: str) -> bool:
         data = self.load()
         rec, version = data["guests"].get(member or ""), data["agreement"]["version"]
@@ -157,10 +186,10 @@ class GuestTDs:
         return {eid: rec for eid, rec in self.load()["events"].items() if rec["member"] == member}
 
     def can_run(self, member: str, event_id: str) -> bool:
-        """On the list, accepted the current agreement, and it's their event (pending or approved)."""
+        """Approved by the LO, signed the current agreement, and it's their event (pending or approved)."""
         rec = self.event(event_id)
         return bool(rec and rec["member"] == member and rec["status"] in (PENDING, APPROVED)
-                    and self.guest(member) and self.has_accepted(member))
+                    and self.is_approved(member) and self.has_accepted(member))
 
 
 class BroadcastLog:

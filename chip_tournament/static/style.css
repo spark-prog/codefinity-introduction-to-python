@@ -760,6 +760,18 @@ body.default-bg {
 .apa-list li { margin: 6px 0; line-height: 1.5; }
 .apa-results-title { font-size: 1rem; margin: var(--space-2) 0 0; }
 .apa-verified { margin: var(--space-2) 0 0; font-size: .8rem; }
+.moved-note { margin-left: 8px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--warn, #f0b429); }
+.apa-link { white-space: nowrap; }
+.apa-badge { margin-left: 5px; padding: 0 5px; font-size: .62rem; font-weight: 800; letter-spacing: .08em; vertical-align: 1px;
+  border: 1px solid currentColor; border-radius: 4px; }
+.popular-searches { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.popular-search { font: inherit; font-size: .8rem; cursor: pointer; color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line-strong); border-radius: 99px; padding: 6px 12px; }
+.popular-search:hover, .popular-search.active { color: var(--accent); border-color: var(--accent); }
+.search-tip { font-size: .78rem; margin: 4px 0; }
+.apa-titles { margin-top: 14px; }
+.apa-titles summary { cursor: pointer; font-weight: 700; }
+.apa-titles .apa-list li { font-size: .85rem; }
 
 /* ---------- Tournament-only rules at the top of an event's Rules page ---------- */
 .event-rules { margin-bottom: 24px; border-color: rgba(var(--accent-rgb), .55); }

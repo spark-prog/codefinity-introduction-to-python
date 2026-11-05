@@ -147,6 +147,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     store = LocalProxy(lambda: g.event.store)
     sms = LocalProxy(lambda: g.event.sms)
     rule_book = rulebook.RuleBook(data_path)
+    search_settings = rulebook.SearchSettings(data_path)
+    app.config["search_settings"] = search_settings
+    app.config["apa_link_fetch"] = None  # tests put a stand-in here; None means the real website
+    link_check_running = threading.Lock()
     player_store = players.PlayerStore(data_path)  # every APA player, kept apart from the tournaments
     pools = pool_mod.Pools(data_path)  # shared tables (Mini-Mania)
     app.config["pools"] = pools
@@ -843,6 +847,10 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
+            try:
+                rulebook.check_apa_links(s.event_rules)
+            except ValueError as exc:
+                raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
@@ -957,17 +965,67 @@ def create_app(data_dir: str | None = None) -> Flask:
         sets = [{**r, "html": rulebook.render(r["body"], prefix=r["id"])} for r in sets]
         event_rules = (rulebook.render(t.settings.event_rules, prefix="tournament")
                        if t is not None and t.settings.event_rules else "")
+        settings = search_settings.load()
+        if os.environ.get("CHIPS_PRODUCTION") == "1" and search_settings.check_is_stale():
+            threading.Thread(target=run_link_check, daemon=True).start()  # weekly, in the background
+        check = settings["link_check"]
         return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules,
-                               apa=apa_rules.load(), apa_sections=apa_rules.sections())
+                               apa=apa_rules.load(), apa_sections=apa_rules.sections(), link_check=check,
+                               moved={b["url"] for b in check["bad"]} if check else set(),
+                               shorthand=rulebook.parse_shorthand(settings["shorthand"]),
+                               popular=rulebook.parse_popular(settings["popular"]))
+
+    def run_link_check() -> dict | None:
+        """Open every official APA page and save the result. Skips if a check is already running."""
+        if not link_check_running.acquire(blocking=False):
+            return None
+        try:
+            fetch = app.config["apa_link_fetch"]
+            result = apa_rules.check_links(fetch) if fetch else apa_rules.check_links()
+            search_settings.record_check(result)
+            return result
+        finally:
+            link_check_running.release()
 
     def event_rule_set(rule_id: str) -> str:
         """A rule set id an event can use: one that exists, or "" for none chosen yet."""
         return rule_id if any(r["id"] == rule_id for r in rule_book.load()) else ""
 
+    def render_admin_rules(edited: dict | None = None, search_form: dict | None = None):
+        """The rules editor. After a refused save, `edited` / `search_form` keep what was typed."""
+        sets = [{**r, **(edited or {})} if edited and r["id"] == edited["id"] else r for r in rule_book.load()]
+        return render_template("admin_rules.html", t=None, rule_sets=sets, search=search_form or search_settings.load(),
+                               check=search_settings.load()["link_check"], apa_count=len(apa_rules.pages()),
+                               apa_sections=apa_rules.sections)
+
     @app.get("/admin/rules")
     @admin_required
     def admin_rules():
-        return render_template("admin_rules.html", t=None, rule_sets=rule_book.load())
+        return render_admin_rules()
+
+    @app.post("/admin/rules/search")
+    @admin_required
+    def admin_rules_search():
+        f = request.form
+        try:
+            search_settings.save_text(f.get("shorthand", ""), f.get("popular", ""))
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return render_admin_rules(search_form={"shorthand": f.get("shorthand", ""), "popular": f.get("popular", "")})
+        flash("Saved the shorthand list and popular searches.", "ok")
+        return redirect(url_for("admin_rules") + "#search-settings")
+
+    @app.post("/admin/rules/check-links")
+    @admin_required
+    def admin_rules_check_links():
+        result = run_link_check()
+        if result is None:
+            flash("A link check is already running. Give it a minute, then reload this page.", "error")
+        elif result["bad"]:
+            flash(f"{len(result['bad'])} of {result['total']} APA links need a look. They're listed below.", "error")
+        else:
+            flash(f"All {result['total']} APA links open.", "ok")
+        return redirect(url_for("admin_rules") + "#link-check")
 
     @app.post("/admin/rules/new")
     @admin_required
@@ -979,11 +1037,14 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/rules/<rule_id>")
     @admin_required
     def admin_rules_save(rule_id):
+        title, body = request.form.get("title", ""), request.form.get("body", "")
         try:
-            rule = rule_book.save(rule_id, request.form.get("title", ""), request.form.get("body", ""))
+            rule = rule_book.save(rule_id, title, body)
             flash(f"Saved {rule['title']}.", "ok")
         except ValueError as exc:
             flash(str(exc), "error")
+            if rule_book.get(rule_id) is not None:  # keep what was typed so nothing is lost
+                return render_admin_rules(edited={"id": rule_id, "title": title, "body": body})
         return redirect(url_for("admin_rules") + f"#edit-{rule_id}")
 
     @app.post("/admin/rules/<rule_id>/move")

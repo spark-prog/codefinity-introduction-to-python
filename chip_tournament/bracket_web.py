@@ -14,7 +14,7 @@ from datetime import datetime
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from chips import eligibility, schedule, themes
+from chips import eligibility, rules as rules_mod, schedule, themes
 from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MAX_TEAM_SIZE, MODIFIED, NO_SHOW, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT,
     asks_two_levels, entries_label, place_text,
@@ -157,6 +157,10 @@ def register(app, h) -> dict:
             s.theme = themes.theme_key(f.get("theme", s.theme))
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
+            try:
+                rules_mod.check_apa_links(s.event_rules)
+            except ValueError as exc:
+                raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"

@@ -89,8 +89,7 @@ def register(app, h) -> dict:
     # ------------------------------------------------------------- shared pages
 
     def home():
-        t = store.load()
-        return render_template("b_home.html", t=t)
+        return app.config["event_tab_page"]()
 
     def board():
         return render_template("b_board.html", t=store.load())

@@ -1,0 +1,17 @@
+{# Live tab: the tables and the chip stats. Needs t. #}
+{% set s = t.settings %}
+
+{% if t.status != SETUP %}
+<section>
+  <div class="section-head"><h2>Live</h2><a href="{{ url_for('board') }}">Open the board</a></div>
+  {% include "_stats.html" %}
+  {% include "_tables.html" %}
+</section>
+{% endif %}
+
+{% if t.status == SETUP %}
+<section class="card">
+  <h2>Live tables</h2>
+  <p class="lede">The tables open when the tournament starts.</p>
+</section>
+{% endif %}

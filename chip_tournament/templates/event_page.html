@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ t.settings.name }}{% endblock %}
+{% block head %}{% if active_tab == "bracket" and t.status == RUNNING %}{% include "_refresh.html" %}{% endif %}{% endblock %}
+{% block content %}
+{% include "_event_top.html" %}
+<div class="event-panel" id="panel" data-tab="{{ active_tab }}">
+  {% include panel %}
+</div>
+{% endblock %}

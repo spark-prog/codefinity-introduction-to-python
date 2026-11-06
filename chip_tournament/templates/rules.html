@@ -1,28 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Rules — {{ t.settings.name if t else "Control Table" }}{% endblock %}
 {% block content %}
+{% if t %}
+{% include "_event_top.html" %}
+<section class="rules-intro">
+  <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% elif not event_rules %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
+    Anything they don't cover follows the <a href="#apa">official APA rules</a>. <a href="/rules">All league rules</a></p>
+  <p><a class="button secondary" href="https://rules.poolplayers.com" target="_blank" rel="noopener">Official APA rules: rules.poolplayers.com</a></p>
+  {% include "_rules_search.html" %}
+</section>
+{% else %}
 <header class="page-head split center">
   <div>
-    <p class="eyebrow">{{ (t.settings.sms_name if t else "") or "League" }} rules</p>
+    <p class="eyebrow">League rules</p>
     <h1>Rules</h1>
-    {% if t %}
-    <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% elif not event_rules %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
-      Anything they don't cover follows the <a href="#apa">official APA rules</a>. <a href="/rules">All league rules</a></p>
-    {% else %}
     <p class="lede">Pick a game, or search every rule set and the official APA rules at once.</p>
-    {% endif %}
     <p><a class="button secondary" href="https://rules.poolplayers.com" target="_blank" rel="noopener">Official APA rules: rules.poolplayers.com</a></p>
   </div>
-  <div class="card rules-search">
-    <label for="rule-search" class="eyebrow">Search the rules</label>
-    <input id="rule-search" type="search" placeholder="e.g. scratch, foul, ball in hand" autocomplete="off">
-    {% if popular %}<div class="popular-searches" aria-label="Popular searches">
-      {% for q in popular %}<button type="button" class="popular-search" data-q="{{ q }}">{{ q }}</button>{% endfor %}
-    </div>{% endif %}
-    <p class="muted search-tip">Tip: put words in quotes for an exact phrase, like “ball on the floor”.</p>
-    <p id="rule-count" class="muted" aria-live="polite"></p>
-  </div>
+  {% include "_rules_search.html" %}
 </header>
+{% endif %}
 
 {% if event_rules %}
 <article class="card event-rules rule-group" id="tournament-rules">

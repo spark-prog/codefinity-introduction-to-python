@@ -69,11 +69,13 @@ def test_each_tournament_has_its_own_data(app, admin):
     assert [x.name for x in a.load().teams.values()] == ["Sharks"]
     assert [x.name for x in b.load().entries.values()] == ["Cy"]
     assert b"Sharks" not in client.get(f"/t/{b.id}/").data
-    assert b"Cy" in client.get(f"/t/{b.id}/").data
+    assert b"Cy" in client.get(f"/t/{b.id}/").data  # an event opens on its teams while people sign up
     assert (b.dir / "texts.log").exists() and not (a.dir / "texts.log").exists()
     # each page links stay inside its tournament
     page = client.get(f"/t/{b.id}/").data
-    assert f'href="/t/{b.id}/rules"'.encode() in page and f'href="/t/{b.id}/board" class="">Bracket</a>'.encode() in page
+    for tab in ("details", "teams", "bracket", "rules"):  # the tab bar
+        assert f'class="event-tab" href="/t/{b.id}/{tab}"'.encode() in page or f'class="event-tab active" href="/t/{b.id}/{tab}"'.encode() in page, tab
+    assert f'href="/t/{b.id}/board" class="">Bracket</a>'.encode() in client.get(f"/t/{b.id}/register").data
 
 
 def test_pages_belong_to_their_tournament_type(app, admin):
@@ -190,8 +192,9 @@ def test_double_elimination_night_through_the_pages(app, admin):
     assert t.status == "finished"
     payouts = sorted((e.payout_cents for e in t.entries.values()), reverse=True)
     assert payouts[:3] == [4800, 3200, 0]
-    page = player.get(f"{base}/").data
+    page = player.get(f"{base}/teams").data
     assert b"Final results" in page and b"$48.00" in page
+    assert b"Final results" not in player.get(f"{base}/").data  # a finished event opens on its bracket
     for _ in range(40):  # texts are sent from a background thread
         texts = (ev.dir / "texts.log").read_text()
         if "APA: Table" in texts:

@@ -758,12 +758,16 @@ def test_event_menu_order(client):
     page = client.get("/").get_data(as_text=True)  # an event's home page, still in setup
     nav = page[page.index('<nav class="nav'):page.index("</nav>")]
     labels = [re.sub(r"<[^>]+>", "", a) for a in re.findall(r"<a [^>]*>(.*?)</a>", nav)]
-    assert labels == ["All Events", "Chip Tournament", "Board", "Rules", "Register", "Log in", "TD LoginTD"]
+    assert labels == ["All Events", "Chip Tournament", "Register", "Log in", "TD LoginTD"]  # Board and Rules are tabs here
+    other = client.get("/register").get_data(as_text=True)  # a page without the tab bar keeps them in the menu
+    other_nav = other[other.index('<nav class="nav'):other.index("</nav>")]
+    assert [re.sub(r"<[^>]+>", "", a) for a in re.findall(r"<a [^>]*>(.*?)</a>", other_nav)][:4] == \
+        ["All Events", "Chip Tournament", "Board", "Rules"]
     assert '<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>' in nav  # short on phones
     assert '<a href="/"><span class="hide-xs">All </span>Events</a>' in nav
     assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title hide-sm active"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/admin"' in nav
-    assert f'href="/t/{ChipEventClient.event_id}/board"' in nav
+    assert f'href="/t/{ChipEventClient.event_id}/board"' not in nav and f'href="/t/{ChipEventClient.event_id}/board"' in other_nav
     assert f'<div class="brand show-sm"><a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page  # title by the logo on phones
     assert "Open the board" not in page  # only once play starts
     client.post("/admin/login", data={"password": "secret"})

@@ -1,0 +1,15 @@
+{# The top of every tabbed event page: the photo, the header with the facts a player needs, and the tab bar.
+   Needs t and active_tab. #}
+{% set s = t.settings %}
+{% include "_event_banner.html" %}
+<header class="page-head event-head">
+  <div class="hero-copy">
+    {% include "_event_header.html" %}
+    {% if event.kind != BRACKET and t.status == SETUP and t.seeking_partner and not s.registration_shut %}<p class="muted"><a href="{{ url_for('register') }}#looking">{{ t.seeking_partner|length }} player(s) looking for a partner</a></p>{% endif %}
+  </div>
+</header>
+<nav class="event-tabs" aria-label="This event">
+  {% for tab in event_tabs(t) %}
+  <a class="event-tab{% if tab.key == active_tab %} active{% endif %}" href="{{ url_for(tab.endpoint) }}"{% if tab.key == active_tab %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.count is not none %} <span class="tab-count">{{ tab.count }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>

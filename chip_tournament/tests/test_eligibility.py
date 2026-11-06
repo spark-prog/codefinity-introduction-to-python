@@ -273,3 +273,48 @@ def test_links_in_messages_stay_safe(tmp_path, monkeypatch):
     assert '<a href="https://example.com/x" target="_blank" rel="noopener">example.com/x</a>.' in out  # the full stop stays outside
     assert ">JOIN</a>" in out
     assert str(f('x" onmouseover="alert(1)')) == "x&#34; onmouseover=&#34;alert(1)"
+
+
+# ---------------------------------------------------------------- Jack & Jill words: Needs 20 and friends
+
+def jj(**kw):
+    return rules(list_label="Jack & Jill", list_column="Masters", gender="", **kw)
+
+
+@pytest.mark.parametrize("word", ["Needs 20", "needs 20", "NEEDS  20"])
+def test_needs_20(word):
+    no, review = el.check_player(rec(masters=word, mp8="14"), jj(), "", "8")
+    assert no == ["Not eligible yet: Jack & Jill needs 20 lifetime 8-Ball matches. You have 14: 6 more to go."]
+    assert review == []
+
+
+def test_needs_20_but_the_column_is_behind_goes_to_review():
+    no, review = el.check_player(rec(masters="Needs 20", mp8="23"), jj(), "", "8")
+    assert no == [] and review == ["The Jack & Jill list says Needs 20, but the player list shows 23 lifetime "
+                                   "8-Ball matches: check and update the list"]
+
+
+@pytest.mark.parametrize("word", ["Not Active-Needs 20", "Not Active - Needs 20", "not active–needs 20"])
+def test_not_active_needs_20(word):
+    no, _ = el.check_player(rec(masters=word, mp8="7"), jj(), "", "8")
+    assert len(no) == 1 and no[0].startswith("Not eligible: Jack & Jill needs you on a current 8-Ball team roster "
+                                             "and 20 lifetime 8-Ball matches. You have 7: 13 more to go.")
+    assert el.LEAGUE_URL in no[0]
+    no, _ = el.check_player(rec(masters=word, mp8="25"), jj(), "", "8")  # has the matches: no countdown
+    assert "more to go" not in no[0] and "8-Ball team roster" in no[0]
+
+
+def test_not_active_in_format():
+    no, review = el.check_player(rec(masters="Not Active in Format", mp8="31"), jj(), "", "8")
+    assert len(no) == 1 and review == []
+    assert "needs you on a current 8-Ball team roster" in no[0] and "You have 31 lifetime 8-Ball matches" in no[0]
+
+
+@pytest.mark.parametrize("word", ["Yes", "Eligible", "eligible"])
+def test_yes_and_eligible_still_pass(word):
+    assert el.check_player(rec(masters=word), jj(), "", "8") == ([], [])
+
+
+def test_unknown_word_is_still_not_on_the_list():
+    no, _ = el.check_player(rec(masters="Maybe"), jj(), "", "8")
+    assert no == ["Not on the Jack & Jill list for this event. Ask the league office if you think you should be."]

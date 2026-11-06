@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import copy
 import os
 import re
 import secrets
@@ -30,11 +31,12 @@ from werkzeug.local import LocalProxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import bracket_web
+import guest_web
 import photos_web
 import qr_web
 import cal_web
 import player_web
-from chips import backup, bonus_event, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
+from chips import alerts, apa_rules, backup, bonus_event, guest_td, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -147,6 +149,12 @@ def create_app(data_dir: str | None = None) -> Flask:
     store = LocalProxy(lambda: g.event.store)
     sms = LocalProxy(lambda: g.event.sms)
     rule_book = rulebook.RuleBook(data_path)
+    search_settings = rulebook.SearchSettings(data_path)
+    app.config["search_settings"] = search_settings
+    app.config["apa_link_fetch"] = None  # tests put a stand-in here; None means the real website
+    link_check_running = threading.Lock()
+    guests = guest_td.GuestTDs(data_path)  # division reps who run one event of their own
+    app.config["guests"] = guests
     player_store = players.PlayerStore(data_path)  # every APA player, kept apart from the tournaments
     pools = pool_mod.Pools(data_path)  # shared tables (Mini-Mania)
     app.config["pools"] = pools
@@ -226,6 +234,13 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["now"] = datetime.now
     app.jinja_env.globals["skill_for"] = players.skill_for
     app.jinja_env.globals["skill_bases"] = players.SKILL_BASES
+    app.jinja_env.globals["level_rule"] = players.level_rule
+
+    def public_url(path: str) -> str:
+        """A link to share outside the app: on the SITE_URL domain (e.g. https://controltable.app) when set."""
+        root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+        return root + path
+    app.jinja_env.globals["public_url"] = public_url
     app.jinja_env.globals["elig_rules"] = eligibility.rules_of
     app.jinja_env.globals["elig_describe"] = eligibility.describe
     app.jinja_env.globals["elig_genders"] = eligibility.GENDERS
@@ -289,6 +304,10 @@ def create_app(data_dir: str | None = None) -> Flask:
             "rule_choices": rule_book.load,
             "is_admin": session.get("admin", False),
             "is_viewer": bool(session.get("viewer")) and not session.get("admin"),
+            "is_guest_td": guest_here(),
+            "guest_listed": guest_member() is not None,
+            "guest_pending": guest_here() and guest_pending(),
+            "hide_phones": (bool(session.get("viewer")) and not session.get("admin")) or guest_here(),
             "ACTIVE": ACTIVE,
             "CALLED": CALLED,
             "WAITING": WAITING,
@@ -446,10 +465,89 @@ def create_app(data_dir: str | None = None) -> Flask:
         if "event" not in values and g.get("event") and app.url_map.is_endpoint_expecting(endpoint, "event"):
             values["event"] = g.event.id
 
+    # ---- guest TDs: a division rep running their own event (see chips/guest_td.py)
+
+    def guest_member() -> str | None:
+        """The signed-in player's member number if they're on the guest TD list."""
+        p = g.get("player")
+        return p["member"] if p and guests.guest(p["member"]) else None
+
+    def guest_fresh() -> bool:
+        return time.time() - (g.get("login_at") or 0) < guest_td.FRESH_HOURS * 3600
+
+    def guest_here() -> bool:
+        """A guest TD may run the event in view: theirs, agreement accepted, signed in recently, not finished."""
+        if "guest_here" not in g:
+            member, ev = guest_member(), g.get("event")
+            g.guest_here = bool(member and ev and not session.get("admin") and guest_fresh()
+                                and guests.can_run(member, ev.id) and ev.load().status != FINISHED)
+        return g.guest_here
+
+    def director_here() -> bool:
+        """The league director, or the guest TD of the event in view."""
+        return bool(session.get("admin")) or guest_here()
+
+    def guest_pending() -> bool:
+        """A guest TD's event that the league office hasn't approved yet."""
+        ev = g.get("event")
+        rec = guests.event(ev.id) if ev else None
+        return bool(rec and rec["status"] == guest_td.PENDING)
+
+    def guest_locked(s) -> dict:
+        """The settings a guest TD can't change, as they were before a settings save."""
+        return {"push_to": s.push_to, "require_member": s.require_member,
+                "eligibility": copy.deepcopy(getattr(s, "eligibility", None))}
+
+    def guest_lock_settings(s, before: dict) -> None:
+        """What a guest TD can't change in their event's settings: who can play (eligibility and member
+        numbers) and pushing players into another event are the league office's call."""
+        if not guest_here():
+            return
+        s.push_to, s.require_member, s.eligibility = before["push_to"], before["require_member"], before["eligibility"]
+        if guest_pending():  # hidden, no texts, registration closed until approved
+            s.test_event, s.registration_closed = True, True
+
+    def broadcast_reach() -> int:
+        """How many phones "text everyone" reaches now: opted-in players, minus anyone who replied STOP."""
+        ev = g.get("event")
+        if ev is None:
+            return 0
+        t = ev.load()
+        if ev.kind == CHIP:
+            groups = t.active_teams if t.status == RUNNING else list(t.teams.values())
+        else:
+            groups = [e for e in t.entries.values() if e.status != "no_show"]
+        blocked = hub.optouts.all()
+        return len({alerts.normalize_phone(n) for grp in groups for n in grp.phones} - set(blocked) - {""})
+
+    app.jinja_env.globals["broadcast_reach"] = broadcast_reach
+    app.jinja_env.globals["sms_optouts"] = lambda: sorted(hub.optouts.all().items(), key=lambda kv: kv[1]["at"], reverse=True)
+    app.jinja_env.globals["guest_limits"] = {"chars": guest_td.GUEST_BROADCAST_CHARS, "per_day": guest_td.GUEST_BROADCASTS_PER_DAY}
+    app.config["director_here"] = director_here
+    app.jinja_env.globals["broadcasts"] = lambda: guest_td.BroadcastLog(g.event.dir).all() if g.get("event") else []
+    app.config["guest_here"] = guest_here
+
+    def guest_refused():
+        """A guest TD on a page they can't use: say why, and send them somewhere useful."""
+        if g.get("event") and guest_member() and request.endpoint in guest_td.GUEST_BLOCKED and guest_here():
+            flash("That's for the league office only.", "error")
+            return redirect(url_for("admin"))
+        if guest_member():
+            if not guest_fresh():
+                flash("For safety, sign in again to keep running your event.", "error")
+            else:
+                flash("Guest TD access covers only your own event, while it's running.", "error")
+            return redirect(url_for("guest_home"))
+        return None
+
     def admin_required(view):
         @wraps(view)
         def wrapper(*args, **kwargs):
+            if not session.get("admin") and guest_here() and request.endpoint not in guest_td.GUEST_BLOCKED:
+                return view(*args, **kwargs)
             if not session.get("admin"):
+                if (stop := guest_refused()) is not None:
+                    return stop
                 if session.get("viewer"):
                     flash("You're signed in view-only, so changes are turned off.", "error")
                     return redirect(url_for("admin") if g.get("event") else url_for("director"))
@@ -463,6 +561,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         @wraps(view)
         def wrapper(*args, **kwargs):
             if not (session.get("admin") or session.get("viewer")):
+                if guest_here() and request.endpoint not in guest_td.GUEST_BLOCKED:
+                    return view(*args, **kwargs)
+                if (stop := guest_refused()) is not None:
+                    return stop
                 return redirect(url_for("admin_login", next=request.path))
             return view(*args, **kwargs)
 
@@ -583,6 +685,28 @@ def create_app(data_dir: str | None = None) -> Flask:
                 "trusted_ip_header": os.environ.get("TRUSTED_IP_HEADER", "") or "(not set)",
                 "headers": {h: request.headers.get(h, "") for h in heads}}
 
+    @app.post("/sms/inbound")
+    def sms_inbound():
+        """Twilio posts every text a player sends to our number here. STOP words put the number on the
+        league-wide opt-out list; START words take it off. Twilio sends the standard confirmation reply."""
+        token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+        # Twilio signs the exact address it was given, which may be the onrender.com one or the site's own
+        # domain (SITE_URL). Try each address this request could have been sent to; a forged request still
+        # fails every one, since only Twilio has the auth token.
+        path = request.full_path.rstrip("?")
+        site = os.environ.get("SITE_URL", "").strip().rstrip("/")
+        here = request.url_root.rstrip("/")
+        candidates = {here + path, here.replace("http://", "https://", 1) + path}
+        if site:
+            candidates.add(site + path)
+        params, signature = request.form.to_dict(), request.headers.get("X-Twilio-Signature", "")
+        if not any(alerts.valid_twilio_signature(token, url, params, signature) for url in candidates):
+            app.logger.warning("SMS reply rejected: Twilio signature didn't match %s%s", sorted(candidates),
+                               "" if token else " (TWILIO_AUTH_TOKEN isn't set)")
+            return "Forbidden", 403
+        hub.optouts.handle_reply(request.form.get("From", ""), request.form.get("Body", ""))
+        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {"Content-Type": "text/xml"}
+
     @app.get("/healthz")
     def healthz():
         """Up and answering. Lists any event file that couldn't be read at the last scan (every minute), but still
@@ -604,12 +728,12 @@ def create_app(data_dir: str | None = None) -> Flask:
         history = [m for m in t.matches if team_id in (m.team_a, m.team_b) and m.status == DONE]
         return render_template(
             "team.html", t=t, team=team, match=t.current_match_for(team_id), history=history,
-            is_team=bool(session.get(f"team_{team_id}") or session.get("admin")), my_device=scorer_device(),
+            is_team=bool(session.get(f"team_{team_id}") or director_here()), my_device=scorer_device(),
         )
 
     def team_match(team_id):
         """The signed-in team's match on a table, and which side it is."""
-        if not (session.get(f"team_{team_id}") or session.get("admin")):
+        if not (session.get(f"team_{team_id}") or director_here()):
             raise TournamentError("Enter your team PIN first.")
         t = store.load()
         m = t.current_match_for(team_id)
@@ -654,7 +778,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if not grp["fixable"] or (want != "all" and grp["id"] != want):
                 continue
             people = t.teams if g.event.kind == CHIP else t.entries
-            new = skill_check.fixed_players(people[grp["id"]], grp["players"], two)
+            new = skill_check.fixed_players(people[grp["id"]], grp["players"], two, getattr(t.settings, "skill_game", "8"))
             label = f"Skill check: {grp['name']} set to the player list's levels"
 
             def apply(tt, gid=grp["id"], new=new):
@@ -749,7 +873,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     def roster(team_id):
         t = store.load()
         team = t.teams.get(team_id) or abort(404)
-        allowed = session.get(f"team_{team_id}") or session.get("admin")
+        allowed = session.get(f"team_{team_id}") or director_here()
         if request.method == "POST" and not allowed:
             check_pin(team)
             return redirect(url_for("roster", team_id=team_id))
@@ -843,7 +967,12 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.contact_phone = f.get("contact_phone", s.contact_phone).strip()
             s.rule_set = event_rule_set(f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
+            try:
+                rulebook.check_apa_links(s.event_rules)
+            except ValueError as exc:
+                raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
+            push_before = guest_locked(s)
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
@@ -851,6 +980,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             if f.get("push_to") is not None:  # the event players can push to ("none" = no pushing)
                 pick = f.get("push_to", "")
                 s.push_to = pick if pick != g.event.id and app.config["hub"].get(pick) is not None else "none"
+            guest_lock_settings(s, push_before)
             hours = (f.get("waitlist_offer_hours", "") or "").strip()
             if hours:
                 if not hours.isdigit() or int(hours) > 72:
@@ -897,6 +1027,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             s.call_mode = call_mode
             if f.get("test_event_shown"):
                 s.test_event = f.get("test_event") == "1"
+            guest_lock_settings(s, push_before)  # again, after the test-event box: a waiting event stays hidden
             field_cap = f.get("field_cap", "0").strip() or "0"
             if not field_cap.isdigit():
                 raise TournamentError("Field cap must be a whole number (0 for no limit).")
@@ -954,18 +1085,78 @@ def create_app(data_dir: str | None = None) -> Flask:
         t, sets = current_t(), rule_book.load()
         if t is not None:
             sets = [r for r in sets if r["id"] == t.settings.rule_set]
-        sets = [{**r, "html": rulebook.render(r["body"])} for r in sets]
-        event_rules = rulebook.render(t.settings.event_rules) if t is not None and t.settings.event_rules else ""
-        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules)
+        sets = [{**r, "html": rulebook.render(r["body"], prefix=r["id"])} for r in sets]
+        event_rules = (rulebook.render(t.settings.event_rules, prefix="tournament")
+                       if t is not None and t.settings.event_rules else "")
+        settings = search_settings.load()
+        if os.environ.get("CHIPS_PRODUCTION") == "1" and search_settings.check_is_stale():
+            threading.Thread(target=run_link_check, daemon=True).start()  # weekly, in the background
+        check = settings["link_check"]
+        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules,
+                               apa=apa_rules.load(), apa_sections=apa_rules.sections(), link_check=check,
+                               moved={b["url"] for b in check["bad"]} if check else set(),
+                               shorthand=rulebook.parse_shorthand(settings["shorthand"]),
+                               popular=rulebook.parse_popular(settings["popular"]))
+
+    def run_link_check() -> dict | None:
+        """Open every official APA page and save the result. Skips if a check is already running."""
+        if not link_check_running.acquire(blocking=False):
+            return None
+        try:
+            fetch = app.config["apa_link_fetch"]
+            result = apa_rules.check_links(fetch) if fetch else apa_rules.check_links()
+            if apa_rules.looks_like_outage(result):  # couldn't reach APA: keep the last good result, retry soon
+                search_settings.record_failed_check(result)
+                return {**result, "outage": True}
+            search_settings.record_check(result)
+            return result
+        finally:
+            link_check_running.release()
 
     def event_rule_set(rule_id: str) -> str:
         """A rule set id an event can use: one that exists, or "" for none chosen yet."""
         return rule_id if any(r["id"] == rule_id for r in rule_book.load()) else ""
 
+    def render_admin_rules(edited: dict | None = None, search_form: dict | None = None):
+        """The rules editor. After a refused save, `edited` / `search_form` keep what was typed."""
+        sets = [{**r, **(edited or {})} if edited and r["id"] == edited["id"] else r for r in rule_book.load()]
+        return render_template("admin_rules.html", t=None, rule_sets=sets, search=search_form or search_settings.load(),
+                               check=search_settings.load()["link_check"], apa_count=len(apa_rules.pages()),
+                               check_failed=search_settings.load().get("link_check_failed"),
+                               apa_sections=apa_rules.sections)
+
     @app.get("/admin/rules")
     @admin_required
     def admin_rules():
-        return render_template("admin_rules.html", t=None, rule_sets=rule_book.load())
+        return render_admin_rules()
+
+    @app.post("/admin/rules/search")
+    @admin_required
+    def admin_rules_search():
+        f = request.form
+        try:
+            search_settings.save_text(f.get("shorthand", ""), f.get("popular", ""))
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return render_admin_rules(search_form={"shorthand": f.get("shorthand", ""), "popular": f.get("popular", "")})
+        flash("Saved the shorthand list and popular searches.", "ok")
+        return redirect(url_for("admin_rules") + "#search-settings")
+
+    @app.post("/admin/rules/check-links")
+    @admin_required
+    def admin_rules_check_links():
+        result = run_link_check()
+        if result is None:
+            flash("A link check is already running. Give it a minute, then reload this page.", "error")
+        elif result.get("outage"):
+            flash(f"Couldn't reach rules.poolplayers.com ({len(result['bad'])} of {result['total']} pages didn't open), "
+                  "so nothing was marked. That's usually a short outage. It tries again by itself within the hour, "
+                  "or press the button later.", "error")
+        elif result["bad"]:
+            flash(f"{len(result['bad'])} of {result['total']} APA links need a look. They're listed below.", "error")
+        else:
+            flash(f"All {result['total']} APA links open.", "ok")
+        return redirect(url_for("admin_rules") + "#link-check")
 
     @app.post("/admin/rules/new")
     @admin_required
@@ -977,11 +1168,14 @@ def create_app(data_dir: str | None = None) -> Flask:
     @app.post("/admin/rules/<rule_id>")
     @admin_required
     def admin_rules_save(rule_id):
+        title, body = request.form.get("title", ""), request.form.get("body", "")
         try:
-            rule = rule_book.save(rule_id, request.form.get("title", ""), request.form.get("body", ""))
+            rule = rule_book.save(rule_id, title, body)
             flash(f"Saved {rule['title']}.", "ok")
         except ValueError as exc:
             flash(str(exc), "error")
+            if rule_book.get(rule_id) is not None:  # keep what was typed so nothing is lost
+                return render_admin_rules(edited={"id": rule_id, "title": title, "body": body})
         return redirect(url_for("admin_rules") + f"#edit-{rule_id}")
 
     @app.post("/admin/rules/<rule_id>/move")
@@ -1180,6 +1374,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         """Every team (or entry) with PINs, cells and text consent, as a spreadsheet. Directors only."""
         t = store.load()
         rows = export.chip_teams(t) if g.event.kind == CHIP else export.bracket_entries(t)
+        if guest_here():  # a guest TD never gets full phone numbers, not even in a download
+            rows = export.mask_phones(rows, guest_td.mask_phone)
         name = f"{g.event.id}-teams-{datetime.now():%Y-%m-%d}.csv"
         return app.response_class(export.to_csv(rows), mimetype="text/csv",
                                   headers={"Content-Disposition": f'attachment; filename="{name}"',
@@ -1270,8 +1466,23 @@ def create_app(data_dir: str | None = None) -> Flask:
     @admin_required
     def admin_broadcast():
         body = request.form.get("body", "").strip()
+        if body and guest_here():  # a guest TD texts players in the League's name: keep it short and occasional
+            log = guest_td.BroadcastLog(g.event.dir)
+            today = datetime.now().date().isoformat()
+            mine = [x for x in log.all() if x["at"].startswith(today) and x["by"].endswith("(guest TD)")]
+            if len(body) > guest_td.GUEST_BROADCAST_CHARS:
+                flash(f"Keep texts to {guest_td.GUEST_BROADCAST_CHARS} characters or fewer "
+                      f"(this one is {len(body)}).", "error")
+                return redirect(url_for("admin") + "#texts")
+            if len(mine) >= guest_td.GUEST_BROADCASTS_PER_DAY:
+                flash(f"Guest TDs can send {guest_td.GUEST_BROADCASTS_PER_DAY} texts to everyone per day, and "
+                      "you've sent them all today. Ask the league office if something urgent needs to go out.", "error")
+                return redirect(url_for("admin") + "#texts")
         if body:
-            act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
+            sent = act("Broadcast text", lambda t: t.broadcast(body), "Queued {result} text(s).")
+            if sent is not None:
+                who = f"{g.player['first']} {g.player['last']} (guest TD)" if guest_here() else "League office"
+                guest_td.BroadcastLog(g.event.dir).add(who, body, sent)
         return redirect(url_for("admin") + "#texts")
 
     @app.post("/t/<event>/admin/text-pins")
@@ -1687,6 +1898,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         if request.form.get("confirm", "").strip().upper() != "DELETE":
             flash("Type DELETE to confirm.", "error")
         elif hub.delete(event_id):
+            guests.forget_event(event_id)
             flash(f"Deleted {name}, its rosters and its texts.", "ok")
         return redirect(url_for("director"))
 
@@ -1754,9 +1966,11 @@ def create_app(data_dir: str | None = None) -> Flask:
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
-        "scorer_device": scorer_device,
+        "scorer_device": scorer_device, "guest_lock_settings": guest_lock_settings, "guest_locked": guest_locked,
     })
     player_web.register(app, {"device_id": device_id})
+    guest_web.register(app, {"hub": hub, "guests": guests, "players": player_store, "admin_required": admin_required,
+                             "guest_fresh": guest_fresh, "FORMATS": FORMATS, "CHIP": CHIP, "BRACKET": BRACKET})
     player_web.register_registration(app)
     photos_web.register(app, admin_required)  # header photo and flyer: every tournament type
     qr_web.register(app, director_view)  # table QR stickers: every tournament type

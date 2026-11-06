@@ -743,6 +743,36 @@ body.default-bg {
 .keep-score { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .keep-score .button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- Rules: section links, search context, official APA pages ---------- */
+.rule-head { scroll-margin-top: 150px; }
+.rule-link { margin-left: 10px; font-size: .8em; font-weight: 700; color: var(--ink-2); text-decoration: none; opacity: .45; }
+.rule-link:hover, .rule-link:focus { color: var(--accent); opacity: 1; }
+.rule-link.copied { color: var(--accent); opacity: 1; font-family: inherit; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+.rule-target { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 6px; border-radius: 4px; }
+.searching .rule-block:not(.rule-head)[data-section]:not([data-section=""])::before {
+  content: attr(data-section); display: block; font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 2px;
+}
+.apa-rules { margin-top: var(--space-3); }
+.apa-section { border-top: 1px solid var(--line); padding: 10px 0; }
+.apa-section summary { cursor: pointer; font-weight: 700; }
+.apa-list { margin: 8px 0 0; padding-left: 22px; }
+.apa-list li { margin: 6px 0; line-height: 1.5; }
+.apa-results-title { font-size: 1rem; margin: var(--space-2) 0 0; }
+.apa-verified { margin: var(--space-2) 0 0; font-size: .8rem; }
+.moved-note { margin-left: 8px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--warn, #f0b429); }
+.apa-link { white-space: nowrap; }
+.apa-badge { margin-left: 5px; padding: 0 5px; font-size: .62rem; font-weight: 800; letter-spacing: .08em; vertical-align: 1px;
+  border: 1px solid currentColor; border-radius: 4px; }
+.popular-searches { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.popular-search { font: inherit; font-size: .8rem; cursor: pointer; color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line-strong); border-radius: 99px; padding: 6px 12px; }
+.popular-search:hover, .popular-search.active { color: var(--accent); border-color: var(--accent); }
+.search-tip { font-size: .78rem; margin: 4px 0; }
+.apa-titles { margin-top: 14px; }
+.apa-titles summary { cursor: pointer; font-weight: 700; }
+.apa-titles .apa-list li { font-size: .85rem; }
+
 /* ---------- Tournament-only rules at the top of an event's Rules page ---------- */
 .event-rules { margin-bottom: 24px; border-color: rgba(var(--accent-rgb), .55); }
 .event-rules .approved-note { margin: 0 0 14px; color: var(--accent); }
@@ -975,8 +1005,14 @@ tr.check-ok td { opacity: .75; }
 .pool-table.sent { border-color: rgba(255, 107, 118, .6); }
 
 /* ---------------------------------------------------------------- header photo & flyer */
-.event-banner { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; max-height: 380px;
-  border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 var(--space-3); box-shadow: var(--shadow); }
+/* The cover keeps the 1200 x 630 shape on a phone. On a wider screen it stays 380px tall and shows the whole
+   photo, centered, over a blurred copy of itself, instead of zooming in and cutting off the top and bottom. */
+.event-banner { position: relative; overflow: hidden; width: 100%; aspect-ratio: 1200 / 630; max-height: 380px;
+  border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 var(--space-3); box-shadow: var(--shadow);
+  background: rgba(0, 0, 0, .35); isolation: isolate; }
+.event-banner::before { content: ""; position: absolute; inset: -24px; z-index: -1;
+  background: var(--cover) center / cover no-repeat; filter: blur(22px) brightness(.6) saturate(1.1); }
+.event-banner img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .flyer-link { display: inline-flex; align-items: center; gap: 12px; margin: 0 0 var(--space-3); text-decoration: none; }
 .flyer-thumb { width: 64px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
 .event-card.has-photo { overflow: hidden; }
@@ -998,7 +1034,7 @@ tr.check-ok td { opacity: .75; }
 .photo-preview.flyer { max-height: 320px; width: auto; max-width: 100%; }
 .photo-empty { display: grid; place-items: center; aspect-ratio: 1200 / 630; border: 1px dashed var(--line); border-radius: var(--radius-sm);
   color: var(--muted); margin-bottom: 10px; }
-.event-banner.contain, .event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
+.event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
 /* Live pages during a deploy: shown until the site answers again, then the page reloads. */
 .reconnecting { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; max-width: calc(100% - 32px);
   padding: 10px 16px; border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--line); color: var(--ink);
@@ -1095,3 +1131,19 @@ details.inline-details > summary.button { display: inline-flex; align-items: cen
 .seed-skill-form select option { background: var(--surface-solid); color: var(--ink); }
 .tier-preview .pill { margin: 2px 6px 2px 0; }
 .seed-note { font-style: normal; }
+
+/* ---------- Guest TDs ---------- */
+.agreement-text { white-space: pre-wrap; max-height: 420px; overflow-y: auto; padding: 14px 16px; margin: 12px 0 18px;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--line); border-radius: var(--radius-sm); line-height: 1.6; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 14px; }
+.inline-form label { flex: 1 1 220px; margin: 0; }
+.guest-note { margin: 16px 0; }
+.guest-rows { display: grid; gap: 10px; margin: 8px 0 18px; }
+.guest-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.guest-row > div:first-child { flex: 1 1 220px; min-width: 0; }
+.guest-ok { color: var(--accent); font-weight: 700; }
+.sig-record { margin-top: 4px; font-size: .8rem; }
+.sig-record summary { cursor: pointer; color: var(--ink-2); }
+.sig-record div { margin-top: 3px; word-break: break-word; }
+.broadcast-reach { display: block; margin-top: 4px; }

@@ -28,6 +28,7 @@ def app(tmp_path, monkeypatch):
     singles = hub.create("Singles Night", "bracket", format="single", date="2026-11-14")
     t = singles.load()
     t.settings.team_size, t.settings.skill_groups, t.settings.race_method = 1, [[1, 5], [6, 9]], "rack_chart"
+    t.settings.skill_game = "high"  # placed by the higher of the two levels
     singles.store.save(t)
     hub.create("Doubles Chips", "chip", date="2026-11-21")
     masters = hub.create("Masters", "bracket", format="single", date="2026-12-05")

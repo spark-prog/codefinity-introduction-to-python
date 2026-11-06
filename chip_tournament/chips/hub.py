@@ -20,7 +20,7 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path
 
-from .alerts import SmsSender
+from .alerts import OptOuts, SmsSender
 from .bracket import BracketTournament
 from .engine import Tournament, TournamentError
 from .storage import Store
@@ -55,6 +55,7 @@ class Hub:
         self.index_path = self.root / "events.json"
         self.lock = threading.RLock()
         self._events: dict[str, Event] = {}
+        self.optouts = OptOuts(self.root / "sms_optouts.json")  # league-wide: one STOP covers every event
         self._migrate_legacy()
 
     # ------------------------------------------------------------- index
@@ -75,7 +76,7 @@ class Hub:
             if ev is None:
                 folder = self.root / "events" / row["id"]
                 ev = Event(id=row["id"], kind=row["kind"], dir=folder, store=Store(folder, KINDS[row["kind"]]),
-                           sms=SmsSender(folder / "texts.log"), created=row.get("created", ""))
+                           sms=SmsSender(folder / "texts.log", self.optouts), created=row.get("created", ""))
                 self._events[row["id"]] = ev
             return ev
 

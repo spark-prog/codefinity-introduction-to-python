@@ -10,10 +10,10 @@
     <h1>{{ s.name }}</h1>
   </div>
   <div class="button-row" style="justify-content: flex-end">
-    <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
+    {% if is_guest_td %}<a class="button secondary" href="{{ url_for('guest_home') }}">My events</a>{% else %}<a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>{% endif %}
     <a class="button secondary" href="{{ url_for('board') }}" target="_blank" rel="noopener">Board ↗</a>
     <a class="button secondary" href="{{ url_for('home') }}" target="_blank" rel="noopener">View as player ↗</a>
-    {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
+    {% if not is_viewer and not is_guest_td %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. Phone numbers, PINs and texts are hidden.</p>{% endif %}
@@ -40,7 +40,7 @@
   <a href="#photos">Photos</a>
   <a href="#texts">Texts &amp; log</a>
   <a href="#settings">Settings</a>
-  <a href="#new-tournament">Start over</a>
+  {% if not is_guest_td %}<a href="#new-tournament">Start over</a>{% endif %}
   <a href="#summary">Summary</a>
 </nav>
 
@@ -298,7 +298,9 @@
             <label>Entry name <input name="name" value="{{ e.name }}"></label>
             {% for p in e.players %}{% set i = loop.index0 %}
             <label>Player {{ i + 1 }} <input name="player_name_{{ i }}" value="{{ p.name }}" {% if not setup %}readonly{% endif %}></label>
-            <label>Cell <input name="player_phone_{{ i }}" value="{{ p.phone }}"></label>
+            {% if hide_phones %}<label>Cell {% if p.phone %}<span class="muted">(on file: ending in {{ p.phone|last4 }})</span>{% endif %}
+              <input name="player_phone_{{ i }}" type="tel" placeholder="{{ 'Leave blank to keep it' if p.phone else '904-555-0123' }}"></label>
+            {% else %}<label>Cell <input name="player_phone_{{ i }}" value="{{ p.phone }}"></label>{% endif %}
             <input type="hidden" name="player_skill_{{ i }}" value="{{ p.skill or '' }}">
             {% if asks_two_levels(s) %}
             <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7" value="{{ p.skill_8 or '' }}" {% if not setup %}readonly{% endif %}></label>
@@ -376,7 +378,7 @@
   <div class="fold-body">
   {% if not is_viewer %}
   <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
-    <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="300"></textarea></label>
+    <label>Text every entry that turned on alerts <textarea name="body" rows="2" maxlength="{{ guest_limits.chars if is_guest_td else 300 }}"></textarea>{% set reach = broadcast_reach() %}<span class="muted small-note broadcast-reach">Goes to {{ reach }} phone{{ "" if reach == 1 else "s" }}: players who turned on text alerts, minus anyone who replied STOP.{% if is_guest_td %} Sent in First Coast APA's name and logged with yours. Event news only (schedule, tables, delays, results), {{ guest_limits.chars }} characters, up to {{ guest_limits.per_day }} a day.{% endif %}</span></label>
     <button class="button small">Send</button>
   </form>
   <form method="post" action="{{ url_for('admin_text_pins') }}" class="form"
@@ -387,6 +389,7 @@
   <details><summary>Recent texts ({{ texts|length }})</summary>
     <table class="grid small">{% for x in texts %}<tr><td>{{ x.at|clock }}</td><td>···{{ x.to|last4 }}</td><td>{{ x.body }}</td><td class="muted">{{ x.status }}</td></tr>{% endfor %}</table>
   </details>
+  {% include "_broadcast_log.html" %}
   {% endif %}
   <details><summary>Activity log</summary>
     <pre class="log">{% for line in t.log|reverse %}{{ line }}
@@ -424,8 +427,8 @@
       <div class="settings section-fields">
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
-    <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
-      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
+    {% if not is_guest_td %}<label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
+      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>{% endif %}
     <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
       <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
       <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
@@ -439,11 +442,14 @@
     <details class="settings-section" data-key="who">
       <summary><span class="settings-title">Who can play</span><span class="settings-sum">{% set who = elig_describe(elig_rules(s)) %}{{ who|join(" · ") if who else "Open to everyone" }}</span></summary>
       <div class="settings section-fields">
-    {% include "_eligibility_settings.html" %}
+    {% if is_guest_td %}<div class="settings-group">Who can play (eligibility)</div>
+    <p class="muted small-note wide guest-locked">Set by the league office.{% if s.require_member %} Member numbers are required.{% endif %}
+      {% set rules = elig_describe(elig_rules(s)) %}{% if rules %}</p><ul class="small-note wide guest-locked">{% for x in rules %}<li>{{ x }}</li>{% endfor %}</ul>{% else %} Open to everyone.</p>{% endif %}
+    {% else %}{% include "_eligibility_settings.html" %}{% endif %}
     <label>Skill levels from the player list
       <select name="skill_game">
         {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
-      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.</span></label>
+      </select><span class="muted small-note">What a logged-in player's registration fills in. A player not active in that format plays at their established level in the other.{% if asks_two_levels(s) %} In this event players enter both levels, and this also picks the one they play at: their skill group and race. Changing it before the draw updates everyone already registered.{% endif %}</span></label>
       </div>
     </details>
     <details class="settings-section" data-key="rules">
@@ -489,7 +495,7 @@
     <label>Round robin: advance to a playoff from each group (0 = no playoff) <input name="advance" type="number" min="0" value="{{ s.advance }}" {% if not setup %}disabled{% endif %}></label>
     <label class="wide">Skill groups, singles (blank = one bracket)
       <input name="skill_groups" value="{{ skill_groups_text(s.skill_groups) }}" placeholder="1-3, 4, 5, 6, 7-9" {% if not setup %}disabled{% endif %}>
-      <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. Groups never merge. A group with one player joins the neighboring group with the fewest players, and a group too small for the format plays single elimination.</span></label>
+      <span class="muted small-note">Each player plays in the group for {{ level_rule(s.skill_game, "their") }} (set by "Skill levels from the player list"); each group has its own bracket and champion. Groups never merge. A group with one player joins the neighboring group with the fewest players, and a group too small for the format plays single elimination.</span></label>
 
       </div>
     </details>
@@ -569,7 +575,7 @@
   </form>
 </section>
 
-<section class="card jump-target" id="new-tournament">
+{% if not is_guest_td %}<section class="card jump-target" id="new-tournament">
   <details class="fold-section"><summary class="fold-head"><h2>Start over</h2><span class="muted">Danger zone: archive or delete this tournament</span></summary>
   <div class="fold-body">
   <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
@@ -589,7 +595,7 @@
   </table>
   {% endif %}
 </div></details>
-</section>
+</section>{% endif %}
 <div id="summary" class="jump-target summary-bottom">
 <h2 class="summary-title">Summary</h2>
 <div class="stats">
@@ -600,9 +606,11 @@
   <div class="stat"><span class="label">Matches left</span><span class="value">{{ t.matches|selectattr("status", "in", ["pending", "ready", "called"])|rejectattr("is_bye")|list|length }}</span></div>
   {% endif %}
 </div>
-{% include "_pending_card.html" %}
+{% if is_guest_td %}<p class="muted small-note guest-note">Member number checks, exceptions and eligibility decisions for this event are handled by the league office.</p>
+{% else %}{% include "_pending_card.html" %}
 {% include "_exceptions_card.html" %}
 {% include "_eligibility_admin_card.html" %}
+{% endif %}
 <section class="card controls" style="margin-top: 0">
   {% if setup %}
   <p>{{ t.field_entries|length }} entr{{ "y" if t.field_entries|length == 1 else "ies" }} in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.

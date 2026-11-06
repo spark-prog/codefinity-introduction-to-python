@@ -194,7 +194,7 @@ def test_rules_editor_and_page(client):
     page = client.post("/admin/rules/8-ball-rules", data={"title": "8-Ball Rules", "body": body}, follow_redirects=True).data
     assert b"Saved 8-Ball Rules" in page
     page = league.get("/rules").data
-    assert b'<h3 class="rule-block">The break</h3>' in page
+    assert b'id="8-ball-rules--the-break" data-section="The break">The break<a class="rule-link"' in page
     assert b"<b>foul</b>" in page and b"<ol>" in page
     assert b"<script>alert(1)</script>" not in page and b"&lt;script&gt;" in page
     client.post("/admin/rules/new", data={"title": "10-Ball Rules"})

@@ -7,21 +7,25 @@
     <h1>Rules</h1>
     {% if t %}
     <p class="lede">{% if rule_sets %}{{ t.settings.name }} plays by {{ rule_sets[0].title }}.{% elif not event_rules %}The rules for {{ t.settings.name }} haven't been posted yet.{% endif %}
-      <a href="/rules">All league rules</a></p>
+      Anything they don't cover follows the <a href="#apa">official APA rules</a>. <a href="/rules">All league rules</a></p>
     {% else %}
-    <p class="lede">Pick a game, or search every rule set at once.</p>
+    <p class="lede">Pick a game, or search every rule set and the official APA rules at once.</p>
     {% endif %}
     <p><a class="button secondary" href="https://rules.poolplayers.com" target="_blank" rel="noopener">Official APA rules: rules.poolplayers.com</a></p>
   </div>
-  {% if rule_sets %}<div class="card rules-search">
+  <div class="card rules-search">
     <label for="rule-search" class="eyebrow">Search the rules</label>
     <input id="rule-search" type="search" placeholder="e.g. scratch, foul, ball in hand" autocomplete="off">
+    {% if popular %}<div class="popular-searches" aria-label="Popular searches">
+      {% for q in popular %}<button type="button" class="popular-search" data-q="{{ q }}">{{ q }}</button>{% endfor %}
+    </div>{% endif %}
+    <p class="muted search-tip">Tip: put words in quotes for an exact phrase, like “ball on the floor”.</p>
     <p id="rule-count" class="muted" aria-live="polite"></p>
-  </div>{% endif %}
+  </div>
 </header>
 
 {% if event_rules %}
-<article class="card event-rules">
+<article class="card event-rules rule-group" id="tournament-rules">
   <p class="eyebrow">{{ t.settings.name }}</p>
   <h2>Tournament rules</h2>
   <p class="approved-note"><b>The rules below have been approved by APA for the purposes of this Tournament only.</b></p>
@@ -37,28 +41,75 @@
 </nav>
 
 {% for r in rule_sets %}
-<article class="card ruleset" id="r-{{ r.id }}">
+<article class="card ruleset rule-group" id="r-{{ r.id }}">
   <p class="eyebrow">{{ (t.settings.sms_name if t else "") or "League" }}</p>
   <h2>{{ r.title }}</h2>
   {% if r.html %}<div class="rule-body">{{ r.html|safe }}</div>
   {% else %}<p class="muted">These rules are coming soon.</p>{% endif %}
 </article>
 {% endfor %}
-<p id="rule-none" class="banner" hidden></p>
 {% elif not t %}
-<p class="muted">No rules have been posted yet.</p>
+<p class="muted">No league rules have been posted yet.</p>
 {% endif %}
+<p id="rule-none" class="banner" hidden></p>
 
+<section class="card apa-rules" id="apa">
+  <p class="eyebrow">American Poolplayers Association</p>
+  <h2>Official APA rules</h2>
+  <p class="muted">Each link opens that page on rules.poolplayers.com. Pages show the rules for both the '23/24–'25/26 and the '26/27–'28/29 league years; the newer ones are labeled.</p>
+  <div id="apa-results" hidden>
+    <h3 class="apa-results-title">Matching APA pages</h3>
+    <ul class="apa-list" id="apa-result-list"></ul>
+  </div>
+  <div id="apa-browse">
+    {% for section, pages in apa_sections %}
+    <details class="apa-section">
+      <summary>{{ section }} <span class="muted">({{ pages|length }})</span></summary>
+      <ul class="apa-list">
+        {% for p in pages %}
+        <li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title }}</a>{% if p.url in moved %} <span class="moved-note">may have moved</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endfor %}
+  </div>
+  <p class="muted apa-verified">{% if link_check %}Links last checked {{ link_check.at[:10] }}{% if link_check.bad %}; {{ link_check.bad|length }} may have moved{% else %}: all open{% endif %}.{% else %}Page list checked against rules.poolplayers.com on {{ apa.verified }}.{% endif %}</p>
+</section>
+
+<script id="apa-pages" type="application/json">{{ apa.pages|tojson }}</script>
+<script id="apa-moved" type="application/json">{{ moved|list|tojson }}</script>
+<script id="rule-shorthand" type="application/json">{{ shorthand|tojson }}</script>
 <script>
 (function () {
   var input = document.getElementById("rule-search");
-  if (!input) return;
+  var groups = Array.prototype.slice.call(document.querySelectorAll(".rule-group"));
   var sets = Array.prototype.slice.call(document.querySelectorAll(".ruleset"));
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".rule-tab"));
   var count = document.getElementById("rule-count"), none = document.getElementById("rule-none");
   var blocks = Array.prototype.slice.call(document.querySelectorAll(".rule-block"));
+  var apaPages = JSON.parse(document.getElementById("apa-pages").textContent);
+  var apaResults = document.getElementById("apa-results"), apaList = document.getElementById("apa-result-list");
+  var apaBrowse = document.getElementById("apa-browse");
   blocks.forEach(function (b) { b.dataset.html = b.innerHTML; });
-  var active = (location.hash && document.getElementById(location.hash.slice(1))) ? location.hash.slice(1) : (sets[0] && sets[0].id);
+
+  function linkTarget() {
+    return location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+  }
+  // Which rule set to show first: the one a link points into, else the first.
+  var target = linkTarget(), targetSet = target && target.closest(".ruleset");
+  var active = targetSet ? targetSet.id : (sets[0] && sets[0].id);
+
+  // Open a section link: show its rule set, scroll to it and outline it.
+  function goToTarget() {
+    var el = linkTarget();
+    if (!el || !el.classList.contains("rule-head")) return;
+    if (input.value) { input.value = ""; search(); }
+    var set = el.closest(".ruleset");
+    if (set) showTab(set.id);
+    document.querySelectorAll(".rule-target").forEach(function (x) { x.classList.remove("rule-target"); });
+    el.classList.add("rule-target");
+    el.scrollIntoView();
+  }
 
   function showTab(id, remember) {
     active = id;
@@ -69,9 +120,10 @@
 
   function highlight(el, re) {
     var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
+    while (walker.nextNode()) if (!walker.currentNode.parentNode.closest(".rule-link")) nodes.push(walker.currentNode);
     nodes.forEach(function (node) {
       var text = node.nodeValue;
+      re.lastIndex = 0;
       if (!re.test(text)) return;
       re.lastIndex = 0;
       var frag = document.createDocumentFragment(), last = 0, m;
@@ -85,37 +137,151 @@
     });
   }
 
+  function blockText(b) {
+    var link = b.querySelector(".rule-link");
+    return link ? b.textContent.slice(0, -link.textContent.length) : b.textContent;
+  }
+
+  // ---- Matching -------------------------------------------------------------
+  // Words can come in any order; "quoted words" must appear exactly as typed;
+  // break finds breaking/breaks; the director's shorthand (BIH = ball in hand) works both ways.
+  var shorthand = JSON.parse(document.getElementById("rule-shorthand").textContent);
+  var moved = JSON.parse(document.getElementById("apa-moved").textContent);
+
+  // Little words that would match nearly every rule ("ball on the floor" searches ball + floor).
+  var STOP = ["the", "an", "of", "on", "in", "to", "is", "it", "for", "and", "or", "if", "at", "by", "be", "can", "what", "when", "how", "do", "does", "my", "you"];
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function stem(w) {
+    var endings = ["ing", "ed", "es", "s"];
+    for (var i = 0; i < endings.length; i++) {
+      var e = endings[i];
+      if (w.length - e.length >= 3 && w.slice(-e.length) === e) return w.slice(0, -e.length);
+    }
+    return w;
+  }
+  function edge(s, front) {  // \b only where the phrase starts/ends with a letter or number
+    var c = front ? s.charAt(0) : s.charAt(s.length - 1);
+    return /\w/.test(c) ? "\\b" : "";
+  }
+  function phrasePattern(p) { return edge(p, true) + esc(p).replace(/\s+/g, "\\s+") + edge(p, false); }
+  function wordPattern(w) { return /\w$/.test(w) ? edge(w, true) + esc(stem(w)) + "\\w*" : phrasePattern(w); }
+  function altPattern(a) { return /\s/.test(a) ? phrasePattern(a) : wordPattern(a); }
+
+  function parse(q) {
+    var terms = [], re = /"([^"]+)"|“([^”]+)”|(\S+)/g, m;
+    while ((m = re.exec(q))) {
+      var phrase = (m[1] || m[2] || "").trim().toLowerCase();
+      if (phrase) { terms.push({ text: phrase, patterns: [phrasePattern(phrase)] }); continue; }
+      var w = m[3].toLowerCase().replace(/^[^\w]+|[^\w]+$/g, "");
+      if (!w || (w.length < 2 && !/\d/.test(w)) || STOP.indexOf(w) !== -1) continue;
+      var alts = [w];
+      shorthand.forEach(function (group) {
+        var hit = group.some(function (g) { return g === w || stem(g) === stem(w); });
+        if (hit) alts = alts.concat(group);
+      });
+      terms.push({ text: w, patterns: alts.filter(function (a, i) { return alts.indexOf(a) === i; }).map(altPattern) });
+    }
+    terms.forEach(function (t) { t.re = new RegExp(t.patterns.join("|"), "i"); });
+    return terms;
+  }
+  function matchesAll(text, terms) { return terms.every(function (t) { return t.re.test(text); }); }
+  function markAll(terms) {
+    return new RegExp(terms.map(function (t) { return t.patterns.join("|"); }).join("|"), "gi");
+  }
+
+  // Official APA layer: every term must appear in the page's title, section or search words. Title hits first.
+  function searchApa(q, terms) {
+    var found = [];
+    apaPages.forEach(function (p) {
+      var all = p.title + " " + p.section + " " + p.words;
+      if (!matchesAll(all, terms)) return;
+      var score = terms.filter(function (t) { return t.re.test(p.title); }).length * 2 +
+                  (p.title.toLowerCase().indexOf(q.toLowerCase()) !== -1 ? 3 : 0);
+      found.push({ page: p, score: score });
+    });
+    found.sort(function (a, b) { return b.score - a.score; });
+    apaList.innerHTML = "";
+    found.forEach(function (f) {
+      var li = document.createElement("li"), a = document.createElement("a"), s = document.createElement("span");
+      a.href = f.page.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = f.page.title;
+      s.className = "muted"; s.textContent = " · " + f.page.section;
+      li.appendChild(a); li.appendChild(s);
+      if (moved.indexOf(f.page.url) !== -1) {
+        var n = document.createElement("span"); n.className = "moved-note"; n.textContent = "may have moved"; li.appendChild(n);
+      }
+      apaList.appendChild(li);
+    });
+    return found.length;
+  }
+
   function search() {
     var q = input.value.trim();
     blocks.forEach(function (b) { b.innerHTML = b.dataset.html; b.hidden = false; });
+    groups.forEach(function (g) { g.hidden = false; });
     tabs.forEach(function (t) { t.querySelector(".rule-hits").textContent = ""; });
+    popularButtons.forEach(function (b) { b.classList.toggle("active", b.dataset.q === q); });
     none.hidden = true;
-    if (q.length < 2) { count.textContent = ""; document.body.classList.remove("searching"); showTab(active); return; }
+    var terms = q.length < 2 ? [] : parse(q);
+    if (!terms.length) {
+      count.textContent = ""; document.body.classList.remove("searching");
+      apaResults.hidden = true; apaBrowse.hidden = false; showTab(active); return;
+    }
     document.body.classList.add("searching");
-    var re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), total = 0;
-    sets.forEach(function (a) {
-      var hits = 0;
-      a.querySelectorAll(".rule-block").forEach(function (b) {
-        re.lastIndex = 0;
-        var match = re.test(b.textContent);
-        b.hidden = !match;
-        if (match) { hits++; highlight(b, re); }
+    var mark = markAll(terms), total = 0;
+    groups.forEach(function (g) {
+      var hits = 0, showH3 = false, showH4 = false;
+      // A heading that matches shows its whole section; otherwise only matching lines show.
+      g.querySelectorAll(".rule-block").forEach(function (b) {
+        var match = matchesAll(blockText(b), terms);
+        if (b.tagName === "H3") { showH3 = match; showH4 = false; }
+        else if (b.tagName === "H4") { showH4 = match; }
+        var show = match || (!b.classList.contains("rule-head") && (showH3 || showH4)) || (b.tagName === "H4" && showH3);
+        b.hidden = !show;
+        if (match) { hits++; highlight(b, mark); }
       });
-      a.hidden = hits === 0;
-      var tab = tabs.filter(function (t) { return t.dataset.target === a.id; })[0];
+      g.hidden = hits === 0;
+      var tab = tabs.filter(function (t) { return t.dataset.target === g.id; })[0];
       if (tab && hits) tab.querySelector(".rule-hits").textContent = hits;
       total += hits;
     });
     tabs.forEach(function (t) { t.classList.remove("active"); });
-    count.textContent = total ? total + (total === 1 ? " rule matches" : " rules match") + " “" + q + "”" : "";
-    if (!total) { none.hidden = false; none.textContent = "No rules mention “" + q + "”. Try a shorter word."; }
+    var apaHits = searchApa(q, terms);
+    apaResults.hidden = !apaHits; apaBrowse.hidden = true;
+    count.textContent = (total ? total + (total === 1 ? " rule" : " rules") : "No rules") + " here · " +
+      (apaHits ? apaHits + " official APA " + (apaHits === 1 ? "page" : "pages") : "no APA pages") + " match “" + q + "”";
+    if (!total) {
+      none.hidden = false;
+      none.textContent = apaHits ? "No rule here mentions “" + q + "”. Check the official APA rules below."
+                                 : "Nothing mentions “" + q + "”. Try fewer or shorter words.";
+    }
   }
+
+  var popularButtons = Array.prototype.slice.call(document.querySelectorAll(".popular-search"));
+  popularButtons.forEach(function (b) {
+    b.addEventListener("click", function () { input.value = b.dataset.q; search(); input.focus(); });
+  });
+
+  // The # beside each heading copies a link straight to that section.
+  document.querySelectorAll(".rule-link").forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      var url = location.href.split("#")[0] + link.getAttribute("href");
+      if (!navigator.clipboard) return;  // plain link: the address bar now shows the section's address
+      e.preventDefault();
+      if (history.replaceState) history.replaceState(null, "", link.getAttribute("href"));
+      navigator.clipboard.writeText(url).then(function () {
+        link.classList.add("copied"); link.textContent = "Link copied";
+        setTimeout(function () { link.classList.remove("copied"); link.textContent = "#"; }, 1800);
+      });
+    });
+  });
 
   tabs.forEach(function (t) {
     t.addEventListener("click", function () { input.value = ""; search(); showTab(t.dataset.target, true); });
   });
   input.addEventListener("input", search);
   showTab(active);
+  goToTarget();
+  window.addEventListener("hashchange", goToTarget);
 })();
 </script>
 {% endblock %}

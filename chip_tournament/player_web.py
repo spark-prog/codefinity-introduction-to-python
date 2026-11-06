@@ -982,7 +982,7 @@ def register_registration(app) -> None:
         """A waiting team accepts or declines the open spot it was offered."""
         gid, ev = team_id or entry_id, g.event
         page = url_for("team_page", team_id=gid) if team_id else url_for("b_entry", entry_id=gid)
-        if not (session.get(f"team_{gid}") or session.get(f"entry_{gid}") or session.get("admin")):
+        if not (session.get(f"team_{gid}") or session.get(f"entry_{gid}") or app.config["director_here"]()):
             flash("Enter your PIN first.", "error")
             return redirect(page)
         yes = request.form.get("action") == "accept"

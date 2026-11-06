@@ -36,6 +36,7 @@ def test_bracket_skill_groups_check_and_fix(app):
     ev = app.config["hub"].create("Movin", "bracket", format="modified")
     t = ev.load()
     t.settings.team_size, t.settings.skill_groups, t.settings.race_method = 1, [[1, 4], [5, 6], [7, 9]], "rack_chart"
+    t.settings.skill_game = "high"  # placed by the higher of the two levels
     for name, s8, s9, member in (("Ann Lee", 6, 0, "32200001"), ("bo ray", 4, 4, ""), ("Cy Day", 3, 0, ""),
                                  ("Dee Fox", 0, 0, ""), ("Ed Kim", 5, 5, "")):
         t.register_entry("", [Player(name, "9045550100", 0, skill_8=s8, skill_9=s9, member=member)])

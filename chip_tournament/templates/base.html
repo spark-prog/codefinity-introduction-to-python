@@ -73,12 +73,14 @@
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         {% if t and t.status == SETUP and not t.settings.registration_shut and not my_registration(t) %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
-        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{% if is_admin or is_viewer %}Director{% else %}<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>{% endif %}</a>
+        {% if guest_listed %}<a href="{{ url_for('guest_home') }}" class="{{ 'active' if ep.startswith('guest') }}">My events</a>{% endif %}
+        <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{% if is_admin or is_viewer %}Director{% elif is_guest_td %}Run event{% else %}<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>{% endif %}</a>
         {% else %}
         <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
-        <a href="{{ url_for('director') }}" class="nav-cta {{ 'active' if ep.startswith('admin') or ep == 'director' }}">Director</a>
+        {% if guest_listed %}<a href="{{ url_for('guest_home') }}" class="nav-cta {{ 'active' if ep.startswith('guest') }}">My events</a>
+        {% else %}<a href="{{ url_for('director') }}" class="nav-cta {{ 'active' if ep.startswith('admin') or ep == 'director' }}">Director</a>{% endif %}
         {% endif %}
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline hide-sm"><button class="link" title="Log out">Log out</button></form>
@@ -92,7 +94,8 @@
     <div class="player-view-bar">You're viewing the player page ·
       <a href="{{ url_for('admin') if event else url_for('director') }}">Back to director</a></div>
     {% endif %}
-    {% if t and t.settings.test_event %}<div class="test-banner">TEST EVENT: practice only. No texts are sent, and it isn't listed on All Events.</div>{% endif %}
+    {% if guest_pending %}<div class="test-banner">WAITING FOR APPROVAL: the league office hasn't approved this event yet. It's hidden, registration stays closed and no texts go out until then.</div>
+    {% elif t and t.settings.test_event %}<div class="test-banner">TEST EVENT: practice only. No texts are sent, and it isn't listed on All Events.</div>{% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg|with_links }}</div>{% endfor %}
     {% endwith %}

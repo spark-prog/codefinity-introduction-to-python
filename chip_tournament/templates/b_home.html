@@ -11,6 +11,7 @@
       {% if my_registration(t) %}{% set hide_push = true %}{% include "_already_registered.html" %}
       {% elif t.status == SETUP and not s.registration_shut %}<a class="button big" href="{{ url_for('register') }}">Register</a>{% endif %}
       {% if not my_registration(t) %}{% include "_push_button.html" %}{% endif %}
+      {% include "_share_button.html" %}
       {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
     </div>
     {% if t.status == SETUP %}{% include "_reg_window.html" %}{% endif %}
@@ -21,7 +22,7 @@
       {% set cal = calendar_links(g.event.id, t) if t.status == "setup" else none %}{% if cal %}<li><span class="k">Calendar</span><span class="v">{% include "_calendar_links.html" %}</span></li>{% endif %}
       <li><span class="k">Format</span><span class="v">{{ t.format_name }} · {{ t.entries_label }}</span></li>
       {% if s.skill_groups %}<li><span class="k">Skill groups</span><span class="v">{% for lo, hi in s.skill_groups %}<span class="pill">SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}</span>{% endfor %}
-        <br><span class="muted">You play in the group for the higher of your 8-Ball and 9-Ball skill levels. Each group has its own bracket and champion.</span></span></li>{% endif %}
+        <br><span class="muted">You play in the group for {{ level_rule(s.skill_game) }}. Each group has its own bracket and champion.</span></span></li>{% endif %}
       <li><span class="k">Races</span><span class="v">
         {% if s.race_method == RACK_CHART %}Rack race chart: each player's race is set by both players' skill levels
         {% elif s.race_method == RACK_RACE %}{{ race_charts.method_label(s.race_method, s.race_chart) }}: each {{ "player's" if s.team_size == 1 else "team's" }} race is set by both {{ "players' skill levels" if s.team_size == 1 else "teams' combined skill levels" }}

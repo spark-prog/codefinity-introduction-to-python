@@ -9,12 +9,12 @@
     <h1>Tournament director</h1>
   </div>
   <div class="button-row" style="justify-content: flex-end">
-    <a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>
+    {% if is_guest_td %}<a class="button secondary" href="{{ url_for('guest_home') }}">My events</a>{% else %}<a class="button secondary" href="{{ url_for('director') }}">All tournaments</a>{% endif %}
     <a class="button secondary" href="{{ url_for('board') }}" target="_blank" rel="noopener">Board ↗</a>
     <a class="button secondary" href="{{ url_for('home') }}" target="_blank" rel="noopener">View as player ↗</a>
     <a class="button secondary" href="{{ url_for('guide') }}">Director's guide</a>
-    {% if not is_viewer %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
-    {% if t.status == SETUP and not is_viewer %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
+    {% if not is_viewer and not is_guest_td %}<a class="button secondary" href="{{ url_for('admin_rules') }}">Edit rules</a>{% endif %}
+    {% if t.status == SETUP and not is_viewer and not is_guest_td %}<a class="button secondary" href="{{ url_for('admin_import') }}">Import teams from a spreadsheet (CSV)</a>{% endif %}
   </div>
 </header>
 {% if is_viewer %}<p class="banner">You're signed in <b>view-only</b>. You can look around, but buttons are turned off, and phone numbers, team PINs and text messages are hidden.</p>{% endif %}
@@ -56,7 +56,7 @@
   <a href="#photos">Photos</a>
   <a href="#texts">Texts &amp; log</a>
   <a href="#settings">Settings</a>
-  <a href="#new-tournament">Start over</a>
+  {% if not is_guest_td %}<a href="#new-tournament">Start over</a>{% endif %}
   <a href="#summary">Summary</a>
 </nav>
 
@@ -295,7 +295,7 @@
     <tr id="team-{{ team.id }}" class="status-{{ team.status }}" data-search="{{ ([team.name] + team.players|map(attribute='name')|list + ([] if is_viewer else team.players|map(attribute='phone')|map('last4')|select|list))|join(' ')|lower }}"
         data-unchecked="{{ '1' if t.status == SETUP and team.status in ('registered', 'waitlisted') and not team.checked_in_at else '' }}">
       <td class="team-cell"><a href="{{ url_for('team_page', team_id=team.id) }}">{{ team.name }}</a><br><span class="muted">PIN {{ "••••" if is_viewer else team.pin }}</span></td>
-      <td class="partners-cell" data-label="Partners">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if is_viewer else p.phone }}</span>{% endif %}</div>{% endfor %}
+      <td class="partners-cell" data-label="Partners">{% for p in team.players %}<div>{{ p.name }} ({{ p.skill }}){% if p.phone %}<br><span class="muted">{{ ("ending in " ~ p.phone|last4) if hide_phones else p.phone }}</span>{% endif %}</div>{% endfor %}
         {% if team.needs_partner %}<div><span class="tag solo" style="margin-left: 0">Needs partner</span>{% if team.list_seeking %} <span class="muted">· on public list</span>{% endif %}</div>{% endif %}</td>
       <td data-label="Skill">{{ team.combined_skill }}
         {% if t.status == SETUP %}
@@ -390,7 +390,7 @@
   {% if not sms_enabled %}<p class="banner">Texting is not set up, so alerts are only logged below. See the README to connect Twilio.</p>{% endif %}
   <form method="post" action="{{ url_for('admin_broadcast') }}" class="form">
     <label>Text every {% if t.status == RUNNING %}active{% else %}registered{% endif %} team
-      <textarea name="body" rows="2" maxlength="300" required placeholder="e.g. 15 minute break — back at 9:45"></textarea></label>
+      <textarea name="body" rows="2" maxlength="{{ guest_limits.chars if is_guest_td else 300 }}" required placeholder="e.g. 15 minute break — back at 9:45"></textarea>{% set reach = broadcast_reach() %}<span class="muted small-note broadcast-reach">Goes to {{ reach }} phone{{ "" if reach == 1 else "s" }}: players who turned on text alerts, minus anyone who replied STOP.{% if is_guest_td %} Sent in First Coast APA's name and logged with yours. Event news only (schedule, tables, delays, results), {{ guest_limits.chars }} characters, up to {{ guest_limits.per_day }} a day.{% endif %}</span></label>
     <button class="button">Send text</button>
   </form>
   <form method="post" action="{{ url_for('admin_text_pins') }}" class="form"
@@ -400,9 +400,10 @@
   </form>
   <details><summary>Recent texts ({{ texts|length }})</summary>
     <div class="table-wrap"><table class="grid small">
-      {% for x in texts %}<tr><td>{{ x.at[11:] }}</td>{% if is_viewer %}<td>ending in {{ x.to|last4 }}</td><td class="muted">(hidden in view-only)</td>{% else %}<td>{{ x.to }}</td><td>{{ x.body }}</td>{% endif %}<td>{{ x.status }}</td></tr>{% endfor %}
+      {% for x in texts %}<tr><td>{{ x.at[11:] }}</td>{% if is_viewer %}<td>ending in {{ x.to|last4 }}</td><td class="muted">(hidden in view-only)</td>{% elif hide_phones %}<td>ending in {{ x.to|last4 }}</td><td>{{ x.body }}</td>{% else %}<td>{{ x.to }}</td><td>{{ x.body }}</td>{% endif %}<td>{{ x.status }}</td></tr>{% endfor %}
     </table></div>
   </details>
+  {% include "_broadcast_log.html" %}
 </div>
 
 <div class="card">
@@ -424,7 +425,7 @@
 
 <section class="card jump-target" id="settings">
   <h2>Tournament details & settings</h2>
-  <details class="settings-section" data-key="background">
+  {% if not is_guest_td %}<details class="settings-section" data-key="background">
     <summary><span class="settings-title">Background photo &amp; clock</span><span class="settings-sum">{{ "Your own photo" if has_custom_background else "Default background" }} · the app thinks it's {{ server_time|clock }}</span></summary>
     <div class="section-fields">
   <div class="photo-row">
@@ -447,7 +448,7 @@
     If that's not the time at your venue, set the <code>TZ</code> setting on your host (e.g. <code>America/Chicago</code>) and restart.
     Check-in, grace and start times all use this clock.</p>
     </div>
-  </details>
+  </details>{% endif %}
   <form method="post" action="{{ url_for('admin_settings') }}" class="form settings">
     {% if not is_viewer %}<div class="button-row wide settings-save-top"><button class="button">Save settings</button></div>{% endif %}
     <div class="settings-tools wide" data-no-dirty data-viewer-ok>
@@ -505,8 +506,8 @@
       <div class="settings section-fields">
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
-    <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
-      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
+    {% if not is_guest_td %}<label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
+      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>{% endif %}
     <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
       <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
       <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
@@ -519,7 +520,10 @@
     <details class="settings-section" data-key="who">
       <summary><span class="settings-title">Who can play</span><span class="settings-sum">{% set who = elig_describe(elig_rules(s)) %}{{ who|join(" · ") if who else "Open to everyone" }}</span></summary>
       <div class="settings section-fields">
-    {% include "_eligibility_settings.html" %}
+    {% if is_guest_td %}<div class="settings-group">Who can play (eligibility)</div>
+    <p class="muted small-note wide guest-locked">Set by the league office.{% if s.require_member %} Member numbers are required.{% endif %}
+      {% set rules = elig_describe(elig_rules(s)) %}{% if rules %}</p><ul class="small-note wide guest-locked">{% for x in rules %}<li>{{ x }}</li>{% endfor %}</ul>{% else %} Open to everyone.</p>{% endif %}
+    {% else %}{% include "_eligibility_settings.html" %}{% endif %}
     <label>Skill levels from the player list
       <select name="skill_game">
         {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -598,7 +602,7 @@
   </form>
 </section>
 
-<section class="card jump-target" id="new-tournament">
+{% if not is_guest_td %}<section class="card jump-target" id="new-tournament">
   <details class="fold-section"><summary class="fold-head"><h2>Start over</h2><span class="muted">Danger zone: archive or delete this tournament</span></summary>
   <div class="fold-body">
   <p class="muted">To run another tournament alongside this one, create it from <a href="{{ url_for('director') }}">All tournaments</a> instead.
@@ -610,7 +614,7 @@
     <button class="button danger" name="mode" value="delete">Delete permanently and start over</button>
   </form>
 </div></details>
-</section>
+</section>{% endif %}
 
 <section class="card jump-target" id="past">
   <h2>Past tournaments</h2>
@@ -639,9 +643,11 @@
 <h2 class="summary-title">Summary</h2>
 {% if t.status != SETUP %}{% include "_stats.html" %}{% endif %}
 
-{% include "_pending_card.html" %}
+{% if is_guest_td %}<p class="muted small-note guest-note">Member number checks, exceptions and eligibility decisions for this event are handled by the league office.</p>
+{% else %}{% include "_pending_card.html" %}
 {% include "_exceptions_card.html" %}
 {% include "_eligibility_admin_card.html" %}
+{% endif %}
 <section class="card controls" style="margin-top: 0">
   {% if t.status == SETUP %}
     <p>{{ t.field_teams|length }}{% if s.field_cap %} of {{ s.field_cap }}{% endif %} team(s) in the field{% if t.waitlist %}, {{ t.waitlist|length }} on the waiting list{% endif %}.

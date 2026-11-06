@@ -204,6 +204,31 @@ def basis_label(basis: str) -> str:
     return {"8": "8-Ball", "9": "9-Ball"}.get(basis, "highest")
 
 
+def level_rule(basis: str, whose: str = "your") -> str:
+    """In words, which level a player plays at under the event's setting (matches level_from)."""
+    return {
+        "8": f"{whose} 8-Ball skill level (with no 8-Ball level, {whose} 9-Ball level counts: 1 plays as 2, 8 or 9 as 7)",
+        "9": f"{whose} 9-Ball skill level (with no 9-Ball level, {whose} 8-Ball level counts)",
+        "high7": f"the higher of {whose} 8-Ball and 9-Ball skill levels, capped at 7",
+    }.get(basis, f"the higher of {whose} 8-Ball and 9-Ball skill levels")
+
+
+def level_from(sl8: int, sl9: int, basis: str) -> int:
+    """The one skill level a player plays at, from their 8-Ball and 9-Ball levels, by the event's basis
+    ("Skill levels from the player list"): '8', '9', 'high' or 'high7'. 0 if neither is known.
+
+    '8' uses the 8-Ball level; with none, the 9-Ball level converts (1 -> 2, 8 or 9 -> 7). '9' uses the
+    9-Ball level; with none, the 8-Ball level. 'high' is the higher of the two; 'high7' the same, capped at 7.
+    """
+    sl8, sl9 = sl8 or 0, sl9 or 0
+    if basis == "8":
+        return sl8 or (min(max(sl9, 2), 7) if sl9 else 0)
+    if basis == "9":
+        return sl9 or sl8
+    top = max(sl8, sl9)
+    return min(top, 7) if basis == "high7" else top
+
+
 def event_skill(rec: dict, basis: str) -> tuple[int | None, str]:
     """The skill level a player plays at in an event, by its basis: '8', '9' (with the conversion rule),
     'high' (the higher of their 8-Ball and 9-Ball levels) or 'high7' (the higher, capped at 7)."""

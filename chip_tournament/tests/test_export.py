@@ -52,6 +52,7 @@ def test_bracket_export_includes_skill_levels_and_groups(tmp_path, monkeypatch):
     ev = app.config["hub"].create("Movin-On-Up", "bracket")
     with ev.store.change("setup") as t:
         t.settings.skill_groups, t.settings.race_method = [[1, 3], [4, 4], [5, 9]], "rack_chart"
+        t.settings.skill_game = "high"  # placed by the higher of the two levels
         e = t.register_entry("", [Player("Ann", "5551234567", 0, True, skill_8=4, skill_9=6)])
     rows = read(admin.get(f"/t/{ev.id}/admin/export.csv"))
     assert rows[0]["Entry"] == "Ann" and rows[0]["PIN"] == f'="{e.pin}"' and rows[0]["Skill group"] == "SL 5–9"

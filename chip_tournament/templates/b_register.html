@@ -36,7 +36,7 @@
       {% if asks_two_levels(s) %}
       <label>8-Ball skill level <input name="player_skill8_{{ i }}" type="number" min="2" max="7" inputmode="numeric" value="{{ form.get('player_skill8_' ~ i, '') }}"></label>
       <label>9-Ball skill level <input name="player_skill9_{{ i }}" type="number" min="1" max="9" inputmode="numeric" value="{{ form.get('player_skill9_' ~ i, '') }}"></label>
-      <p class="muted small-note">Enter at least one (both if you play both).{% if s.skill_groups %} You play in the skill group for the higher one:
+      <p class="muted small-note">Enter at least one (both if you play both).{% if s.skill_groups %} You play in the skill group for {{ level_rule(s.skill_game) }}:
         {% for lo, hi in s.skill_groups %}SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}.{% endif %}</p>
       {% else %}
       <label>Skill level {% if not (s.max_player_skill or s.team_skill_cap) %}(optional){% endif %} <input name="player_skill_{{ i }}" type="number" min="1" max="9" value="{{ form.get('player_skill_' ~ i, '') }}" {% if s.max_player_skill or s.team_skill_cap %}required{% endif %}></label>

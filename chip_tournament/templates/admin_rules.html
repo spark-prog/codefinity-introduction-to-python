@@ -24,7 +24,13 @@
       <tr><td><code>- Scratch on the break</code></td><td>a bullet point</td></tr>
       <tr><td><code>1. Rack the balls</code></td><td>a numbered step</td></tr>
       <tr><td><code>**must**</code></td><td>bold words</td></tr>
+      <tr><td><code>[apa: Fouls]</code></td><td>a link to that page of the official APA rules</td></tr>
     </table></div>
+    <details class="apa-titles">
+      <summary>APA page titles you can link to ({{ apa_count }})</summary>
+      <p class="muted">Use the title exactly as listed (capitals don't matter). A title that doesn't match stops the save, so a link can never go nowhere.</p>
+      <ul class="apa-list">{% for section, pages in apa_sections() %}<li><b>{{ section }}:</b> {% for p in pages %}{{ p.title }}{% if not loop.last %} · {% endif %}{% endfor %}</li>{% endfor %}</ul>
+    </details>
     <p class="muted" style="margin-top: 16px">Rules are saved separately from the tournament, so starting a new tournament doesn't erase them.</p>
   </div>
   <form method="post" action="{{ url_for('admin_rules_new') }}" class="card form">
@@ -33,6 +39,34 @@
     <label>Title <input name="title" placeholder="e.g. 10-Ball Rules" required></label>
     <button class="button">Add rule set</button>
   </form>
+</div>
+
+<div class="split">
+  <form method="post" action="{{ url_for('admin_rules_search') }}" class="card form" id="search-settings">
+    <p class="eyebrow">Search</p>
+    <h2>Shorthand and popular searches</h2>
+    <label>Shorthand <span class="muted">— one per line: a word, =, then what it means. Searching any word on a line finds the others.</span>
+      <textarea name="shorthand" rows="8" placeholder="BIH = ball in hand">{{ search.shorthand }}</textarea></label>
+    <label>Popular searches <span class="muted">— one per line, up to 12. They show as buttons under the search box.</span>
+      <textarea name="popular" rows="7" placeholder="ball in hand">{{ search.popular }}</textarea></label>
+    <button class="button">Save search settings</button>
+  </form>
+  <div class="card" id="link-check">
+    <p class="eyebrow">Official APA links</p>
+    <h2>Link check</h2>
+    <p>Opens all {{ apa_count }} official APA pages to make sure each link still works. It also runs by itself once a week.</p>
+    {% if check %}
+    <p><b>Last checked {{ check.at.replace("T", " at ")[:-3] }}:</b>
+      {% if check.bad %}{{ check.total - check.bad|length }} of {{ check.total }} open.{% else %}all {{ check.total }} open.{% endif %}</p>
+    {% if check.bad %}
+    <p class="muted">These pages didn't open the way they should. Players see a "may have moved" note beside them until the list is updated.</p>
+    <ul class="apa-list">{% for b in check.bad %}<li><a href="{{ b.url }}" target="_blank" rel="noopener">{{ b.title }}</a> <span class="muted">· {{ b.problem }}</span></li>{% endfor %}</ul>
+    {% endif %}
+    {% else %}<p class="muted">Not checked yet.</p>{% endif %}
+    {% if check_failed %}<p class="muted"><b>Last try {{ check_failed.at.replace("T", " at ")[:-3] }} couldn't reach APA's site</b>
+      ({{ check_failed.failed }} of {{ check_failed.total }} pages didn't open), so nothing was marked. It tries again by itself within the hour.</p>{% endif %}
+    <form method="post" action="{{ url_for('admin_rules_check_links') }}"><button class="button secondary">Check the links now</button></form>
+  </div>
 </div>
 
 {% for r in rule_sets %}

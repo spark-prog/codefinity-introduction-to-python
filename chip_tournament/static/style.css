@@ -1005,8 +1005,14 @@ tr.check-ok td { opacity: .75; }
 .pool-table.sent { border-color: rgba(255, 107, 118, .6); }
 
 /* ---------------------------------------------------------------- header photo & flyer */
-.event-banner { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; max-height: 380px;
-  border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 var(--space-3); box-shadow: var(--shadow); }
+/* The cover keeps the 1200 x 630 shape on a phone. On a wider screen it stays 380px tall and shows the whole
+   photo, centered, over a blurred copy of itself, instead of zooming in and cutting off the top and bottom. */
+.event-banner { position: relative; overflow: hidden; width: 100%; aspect-ratio: 1200 / 630; max-height: 380px;
+  border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 var(--space-3); box-shadow: var(--shadow);
+  background: rgba(0, 0, 0, .35); isolation: isolate; }
+.event-banner::before { content: ""; position: absolute; inset: -24px; z-index: -1;
+  background: var(--cover) center / cover no-repeat; filter: blur(22px) brightness(.6) saturate(1.1); }
+.event-banner img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .flyer-link { display: inline-flex; align-items: center; gap: 12px; margin: 0 0 var(--space-3); text-decoration: none; }
 .flyer-thumb { width: 64px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
 .event-card.has-photo { overflow: hidden; }
@@ -1028,7 +1034,7 @@ tr.check-ok td { opacity: .75; }
 .photo-preview.flyer { max-height: 320px; width: auto; max-width: 100%; }
 .photo-empty { display: grid; place-items: center; aspect-ratio: 1200 / 630; border: 1px dashed var(--line); border-radius: var(--radius-sm);
   color: var(--muted); margin-bottom: 10px; }
-.event-banner.contain, .event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
+.event-card-img.contain, .your-event-thumb.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
 /* Live pages during a deploy: shown until the site answers again, then the page reloads. */
 .reconnecting { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; max-width: calc(100% - 32px);
   padding: 10px 16px; border-radius: 999px; background: var(--surface-solid); border: 1px solid var(--line); color: var(--ink);

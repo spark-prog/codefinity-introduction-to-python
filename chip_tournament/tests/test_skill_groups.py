@@ -208,3 +208,25 @@ def test_movin_on_up_setup_and_registration(tmp_path, monkeypatch):
     admin.post(f"{base}/admin/entry/{bob.id}/edit", data={"name": "Bob", "player_name_0": "Bob", "player_skill9_0": "8"})
     bob = ev.load().entries[bob.id]
     assert (bob.skill, bob.division) == (8, "SL 7–9")
+
+
+def test_pages_describe_the_events_own_skill_rule(tmp_path, monkeypatch):
+    """Register, event and settings pages say which level counts, per "Skill levels from the player list"."""
+    app, admin = client(tmp_path, monkeypatch)
+    ev = app.config["hub"].create("8-Ball Singles", "bracket")
+    base = f"/t/{ev.id}"
+    words = {"8": "8-Ball skill level (with no 8-Ball level", "9": "9-Ball skill level (with no 9-Ball level",
+             "high": "the higher of your 8-Ball and 9-Ball skill levels", "high7": "skill levels, capped at 7"}
+    for basis, says in words.items():
+        admin.post(f"{base}/admin/settings", data={
+            "name": "8-Ball Singles", "tables": "1, 2", "format": "modified", "team_size": "1", "final_cut": "4",
+            "skill_groups": "1-3, 4, 5, 6, 7-9", "race_method": "rack_chart", "payouts": "", "entry_fee": "0",
+            "race_winners": "3", "race_losers": "3", "race_finals": "3", "skill_game": basis})
+        assert ev.load().settings.skill_game == basis
+        player = app.test_client()
+        for path in ("/register", "/"):
+            page = player.get(base + path).get_data(as_text=True)
+            assert says in page, (basis, path)
+            if basis in ("8", "9"):
+                assert "higher" not in page, (basis, path)
+        assert says.replace("your", "their") in admin.get(f"{base}/admin").get_data(as_text=True)

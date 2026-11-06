@@ -94,7 +94,7 @@ def test_the_flyer_and_using_it_as_the_header(app):
     header = public.get(f"/t/{ev.id}/photo/header")
     assert header.status_code == 200 and header.data == JPG  # the flyer stands in as the header
     header.close()
-    assert 'class="event-banner contain"' in public.get(f"/t/{ev.id}/").get_data(as_text=True)  # shown whole
+    assert 'class="event-banner"' in public.get(f"/t/{ev.id}/").get_data(as_text=True)  # every cover is shown whole
     assert 'event-card-img contain' in public.get("/").get_data(as_text=True)
     assert f"/t/{ev.id}/photo/header?v=" in public.get("/").get_data(as_text=True)
     c.post(f"/t/{ev.id}/admin/photo/flyer", data={"action": "save", "flyer_as_header_shown": "1"})  # unticked

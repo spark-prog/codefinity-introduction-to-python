@@ -166,6 +166,9 @@ class Entry:
     payout_texted_cents: int = 0  # the amount in that text, so a later correction can be texted
     division: str = ""  # skill group label ("SL 4"); "" when the event has one bracket
     seed_note: str = ""  # why "Seed by skill" put it where it did (shown before the draw)
+    rsvp: str = ""  # "attending", "out" (can't make it) or "" (no reply): a player on the team answers for it
+    rsvp_by: str = ""  # who answered
+    rsvp_at: str = ""  # when
     offer_until: str = ""  # waiting list: offered an open spot until this time (chips/waitlist.py)
     offer_emailed: str = ""  # the offer (its deadline) the players were emailed about
 
@@ -308,6 +311,7 @@ class BracketSettings:
     rule_set: str = ""  # id of the league rule set this event plays by
     event_rules: str = ""  # APA-approved rules for this tournament only
     registration_closed: bool = False  # director closed online registration (the director can still add entries)
+    office_adds_teams: bool = False  # the league office adds the teams: no online registration; a player on each team confirms (RSVP)
     registration_opens: str = ""  # online registration opens at this time ('2026-11-07T18:00', venue time); blank = now
     registration_closes: str = ""  # and closes at this time; blank = when the director closes it
 
@@ -315,7 +319,7 @@ class BracketSettings:
     def registration_shut(self) -> bool:
         """Online registration is closed: by the director, or outside the opens/closes times."""
         from .schedule import OPEN, reg_window
-        return reg_window(self)[0] != OPEN
+        return self.office_adds_teams or reg_window(self)[0] != OPEN
     skill_groups: list[list[int]] = field(default_factory=list)  # [[1, 3], [4, 4], ...]; [] = one bracket
     race_method: str = STRAIGHT  # STRAIGHT: the race_* numbers; RACK_CHART: the original SL 1-9 rack race chart;
     # RACK_RACE / BALL_COUNT: each side from the league's charts (chips/race_charts.py), in race_chart's version
@@ -735,6 +739,9 @@ class BracketTournament:
     def unregister(self, entry_id: str) -> str:
         """The player (or team) takes itself out before the draw. Its spot goes to the waiting list."""
         entry = self.entry(entry_id)
+        if self.settings.office_adds_teams:
+            raise TournamentError("The league office adds the teams for this event. If your team can't make it, use "
+                                  "Can't make it on your team page and the office will see it.")
         if self.status != SETUP:
             raise TournamentError("The bracket is drawn, so you can't unregister here. See the tournament desk.")
         self._text(entry, f"{entry.name} is unregistered from {self.settings.name}. "
@@ -793,6 +800,31 @@ class BracketTournament:
         for e in self.entries.values():
             e.seed_note = ""
         self._say("Shuffled the entry order.")
+
+    RSVP_ANSWERS = {"attending": "attending", "out": "can't make it", "": "no reply"}
+
+    def rsvp(self, entry_id: str, answer: str, by: str = "") -> Entry:
+        """A player on the team (or the league office) says whether the team is coming. It's information for the
+        director only: nothing else changes, and it can be changed until the bracket is drawn."""
+        entry = self.entry(entry_id)
+        if not self.settings.office_adds_teams:
+            raise TournamentError("This event doesn't ask teams to confirm.")
+        if answer not in self.RSVP_ANSWERS:
+            raise TournamentError("Pick attending or can't make it.")
+        if self.status != SETUP:
+            raise TournamentError("The bracket is drawn, so it's too late to change this. See the tournament desk.")
+        if entry.status not in (REGISTERED, WAITLISTED):
+            raise TournamentError(f"{entry.name} isn't on the list for this event.")
+        entry.rsvp, entry.rsvp_by, entry.rsvp_at = answer, (by if answer else ""), (now() if answer else "")
+        self._say(f"{entry.name}: {self.RSVP_ANSWERS[answer]}" + (f" (answered by {by})." if answer and by else "."))
+        return entry
+
+    def rsvp_counts(self) -> dict:
+        """How many teams in the field are attending, can't make it, or haven't answered."""
+        counts = {"attending": 0, "out": 0, "": 0}
+        for e in self.field_entries:
+            counts[e.rsvp if e.rsvp in counts else ""] += 1
+        return counts
 
     def seed_by_skill(self, game: str, record_for) -> int:
         """Put the field in seed order: skill level in `game` ("8" or "9"), then the other game's level if played in

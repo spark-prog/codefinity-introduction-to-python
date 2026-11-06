@@ -20,7 +20,7 @@
     <a class="card event-card{% if photo %} has-photo{% endif %}" href="{{ url_for('home', event=r.event.id) }}">
       {% if photo %}<img class="event-card-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
       {% set st, when = reg_window(s) %}
-      <span class="event-status {{ r.t.status }}">{% if r.t.status == RUNNING %}Live now{% elif st == "open" %}Registration open{% elif st == "before" %}Opens {{ when.strftime("%a, %b") }} {{ when.day }}{% else %}Registration closed{% endif %}</span>
+      <span class="event-status {{ r.t.status }}">{% if r.t.status == RUNNING %}Live now{% elif s.office_adds_teams %}Teams added by the league office{% elif st == "open" %}Registration open{% elif st == "before" %}Opens {{ when.strftime("%a, %b") }} {{ when.day }}{% else %}Registration closed{% endif %}</span>
       <h2>{{ s.name }}</h2>
       <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
       {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}

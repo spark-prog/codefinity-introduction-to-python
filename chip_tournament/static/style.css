@@ -1095,3 +1095,17 @@ details.inline-details > summary.button { display: inline-flex; align-items: cen
 .seed-skill-form select option { background: var(--surface-solid); color: var(--ink); }
 .tier-preview .pill { margin: 2px 6px 2px 0; }
 .seed-note { font-style: normal; }
+
+/* RSVP: teams the league office added confirm they're coming */
+.rsvp-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700; border: 1px solid var(--line-strong); white-space: nowrap; }
+.rsvp-line { margin-top: 6px; }
+.rsvp-attending { color: #9ff5d6; border-color: rgba(46, 230, 166, .45); background: var(--green-tint); }
+.rsvp-out { color: #ffb0b6; border-color: rgba(255, 59, 74, .45); background: var(--red-tint); }
+.rsvp-none { color: var(--muted); }
+.rsvp-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.rsvp-set { display: inline-flex; align-items: center; gap: 6px; }
+.rsvp-set select { min-height: 34px; padding: 0 8px; font: inherit; font-size: .85rem; color: var(--ink); background: rgba(0, 0, 0, .3);
+  border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm); }
+.rsvp-set select option { background: var(--surface-solid); color: var(--ink); }
+.rsvp-card .rsvp-answer { font-size: 1.1rem; margin: 6px 0 10px; }
+.rsvp-box { margin-top: 10px; }

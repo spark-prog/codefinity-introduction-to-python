@@ -1210,7 +1210,11 @@ def register_registration(app) -> None:
                 where += " · member number pending verification"
             partners = [p.name for p in grp.players if p is not mine]
             pushable = can_push(ev.id, t, me["member"])[0]
-            out.append({"can_push": pushable, "push_url": url_for("push_eligibility", event=ev.id),
+            rsvp = None
+            if not chip and s.office_adds_teams and t.status == "setup" and grp.status in ("registered", "waitlisted"):
+                rsvp = {"answer": grp.rsvp, "by": grp.rsvp_by,
+                        "url": url_for("entry_rsvp", event=ev.id, entry_id=grp.id)}
+            out.append({"can_push": pushable, "rsvp": rsvp, "push_url": url_for("push_eligibility", event=ev.id),
                         "push_name": (push_target(ev.id, t) or ("", ""))[1],
                         "id": ev.id, "name": s.name, "date": s.date, "time": s.start_time, "venue": s.venue,
                         "status": t.status, "test": s.test_event, "group_name": grp.name, "partners": partners,
@@ -1223,6 +1227,37 @@ def register_registration(app) -> None:
         past = sorted((e for e in out if e["status"] == "finished"), key=lambda e: e["date"] or "", reverse=True)
         return live + past
 
+    def is_on_team(t, grp) -> bool:
+        """The logged-in player is on this team (by member number, or by name when no number was entered)."""
+        me = g.get("player")
+        found = find_me(t, me)[0] if me else None
+        return found is not None and found.id == grp.id
+
+    @app.post("/t/<event>/entry/<entry_id>/rsvp")
+    def entry_rsvp(entry_id):
+        """A player on a team the league office added says whether the team is coming (one answer for the team)."""
+        if g.event.kind != "bracket":
+            abort(404)
+        answer, me = request.form.get("answer", ""), g.get("player")
+        try:
+            with g.event.store.change("RSVP") as t:
+                grp = t.entries.get(entry_id)
+                if grp is None:
+                    raise TournamentError("That team isn't in this event.")
+                if not (session.get("admin") or session.get(f"entry_{entry_id}") or is_on_team(t, grp)):
+                    raise TournamentError("Log in as a player on this team, or enter your team PIN on the team page first.")
+                by = "the league office" if session.get("admin") else (full_name(me) if me else "a player on the team")
+                t.rsvp(entry_id, answer, by)
+                said = {"attending": f"Thanks! {grp.name} is marked as attending.",
+                        "out": f"Got it: {grp.name} can't make it. The league office can see this.",
+                        "": "Your answer was cleared."}[answer]
+            flash(said, "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        nxt = request.form.get("next", "")
+        return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("b_entry", entry_id=entry_id))
+
+    app.config["is_on_team"] = is_on_team
     app.config["your_events"] = your_events
     app.config["attach_members"] = attach_members
     app.jinja_env.globals["my_registration"] = my_registration

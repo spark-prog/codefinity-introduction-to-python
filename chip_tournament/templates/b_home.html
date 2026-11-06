@@ -13,6 +13,7 @@
       {% if not my_registration(t) %}{% include "_push_button.html" %}{% endif %}
       {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
     </div>
+    {% if t.status == SETUP and s.office_adds_teams %}<p class="lede">The league office adds the teams for this event. Find your team below, then log in or use your team PIN to confirm you're coming.</p>{% endif %}
     {% if t.status == SETUP %}{% include "_reg_window.html" %}{% endif %}
   </div>
   <div class="card">
@@ -78,16 +79,16 @@
   {% if s.skill_groups %}
   {% for label in t.division_names %}{% set members = t.field_entries|selectattr("division", "equalto", label)|list %}{% if members %}
   <h3 class="division-title">{{ label }} <span class="muted">({{ members|length }})</span></h3>
-  <ol class="entry-list">{% for e in members %}<li>{{ e.name }}</li>{% endfor %}</ol>
+  <ol class="entry-list">{% for e in members %}<li>{% if s.office_adds_teams and t.status == SETUP %}<a href="{{ url_for('b_entry', entry_id=e.id) }}">{{ e.name }}</a>{% else %}{{ e.name }}{% endif %}</li>{% endfor %}</ol>
   {% endif %}{% endfor %}
   {% set unplaced = t.field_entries|selectattr("division", "equalto", "")|list %}
   {% if unplaced %}<h3 class="division-title">Skill level needed <span class="muted">({{ unplaced|length }})</span></h3>
   <ol class="entry-list">{% for e in unplaced %}<li>{{ e.name }}</li>{% endfor %}</ol>{% endif %}
   <p class="muted small-note">Each group plays its own bracket and never merges with another. A group with only one player joins the neighboring group with the fewest players at the draw.</p>
   {% else %}
-  <ol class="entry-list">{% for e in t.field_entries %}<li>{{ e.name }}{% if s.team_size > 1 and e.name != e.partners %} <span class="muted">{{ e.partners }}</span>{% endif %}</li>{% endfor %}</ol>
+  <ol class="entry-list">{% for e in t.field_entries %}<li>{% if s.office_adds_teams and t.status == SETUP %}<a href="{{ url_for('b_entry', entry_id=e.id) }}">{{ e.name }}</a>{% else %}{{ e.name }}{% endif %}{% if s.team_size > 1 and e.name != e.partners %} <span class="muted">{{ e.partners }}</span>{% endif %}</li>{% endfor %}</ol>
   {% endif %}
-  {% else %}<p class="muted">Be the first to register.</p>{% endif %}
+  {% else %}<p class="muted">{{ "No teams have been added yet." if s.office_adds_teams else "Be the first to register." }}</p>{% endif %}
   {% if t.waitlist %}<p class="muted">Waiting list: {% for i in t.waitlist %}{{ t.name_of(i) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
 </section>
 {% endif %}

@@ -2,6 +2,7 @@
 {% block title %}{{ entry.name }} — {{ t.settings.name }}{% endblock %}
 {% block head %}{% if match and match.status == "called" and not is_entry %}{% set secs = 30 %}{% include "_refresh.html" %}{% endif %}{% endblock %}
 {% block content %}
+{% set s_office = t.settings.office_adds_teams %}
 <header class="page-head">
   <p class="eyebrow">{{ t.settings.name }}{% if entry.division %} · {{ entry.division }} group{% endif %}{% if entry.seed %} · seed {{ entry.seed }}{% endif %}</p>
   <h1>{{ entry.name }}</h1>
@@ -22,6 +23,24 @@
     <button class="button small">Turn on alerts</button>
   </form>
   {% endif %}{% endfor %}
+</section>
+{% endif %}
+
+{% if s_office and t.status == SETUP and entry.status in ("registered", "waitlisted") %}
+<section class="card rsvp-card" id="rsvp">
+  <h3>Is your team coming?</h3>
+  <p class="muted">The league office added your team. One player can answer for everyone, and you can change it until the bracket is drawn.</p>
+  <p class="rsvp-answer"><b>{% if entry.rsvp == "attending" %}✓ Your team is attending{% elif entry.rsvp == "out" %}✗ Your team can't make it{% else %}No answer yet{% endif %}</b>
+    {% if entry.rsvp_by %}<span class="muted">· answered by {{ entry.rsvp_by }}</span>{% endif %}</p>
+  {% if can_rsvp %}
+  <form method="post" action="{{ url_for('entry_rsvp', entry_id=entry.id) }}" class="button-row">
+    <button class="button" name="answer" value="attending" {% if entry.rsvp == "attending" %}disabled{% endif %}>We're attending</button>
+    <button class="button secondary" name="answer" value="out" {% if entry.rsvp == "out" %}disabled{% endif %}>Can't make it</button>
+  </form>
+  {% else %}
+  <p>Log in with your APA member number, or enter your team PIN below, to answer for your team.</p>
+  <a class="button" href="{{ url_for('player_login', next=request.path) }}">Log in</a>
+  {% endif %}
 </section>
 {% endif %}
 
@@ -111,7 +130,7 @@
 
 {% if not is_entry and not (match and match.status == "called") %}
 <section class="card">
-  <h3>Enter scores for your match</h3>
+  <h3>{{ "Enter your team PIN" if s_office else "Enter scores for your match" }}</h3>
   <form method="post" action="{{ url_for('b_entry_login', entry_id=entry.id) }}" class="form narrow">
     <label>PIN <input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" required></label>
     <button class="button">Sign in</button>
@@ -120,7 +139,7 @@
 </section>
 {% endif %}
 
-{% if is_entry and t.status == SETUP %}
+{% if is_entry and t.status == SETUP and not s_office %}
 <section class="card">
   <h3>Your registration</h3>
   <ul>{% for p in entry.players %}<li>{{ p.name }}{% if p.skill_8 or p.skill_9 %} · 8-Ball {{ p.skill_8 or "—" }} · 9-Ball {{ p.skill_9 or "—" }}{% elif p.skill %} · SL {{ p.skill }}{% endif %}</li>{% endfor %}</ul>

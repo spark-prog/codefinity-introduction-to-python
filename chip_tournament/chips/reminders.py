@@ -92,11 +92,19 @@ def email_text(t, event_id: str, kind: str, grp, which: str, now: datetime | Non
     lines = [f"This is a reminder that you're registered for {s.name}"
              + (f" ({grp.name})" if len(grp.players) > 1 or grp.name != grp.players[0].name else "") + ".", "",
              f"When: {when_line(s)}", f"Where: {where_line(s)}"]
-    if page:
+    office = getattr(s, "office_adds_teams", False)
+    if page and office:
+        lines += ["", ("Your team has confirmed it's coming. Thanks!" if getattr(grp, "rsvp", "") == "attending" else
+                       f"Please confirm your team is coming (one player can answer for the whole team): {page}"),
+                  f"Add it to your calendar: {root}/t/{event_id}/calendar.ics"]
+    elif page:
         lines += ["", f"Your page (table calls, scores and your PIN): {page}",
                   f"Add it to your calendar: {root}/t/{event_id}/calendar.ics"]
-    lines += ["", "Can't make it? Unregister on your page so someone on the waiting list gets your spot."
-              if page else "Can't make it? Let the tournament director know so someone on the waiting list gets your spot."]
+    if office:
+        lines += ["", "Can't make it? Choose Can't make it on your team page so the league office knows."]
+    else:
+        lines += ["", "Can't make it? Unregister on your page so someone on the waiting list gets your spot."
+                  if page else "Can't make it? Let the tournament director know so someone on the waiting list gets your spot."]
     if start and which == TWO_HOURS:
         lines += ["", "See you soon, and good luck!"]
     return subject, "\n".join(lines)

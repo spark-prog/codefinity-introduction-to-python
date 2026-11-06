@@ -36,7 +36,7 @@ import photos_web
 import qr_web
 import cal_web
 import player_web
-from chips import alerts, apa_rules, backup, bonus_event, guest_td, eligibility, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
+from chips import alerts, apa_rules, backup, bonus_event, guest_td, eligibility, event_info, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
 from chips.hub import BRACKET, CHIP, Hub
 from chips.engine import (
@@ -229,6 +229,8 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["last4"] = last4
     app.jinja_env.globals["event_when"] = event_when
     app.jinja_env.globals["reg_window"] = schedule.reg_window
+    app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
+                                 skill_rule=event_info.skill_rule, skill_short=event_info.skill_short, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
@@ -1562,7 +1564,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         rows = hub.summaries()
         if not (session.get("admin") or session.get("viewer")):  # practice events stay off the public list
             rows = [r for r in rows if not r["t"].settings.test_event]
-        return render_template("hub.html", t=None, rows=rows)
+        mine = {}
+        if g.get("player"):  # what each event means for the logged-in player: registered, can register, not eligible yet
+            mine = {r["id"]: r["status"] for r in app.config["public_results"](g.player["member"])}
+        return render_template("hub.html", t=None, rows=rows, mine=mine)
 
     @app.get("/admin")
     @director_view

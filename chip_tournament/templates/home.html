@@ -4,17 +4,8 @@
 {% include "_event_banner.html" %}
 <header class="page-head split center">
   <div class="hero-copy">
-    <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
-    <h1>{{ s.name }}</h1>
-    {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
-    <div class="button-row actions-row">
-      {% if my_registration(t) %}{% set hide_push = true %}{% include "_already_registered.html" %}
-      {% elif t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}<a class="button big" href="{{ url_for('register') }}">Register a team</a>{% endif %}
-      {% if not my_registration(t) %}{% include "_push_button.html" %}{% endif %}
-      {% include "_share_button.html" %}
-      {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
-    </div>
-    {% if not t.entries_locked and not t.last_call %}{% include "_reg_window.html" %}{% endif %}
+    {% set can_register = t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}{% set register_label = "Register a team" %}
+    {% include "_event_header.html" %}
     {% if t.status == SETUP and t.seeking_partner and not s.registration_shut %}<p class="muted"><a href="{{ url_for('register') }}#looking">{{ t.seeking_partner|length }} player(s) looking for a partner</a></p>{% endif %}
   </div>
   <div class="card">

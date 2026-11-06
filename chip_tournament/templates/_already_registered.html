@@ -3,19 +3,11 @@
 {% if reg %}
 <div class="already-registered">
   {% if hide_push %}<div class="button-row">{% endif %}
-  {% set page = url_for('team_page', team_id=reg.id) if event.kind == CHIP else url_for('b_entry', entry_id=reg.id) %}
-  {% if t.settings.office_adds_teams %}
-  <span class="button big disabled" aria-disabled="true">On the list</span>
-  {% if hide_push %}{% include "_push_button.html" %}</div>{% endif %}
-  <p>Your team <b>{{ reg.name }}</b> is on the list.
-    {% if reg.rsvp == "attending" %}✓ You've confirmed your team is attending.{% elif reg.rsvp == "out" %}You told us your team can't make it.{% else %}<b>Are you coming?</b>{% endif %}
-    <a href="{{ page }}">{{ "Change your answer" if reg.rsvp else "Confirm your team is coming" }}</a>.</p>
-  {% else %}
   <span class="button big disabled" aria-disabled="true">Registered</span>
   {% if hide_push %}{% include "_push_button.html" %}</div>{% endif %}
   <p>You're already registered{% if reg.name and reg.name != player.first ~ " " ~ player.last %} as <b>{{ reg.name }}</b>{% endif %}.
+    {% set page = url_for('team_page', team_id=reg.id) if event.kind == CHIP else url_for('b_entry', entry_id=reg.id) %}
     Edit your registration <a href="{{ page }}">here</a>, or <a href="{{ page }}#unregister">unregister</a>.</p>
-  {% endif %}
   {% if not hide_push and can_push(t, player.member)[0] %}{% set push_url = url_for('push_eligibility') %}{% set push_name = push_target(t)[1] %}{% set push_registered = true %}{% include "_push_box.html" %}{% endif %}
 </div>
 {% endif %}

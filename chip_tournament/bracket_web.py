@@ -158,8 +158,6 @@ def register(app, h) -> dict:
             s.rule_set = h["event_rule_set"](f.get("rule_set", s.rule_set))
             s.event_rules = f.get("event_rules", s.event_rules).replace("\r\n", "\n").strip()
             s.registration_closed = f.get("registration_closed") == "1"
-            if f.get("office_adds_shown"):
-                s.office_adds_teams = f.get("office_adds_teams") == "1"
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
@@ -297,7 +295,6 @@ def register(app, h) -> dict:
         return render_template("b_entry.html", t=t, entry=entry, match=t.current_match_for(entry_id),
                                history=t.matches_for(entry_id), path=t.next_for(entry_id),
                                place=place_text(t.places().get(entry_id)), is_entry=signed_in(entry_id),
-                               can_rsvp=signed_in(entry_id) or app.config["is_on_team"](t, entry),
                                my_device=h["scorer_device"]())
 
     @app.post("/t/<event>/entry/<entry_id>/login")
@@ -447,25 +444,15 @@ def register(app, h) -> dict:
             act("Add entries", add_all, "Added {result} entries.")
         else:
             act("Add entry", lambda t: t.register_entry(
-                f.get("name", ""), app.config["attach_members"](f, players_from_form(f, t.settings.team_size), t),
-                by_director=True), "Added {result.name}.")
+                f.get("name", ""), players_from_form(f, t.settings.team_size), by_director=True), "Added {result.name}.")
         return redirect(back("entries"))
 
     @app.post("/t/<event>/admin/entry/<entry_id>/edit")
     @admin_required
     def b_edit_entry(entry_id):
         f = request.form
-        act("Edit entry", lambda t: t.update_entry(
-            entry_id, f.get("name"), app.config["attach_members"](f, players_from_form(f, t.settings.team_size), t)),
+        act("Edit entry", lambda t: t.update_entry(entry_id, f.get("name"), players_from_form(f, t.settings.team_size)),
             "Saved {result.name}.")
-        return redirect(back("entries"))
-
-    @app.post("/t/<event>/admin/entry/<entry_id>/rsvp")
-    @admin_required
-    def b_admin_rsvp(entry_id):
-        """The league office records a team's answer (a captain told them by text or in person)."""
-        answer = request.form.get("answer", "")
-        act("RSVP (league office)", lambda t: t.rsvp(entry_id, answer, "the league office"), "Saved.")
         return redirect(back("entries"))
 
     actions = {

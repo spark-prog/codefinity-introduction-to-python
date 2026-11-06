@@ -251,10 +251,6 @@
       {% for label, count, fmt in plan.rows %}<span class="pill">{{ label }} · {{ count }}{% if fmt != s.format %} · single elimination{% endif %}</span>{% endfor %}</p>
     {% for note in plan.notes %}<p class="muted small-note">{{ note }}</p>{% endfor %}{% endif %}
   </div>{% endif %}
-  {% if setup and s.office_adds_teams %}{% set rc = t.rsvp_counts() %}
-  <p class="rsvp-summary"><b>RSVPs:</b> <span class="rsvp-tag rsvp-attending">✓ {{ rc.attending }} attending</span>
-    <span class="rsvp-tag rsvp-out">✗ {{ rc.out }} can't make it</span> <span class="rsvp-tag rsvp-none">{{ rc[""] }} no reply</span>
-    <span class="muted small-note">A player on each team answers for the team from its page or My account. This is only for your information: nothing changes on its own.</span></p>{% endif %}
   {% if setup %}
   <p class="muted">{{ "With manual seeding, the order below is the seed order (1 at the top): byes go to the top seeds. Skill groups take their own players from this order."
      if s.seeding == "manual" else "Seeding is a random draw at the start. Switch to manual seeding in Settings to set the order yourself." }}</p>
@@ -273,8 +269,7 @@
       <td data-label="Status">{% if e.status == "waitlisted" %}Waiting list #{{ t.waitlist_position(e) }}
         {% elif e.status == "no_show" %}No-show
         {% elif setup %}{{ ("Checked in " ~ e.checked_in_at|clock) if e.checked_in_at else "Not checked in" }}
-        {% else %}{{ {"active": "Still in", "eliminated": "Out", "champion": "Champion"}.get(e.status, e.status) }}{% if e.withdrawn %} (withdrew){% endif %}{% endif %}
-        {% if setup and s.office_adds_teams and e.status in ("registered", "waitlisted") %}<div class="rsvp-line"><span class="rsvp-tag rsvp-{{ e.rsvp or 'none' }}">{% if e.rsvp == "attending" %}✓ Attending{% elif e.rsvp == "out" %}✗ Can't make it{% else %}No reply yet{% endif %}</span>{% if e.rsvp_by %}<div class="muted small-note">{{ e.rsvp_by }}</div>{% endif %}</div>{% endif %}</td>
+        {% else %}{{ {"active": "Still in", "eliminated": "Out", "champion": "Champion"}.get(e.status, e.status) }}{% if e.withdrawn %} (withdrew){% endif %}{% endif %}</td>
       <td class="nowrap actions">
         {% if setup %}
           {% if e.status == "registered" %}
@@ -298,20 +293,12 @@
             <button class="button small danger-outline">Withdraw</button></form>
         {% endif %}
         {% if not is_viewer %}
-        {% if setup and s.office_adds_teams and e.status in ("registered", "waitlisted") %}
-        <form method="post" action="{{ url_for('b_admin_rsvp', entry_id=e.id) }}" class="inline rsvp-set">
-          <select name="answer" aria-label="RSVP for {{ e.name }}">
-            <option value="" {% if not e.rsvp %}selected{% endif %}>No reply</option>
-            <option value="attending" {% if e.rsvp == "attending" %}selected{% endif %}>Attending</option>
-            <option value="out" {% if e.rsvp == "out" %}selected{% endif %}>Can't make it</option></select>
-          <button class="button small secondary">Set RSVP</button></form>{% endif %}
         <details class="inline-details"><summary class="button small secondary">Edit</summary>
           <form method="post" action="{{ url_for('b_edit_entry', entry_id=e.id) }}" class="form">
             <label>Entry name <input name="name" value="{{ e.name }}"></label>
             {% for p in e.players %}{% set i = loop.index0 %}
             <label>Player {{ i + 1 }} <input name="player_name_{{ i }}" value="{{ p.name }}" {% if not setup %}readonly{% endif %}></label>
             <label>Cell <input name="player_phone_{{ i }}" value="{{ p.phone }}"></label>
-            <label>APA member number <input name="player_member_{{ i }}" value="{{ p.member }}" inputmode="numeric" maxlength="10" placeholder="322…" {% if not setup %}readonly{% endif %}></label>
             <input type="hidden" name="player_skill_{{ i }}" value="{{ p.skill or '' }}">
             {% if asks_two_levels(s) %}
             <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7" value="{{ p.skill_8 or '' }}" {% if not setup %}readonly{% endif %}></label>
@@ -337,7 +324,6 @@
       {% for i in range(s.team_size) %}
       <label>Player {{ i + 1 if s.team_size > 1 else "" }} name <input name="player_name_{{ i }}" required></label>
       <label>Cell (optional) <input name="player_phone_{{ i }}" type="tel"></label>
-      <label>APA member number (optional) <input name="player_member_{{ i }}" inputmode="numeric" maxlength="10" placeholder="322…"></label>
       {% if asks_two_levels(s) %}
       <label>8-Ball SL <input name="player_skill8_{{ i }}" type="number" min="2" max="7"></label>
       <label>9-Ball SL <input name="player_skill9_{{ i }}" type="number" min="1" max="9"></label>
@@ -436,8 +422,6 @@
     <details class="settings-section" data-key="registration">
       <summary><span class="settings-title">Registration</span><span class="settings-sum">{% set st, when = reg_window(s) %}{{ {"open": "Open", "before": "Not open yet", "after": "Closed", "closed": "Closed"}[st] }}{% if s.require_member %} · member numbers required{% endif %}{% if s.waitlist_offer_hours %} · waiting-list offers {{ s.waitlist_offer_hours }} h{% endif %}</span></summary>
       <div class="settings section-fields">
-    <label class="checkbox wide"><input type="hidden" name="office_adds_shown" value="1"><input type="checkbox" name="office_adds_teams" value="1" {% if s.office_adds_teams %}checked{% endif %}>
-      The league office adds the teams (no online registration: the Register button goes away, teams are added here one at a time, and a player on each team confirms they're coming)</label>
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
     <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>

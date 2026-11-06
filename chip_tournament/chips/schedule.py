@@ -47,8 +47,6 @@ def when_text(when: datetime) -> str:
 
 
 def shut_message(s, at: datetime | None = None) -> str:
-    if getattr(s, "office_adds_teams", False):
-        return "The league office adds the teams for this event, so there's nothing to register for."
     state, when = reg_window(s, at)
     if state == BEFORE:
         return f"Registration opens {when_text(when)}."

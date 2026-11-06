@@ -19,14 +19,6 @@
       {% endif %}
     </p>
     {% if e.partners %}<p class="muted small-note">{{ e.group_name }} · with {{ e.partners|join(", ") }}</p>{% endif %}
-    {% if e.rsvp %}<div class="rsvp-box">
-      <p class="your-event-status"><b>{% if e.rsvp.answer == "attending" %}✓ Your team is attending{% elif e.rsvp.answer == "out" %}✗ Your team can't make it{% else %}Is your team coming?{% endif %}</b>
-        <span class="muted small-note">One player can answer for the team.</span></p>
-      <form method="post" action="{{ e.rsvp.url }}" class="button-row">
-        <input type="hidden" name="next" value="{{ url_for('my_account') }}#upcoming">
-        <button class="button small" name="answer" value="attending" {% if e.rsvp.answer == "attending" %}disabled{% endif %}>We're attending</button>
-        <button class="button small secondary" name="answer" value="out" {% if e.rsvp.answer == "out" %}disabled{% endif %}>Can't make it</button>
-      </form></div>{% endif %}
     {% if e.can_push %}{% set push_url = e.push_url %}{% set push_name = e.push_name %}{% set push_registered = true %}{% include "_push_box.html" %}{% endif %}
     <div class="button-row">
       <a class="button small" href="{{ e.page }}">{{ "My team page" if e.chip else "My page" }}</a>

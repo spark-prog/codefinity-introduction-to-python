@@ -1,5 +1,5 @@
 {# When online registration opens or closes, with a live countdown. Needs t. #}
-{% if t.status != FINISHED and not t.settings.office_adds_teams %}
+{% if t.status != FINISHED %}
 {% set st, when = reg_window(t.settings) %}
 {% if st == "before" %}
   <p class="reg-window">Registration opens <b>{{ reg_when(when) }}</b>

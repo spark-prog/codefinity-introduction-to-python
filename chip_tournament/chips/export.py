@@ -63,14 +63,13 @@ def bracket_entries(t) -> list[list[str]]:
     s = t.settings
     two_levels = asks_two_levels(s)
     header = ["Entry", "PIN", "Status", "Where", "Skill group", "Seed", "Waiting list #", "Checked in", "Registered",
-              "Won", "RSVP"]
+              "Won"]
     rows = []
     for e in entries:
         _, p_row = _players(e.players, s.team_size, two_levels)
         rows.append([e.name, Pin(e.pin), e.status.replace("_", " "), t.where(e), e.division, e.seed or "",
                      t.waitlist_position(e) or "", e.checked_in_at or "", e.registered_at,
-                     money(e.payout_cents) if e.payout_cents else "",
-                     {"attending": "attending", "out": "can't make it"}.get(e.rsvp, "")] + p_row)
+                     money(e.payout_cents) if e.payout_cents else ""] + p_row)
     return [header + _players([], s.team_size, two_levels)[0]] + rows
 
 

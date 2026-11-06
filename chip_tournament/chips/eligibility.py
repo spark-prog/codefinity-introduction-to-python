@@ -72,11 +72,23 @@ YES_VALUES = ("yes", "y", "true", "x", "1", "eligible")
 QUALIFIED_VALUES = ("qualified",)  # already earned their spot (Singles Boards): can't enter this qualifier again
 NOT_ELIGIBLE_VALUES = ("not eligible", "not eligible yet", "ineligible")  # a plain No means "not on the list"
 ESTABLISHED_MATCHES = 10  # APA: a player is established in a format after 10 lifetime matches
+# The office's words for why someone isn't eligible (e.g. Jack & Jill): "Needs 20", "Not Active-Needs 20",
+# "Not Active in Format". "Active" means on a current team roster in the event's format.
+NEEDS = re.compile(r"^needs (\d+)$")
+INACTIVE_NEEDS = re.compile(r"^not active needs (\d+)$")
+INACTIVE_IN_FORMAT = "not active in format"
+
+
+def _list_word(value: str) -> str:
+    """'Not Active-Needs 20' -> 'not active needs 20': lower case, dashes and extra spaces dropped."""
+    return re.sub(r"\s+", " ", re.sub(r"[-–—:,]", " ", value or "")).strip().lower()
 
 
 def list_value(rec: dict | None, r: dict) -> str:
     """From the event's list: 'yes' (on it: Yes or Eligible), 'push' (a one-time grace), 'qualified' (already
-    qualified, so not eligible), 'not_eligible' (Not Eligible: not 10 lifetime matches in the format) or ''."""
+    qualified, so not eligible), 'not_eligible' (Not Eligible: not 10 lifetime matches in the format),
+    'needs:N' (Needs N lifetime matches), 'inactive_needs:N' (not on a roster in the format, and needs N),
+    'inactive_format' (has the matches but isn't on a roster in the format) or ''."""
     if rec is None:
         return ""
     if rec["member"] in r["list_members"]:
@@ -91,6 +103,13 @@ def list_value(rec: dict | None, r: dict) -> str:
             return "qualified"
         if value in NOT_ELIGIBLE_VALUES:
             return "not_eligible"
+        word = _list_word(value)
+        if m := NEEDS.match(word):
+            return f"needs:{m.group(1)}"
+        if m := INACTIVE_NEEDS.match(word):
+            return f"inactive_needs:{m.group(1)}"
+        if word == INACTIVE_IN_FORMAT:
+            return "inactive_format"
     return ""
 
 
@@ -105,6 +124,30 @@ def _not_established(rec: dict, r: dict, game: str, label: str) -> str:
         return (f"The {label} list marks you Not Eligible ({need} lifetime{name} matches needed), but the player "
                 f"list shows {have}. Ask the league office to update it.")
     return f"Not eligible yet: {label} needs {need} lifetime{name} matches. You have {have}: {need - have} more to go."
+
+
+def _office_word(value: str, rec: dict, r: dict, game: str, label: str, no: list, review: list) -> None:
+    """Needs N / Not Active-Needs N / Not Active in Format: why not, with the player's own count."""
+    fmt = r["matches_game"] if r["matches_game"] in ("8", "9") else (game if game in ("8", "9") else "8")
+    have = rec.get(f"mp{fmt}") or 0
+    roster = f"a current {fmt}-Ball team roster"
+    join = f" Join a {fmt}-Ball team to play: {LEAGUE_URL}"
+    if value == "inactive_format":
+        no.append(f"Not eligible: {label} needs you on {roster}. You have {have} lifetime {fmt}-Ball matches, so "
+                  f"joining a {fmt}-Ball team is all that's left.{join}")
+        return
+    kind, need = value.split(":")
+    need = int(need)
+    if kind == "inactive_needs":
+        more = f" You have {have}: {need - have} more to go." if have < need else ""
+        no.append(f"Not eligible: {label} needs you on {roster} and {need} lifetime {fmt}-Ball matches.{more}{join}")
+        return
+    if have >= need:  # the list is behind the match counts: the office takes a look, it's not a refusal
+        review.append(f"The {label} list says Needs {need}, but the player list shows {have} lifetime {fmt}-Ball "
+                      "matches: check and update the list")
+        return
+    no.append(f"Not eligible yet: {label} needs {need} lifetime {fmt}-Ball matches. "
+              f"You have {have}: {need - have} more to go.")
 
 
 def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8",
@@ -162,6 +205,8 @@ def check_player(rec: dict | None, r: dict, session_start: str, game: str = "8",
         elif value == "not_eligible":
             if not any("lifetime" in x for x in no):  # the event's own match rule already said it
                 no.append(_not_established(rec, r, game, r["list_label"] or "this event"))
+        elif value.startswith(("needs:", "inactive_needs:")) or value == "inactive_format":
+            _office_word(value, rec, r, game, r["list_label"] or "this event", no, review)
         elif value not in ("yes", "push"):
             if r["list_members"] or r["list_column"]:
                 no.append(f"Not on the {label} list for this event. Ask the league office if you think you should be.")

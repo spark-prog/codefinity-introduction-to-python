@@ -4,17 +4,8 @@
 {% include "_event_banner.html" %}
 <header class="page-head split center">
   <div class="hero-copy">
-    <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
-    <h1>{{ s.name }}</h1>
-    {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
-    <div class="button-row actions-row">
-      {% if my_registration(t) %}{% set hide_push = true %}{% include "_already_registered.html" %}
-      {% elif t.status == SETUP and not s.registration_shut %}<a class="button big" href="{{ url_for('register') }}">Register</a>{% endif %}
-      {% if not my_registration(t) %}{% include "_push_button.html" %}{% endif %}
-      {% include "_share_button.html" %}
-      {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
-    </div>
-    {% if t.status == SETUP %}{% include "_reg_window.html" %}{% endif %}
+    {% set can_register = t.status == SETUP and not s.registration_shut %}{% set register_label = "Register" %}
+    {% include "_event_header.html" %}
   </div>
   <div class="card">
     <p class="eyebrow">Event details</p>

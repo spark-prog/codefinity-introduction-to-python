@@ -1,8 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Control Table — tournaments{% endblock %}
 {% block content %}
-{% set live = rows|rejectattr("t.status", "equalto", FINISHED)|list %}
 {% set past = rows|selectattr("t.status", "equalto", FINISHED)|list %}
+{# Upcoming and live events in three groups, each soonest first. #}
+{% set ns = namespace(live=[], open=[], soon=[]) %}
+{% for r in rows if r.t.status != FINISHED %}{% set k = event_status(r.t).key %}
+  {% if k == "live" %}{% set ns.live = ns.live + [r] %}{% elif k == "open" %}{% set ns.open = ns.open + [r] %}{% else %}{% set ns.soon = ns.soon + [r] %}{% endif %}
+{% endfor %}
+{% set mine_labels = {"registered": "✓ You're registered", "eligible": "You can register", "check": "Eligibility check needed", "no": "Not eligible yet"} %}
+
+{% macro event_card(r, my) %}
+{% set s = r.t.settings %}{% set es = event_status(r.t) %}{% set photo = event_photo(r.event.id) %}
+<a class="card event-card{% if photo %} has-photo{% endif %}" href="{{ url_for('home', event=r.event.id) }}">
+  {% if photo %}<img class="event-card-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
+  <div class="event-card-top">
+    <span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
+    {% if my == "registered" or (my in ("eligible", "check", "no") and es.key == "open") %}<span class="mine-chip mine-{{ my }}">{{ mine_labels[my] }}</span>{% endif %}
+  </div>
+  <h2>{{ s.name }}</h2>
+  <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
+  {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}
+  {% if es.detail %}<p class="event-detail">{{ es.detail }}</p>{% endif %}
+  <p class="event-meta"><span class="pill">{{ r.format }}</span>
+    <span class="pill">{{ event_fee(r.t) }}</span>
+    <span class="pill">{{ event_spots(r.t) }}</span></p>
+  <p class="skill-line">{{ skill_rule(r.t) }}</p>
+</a>
+{% endmacro %}
+
 <header class="page-head split center">
   <div class="hero-copy">
     <p class="eyebrow">Control Table</p>
@@ -12,39 +37,50 @@
   </div>
 </header>
 
-<section>
-  {% if live %}
+{% if rows|length > 8 %}
+<div class="event-search card">
+  <label for="event-search" class="eyebrow">Find a tournament</label>
+  <input id="event-search" type="search" placeholder="Name, place or format" autocomplete="off" data-no-dirty>
+</div>
+{% endif %}
+
+{% if ns.live or ns.open or ns.soon %}
+{% for title, group in (("Live now", ns.live), ("Open for registration", ns.open), ("Upcoming", ns.soon)) if group %}
+<section class="event-group">
+  <div class="section-head"><h2>{{ title }}</h2><span class="muted">{{ group|length }}</span></div>
   <div class="event-grid">
-    {% for r in live %}{% set s = r.t.settings %}
-    {% set photo = event_photo(r.event.id) %}
-    <a class="card event-card{% if photo %} has-photo{% endif %}" href="{{ url_for('home', event=r.event.id) }}">
-      {% if photo %}<img class="event-card-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
-      {% set st, when = reg_window(s) %}
-      <span class="event-status {{ r.t.status }}">{% if r.t.status == RUNNING %}Live now{% elif st == "open" %}Registration open{% elif st == "before" %}Opens {{ when.strftime("%a, %b") }} {{ when.day }}{% else %}Registration closed{% endif %}</span>
-      <h2>{{ s.name }}</h2>
-      <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
-      {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}
-      <p class="event-meta"><span class="pill">{{ r.format }}</span>
-        <span class="pill">{{ r.count }} {{ "team" if r.event.kind == CHIP else "entr" }}{{ ("s" if r.count != 1 else "") if r.event.kind == CHIP else ("ies" if r.count != 1 else "y") }}</span>
-        {% if s.entry_fee_cents %}<span class="pill">{{ s.entry_fee_cents|money }} entry</span>{% endif %}</p>
-    </a>
-    {% endfor %}
+    {% for r in group %}{{ event_card(r, mine.get(r.event.id)) }}{% endfor %}
   </div>
-  {% else %}
-  <div class="card"><p class="lede" style="margin: 0">No tournaments are open right now. Check back soon.</p></div>
-  {% endif %}
 </section>
+{% endfor %}
+{% else %}
+<section><div class="card"><p class="lede" style="margin: 0">No tournaments are open right now. Check back soon.</p></div></section>
+{% endif %}
 
 {% if past %}
 <section>
   <div class="section-head"><h2>Results</h2></div>
   <div class="table-wrap"><table class="grid">
-    <thead><tr><th>Tournament</th><th>Date</th><th>Format</th><th></th></tr></thead>
+    <thead><tr><th>Tournament</th><th>Date</th><th>Format</th></tr></thead>
     {% for r in past %}
-    <tr><td>{{ r.t.settings.name }}</td><td>{{ event_when(r.t.settings.date, "") }}</td><td>{{ r.format }}</td>
-      <td><a href="{{ url_for('home', event=r.event.id) }}">Results</a></td></tr>
+    <tr><td><a href="{{ url_for('home', event=r.event.id) }}">{{ r.t.settings.name }}</a></td><td>{{ event_when(r.t.settings.date, "") }}</td><td>{{ r.format }}</td></tr>
     {% endfor %}
   </table></div>
 </section>
+{% endif %}
+
+{% if rows|length > 8 %}
+<script>
+(function () {
+  var box = document.getElementById("event-search");
+  if (!box) return;
+  box.addEventListener("input", function () {
+    var q = box.value.trim().toLowerCase();
+    document.querySelectorAll(".event-card").forEach(function (c) { c.hidden = !!q && c.textContent.toLowerCase().indexOf(q) < 0; });
+    document.querySelectorAll(".event-group").forEach(function (g) { g.hidden = !g.querySelector(".event-card:not([hidden])"); });
+    document.querySelectorAll(".table-wrap tr").forEach(function (r) { if (r.querySelector("td")) r.hidden = !!q && r.textContent.toLowerCase().indexOf(q) < 0; });
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

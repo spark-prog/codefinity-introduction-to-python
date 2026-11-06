@@ -392,3 +392,34 @@ def test_guest_page_lists_events_like_the_director_page(app):
     admin.post(f"/admin/guests/event/{ev.id}/approve")
     page = text(c.get("/guest"))
     assert "WAITING FOR APPROVAL" not in page and "Public page" in page
+
+
+# ---------------------------------------------------------------- eligibility is the league office's call (audit #2)
+
+def test_guest_cannot_change_who_can_play(app):
+    admin, c = ready_guest(app)
+    ev = guest_event(app, c)
+    admin.post(f"/admin/guests/event/{ev.id}/approve")
+    s = ev.load().settings
+    base = {"name": s.name, "tables": ", ".join(s.tables)}
+    # The league office sets Jack & Jill rules: 20 lifetime 8-Ball matches, mixed pairs, member numbers required.
+    admin.post(f"/t/{ev.id}/admin/settings", data={**base, "require_member_shown": "1", "require_member": "1",
+                                                   "elig_shown": "1", "elig_min_matches": "20", "elig_matches_game": "8",
+                                                   "elig_gender": "mixed"})
+    set_by_office = ev.load().settings
+    assert set_by_office.require_member and set_by_office.eligibility["min_matches"] == 20
+    rules_before = dict(set_by_office.eligibility)
+    # The guest TD tries to loosen everything, and changes a field they're allowed to.
+    c.post(f"/t/{ev.id}/admin/settings", data={**base, "venue": "Ace Billiards", "require_member_shown": "1",
+                                               "elig_shown": "1", "elig_min_matches": "0", "elig_matches_game": "either",
+                                               "elig_gender": "", "push_to": "none"})
+    after = ev.load().settings
+    assert after.venue == "Ace Billiards"  # their own settings still save
+    assert after.require_member and after.eligibility == rules_before  # who can play didn't move
+    # They see the rules, not the controls.
+    page = text(c.get(f"/t/{ev.id}/admin"))
+    assert "Set by the league office" in page and "At least 20 lifetime matches in 8-Ball" in page
+    assert 'name="elig_min_matches"' not in page and 'name="require_member"' not in page and 'name="push_to"' not in page
+    # The league office still sees and uses the controls.
+    page = text(admin.get(f"/t/{ev.id}/admin"))
+    assert 'name="elig_min_matches"' in page and 'name="require_member"' in page and "Set by the league office" not in page

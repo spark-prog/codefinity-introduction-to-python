@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import copy
 import os
 import re
 import secrets
@@ -485,11 +486,17 @@ def create_app(data_dir: str | None = None) -> Flask:
         rec = guests.event(ev.id) if ev else None
         return bool(rec and rec["status"] == guest_td.PENDING)
 
-    def guest_lock_settings(s, before_push_to: str) -> None:
-        """What a guest TD can't change in their event's settings."""
+    def guest_locked(s) -> dict:
+        """The settings a guest TD can't change, as they were before a settings save."""
+        return {"push_to": s.push_to, "require_member": s.require_member,
+                "eligibility": copy.deepcopy(getattr(s, "eligibility", None))}
+
+    def guest_lock_settings(s, before: dict) -> None:
+        """What a guest TD can't change in their event's settings: who can play (eligibility and member
+        numbers) and pushing players into another event are the league office's call."""
         if not guest_here():
             return
-        s.push_to = before_push_to  # pushing players into another event is the league office's call
+        s.push_to, s.require_member, s.eligibility = before["push_to"], before["require_member"], before["eligibility"]
         if guest_pending():  # hidden, no texts, registration closed until approved
             s.test_event, s.registration_closed = True, True
 
@@ -958,7 +965,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             except ValueError as exc:
                 raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
-            push_before = s.push_to
+            push_before = guest_locked(s)
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):
@@ -1952,7 +1959,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     bracket_views = bracket_web.register(app, {
         "act": act, "store": store, "sms": sms, "director_view": director_view, "admin_required": admin_required,
         "parse_money": parse_money, "check_pin": check_pin, "minutes": minutes, "event_rule_set": event_rule_set,
-        "scorer_device": scorer_device, "guest_lock_settings": guest_lock_settings,
+        "scorer_device": scorer_device, "guest_lock_settings": guest_lock_settings, "guest_locked": guest_locked,
     })
     player_web.register(app, {"device_id": device_id})
     guest_web.register(app, {"hub": hub, "guests": guests, "players": player_store, "admin_required": admin_required,

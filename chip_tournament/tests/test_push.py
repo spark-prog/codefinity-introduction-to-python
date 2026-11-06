@@ -234,3 +234,25 @@ def test_push_eligibility_button_on_the_event_page(app):
     assert "Push eligibility" not in app.test_client().get("/t/mvp-spring/").get_data(as_text=True)  # no target there
     r = ann.post("/t/mvp-fall/push", data={"confirm": "1", "back": "//evil.example"})
     assert r.headers["Location"].endswith("/me")  # only our own pages
+
+
+def test_the_director_can_undo_a_push(app):
+    hub = app.config["hub"]
+    ann = Clients(app).logged_in("32200001")
+    ann.post("/t/mvp-fall/push", data={"confirm": "1"})
+    assert "pushed your eligibility" in ann.get("/t/mvp-fall/register").get_data(as_text=True)
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    page = admin.get("/t/mvp-fall/admin").get_data(as_text=True)
+    assert "Undo push" in page and "Ann Lee" in page
+    assert "Only the director" in app.test_client().post("/t/mvp-fall/admin/push-undo", data={"member": "32200001"},
+                                                          follow_redirects=True).get_data(as_text=True)
+    r = admin.post("/t/mvp-fall/admin/push-undo", data={"member": "32200001"}, follow_redirects=True).get_data(as_text=True)
+    assert "push is undone" in r and "Undo push" not in r
+    assert not app.config["pushes"].from_event("mvp-fall")
+    assert "On their one-time grace here" not in admin.get("/t/mvp-spring/admin").get_data(as_text=True)
+    assert "pushed your eligibility" not in ann.get("/t/mvp-fall/register").get_data(as_text=True)
+    register(ann, "mvp-fall", "Ann Lee", "32200001")
+    assert hub.get("mvp-fall").load().registered_as("32200001") is not None
+    again = admin.post("/t/mvp-fall/admin/push-undo", data={"member": "32200001"}, follow_redirects=True).get_data(as_text=True)
+    assert "hasn&#39;t pushed this event" in again

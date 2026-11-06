@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape, unescape
 from pathlib import Path
 
@@ -94,7 +94,7 @@ class SearchSettings:
         self.lock = threading.RLock()
 
     def load(self) -> dict:
-        data = {"shorthand": DEFAULT_SHORTHAND, "popular": DEFAULT_POPULAR, "link_check": None}
+        data = {"shorthand": DEFAULT_SHORTHAND, "popular": DEFAULT_POPULAR, "link_check": None, "link_check_failed": None}
         if self.path.exists():
             data.update(json.loads(self.path.read_text()))
         return data
@@ -114,13 +114,26 @@ class SearchSettings:
             self._save(data)
 
     def record_check(self, result: dict) -> None:
+        """A check that reached APA's site: it replaces the last one (and what players see)."""
         with self.lock:
             data = self.load()
-            data["link_check"] = result
+            data["link_check"], data["link_check_failed"] = result, None
             self._save(data)
 
-    def check_is_stale(self, days: int = 7) -> bool:
-        check = self.load()["link_check"]
+    def record_failed_check(self, result: dict) -> None:
+        """A check that couldn't reach APA's site: the last good result stays; this is kept only to say so."""
+        with self.lock:
+            data = self.load()
+            data["link_check_failed"] = {"at": result["at"], "total": result["total"], "failed": len(result["bad"])}
+            self._save(data)
+
+    def check_is_stale(self, days: int = 7, retry_hours: int = 1) -> bool:
+        """Due for the automatic check: a week since the last good one, and not tried in the last hour."""
+        data = self.load()
+        failed = data.get("link_check_failed")
+        if failed and datetime.now() - datetime.fromisoformat(failed["at"]) < timedelta(hours=retry_hours):
+            return False
+        check = data["link_check"]
         if not check:
             return True
         return (datetime.now() - datetime.fromisoformat(check["at"])).days >= days

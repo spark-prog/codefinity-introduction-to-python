@@ -63,6 +63,8 @@
     <ul class="apa-list">{% for b in check.bad %}<li><a href="{{ b.url }}" target="_blank" rel="noopener">{{ b.title }}</a> <span class="muted">· {{ b.problem }}</span></li>{% endfor %}</ul>
     {% endif %}
     {% else %}<p class="muted">Not checked yet.</p>{% endif %}
+    {% if check_failed %}<p class="muted"><b>Last try {{ check_failed.at.replace("T", " at ")[:-3] }} couldn't reach APA's site</b>
+      ({{ check_failed.failed }} of {{ check_failed.total }} pages didn't open), so nothing was marked. It tries again by itself within the hour.</p>{% endif %}
     <form method="post" action="{{ url_for('admin_rules_check_links') }}"><button class="button secondary">Check the links now</button></form>
   </div>
 </div>

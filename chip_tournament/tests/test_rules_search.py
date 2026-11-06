@@ -1,5 +1,7 @@
 """Rules search, phase 2: [apa: …] links, shorthand and popular searches, and the APA link check."""
 
+from datetime import datetime, timedelta
+
 import pytest
 
 from app import create_app
@@ -140,3 +142,54 @@ def test_link_check_is_stale_after_a_week(tmp_path):
     assert s.check_is_stale()
     s.record_check(apa_rules.check_links(lambda url: (200, url)))
     assert not s.check_is_stale()
+
+
+# ---- a check that can't reach APA's site (audit fix) ----------------------------------------------------
+
+def test_outage_marks_nothing_and_keeps_the_last_good_check(tmp_path, monkeypatch):
+    app, admin = make_app(tmp_path, monkeypatch)
+    app.config["apa_link_fetch"] = lambda url: (404, url) if url == FOULS else (200, url)
+    admin.post("/admin/rules/check-links")  # a good check: Fouls really moved
+    good = SearchSettings(tmp_path).load()["link_check"]
+
+    def offline(url):
+        raise OSError("network unreachable")
+    app.config["apa_link_fetch"] = offline
+    page = admin.post("/admin/rules/check-links", follow_redirects=True).get_data(as_text=True)
+    assert "Couldn&#39;t reach rules.poolplayers.com (84 of 84 pages didn&#39;t open), so nothing was marked" in page
+    assert "couldn't reach APA's site" in page  # noted on the rules editor
+    s = SearchSettings(tmp_path).load()
+    assert s["link_check"] == good and s["link_check_failed"]["failed"] == len(apa_rules.pages())
+    public = app.test_client().get("/rules").get_data(as_text=True)
+    assert public.count('class="moved-note"') == 1  # only the page that really moved, as before the outage
+
+
+def test_outage_on_the_first_ever_check_marks_nothing(tmp_path, monkeypatch):
+    app, admin = make_app(tmp_path, monkeypatch)
+    app.config["apa_link_fetch"] = lambda url: (503, url)  # APA's site down: every page answers 503
+    admin.post("/admin/rules/check-links")
+    assert SearchSettings(tmp_path).load()["link_check"] is None
+    assert 'class="moved-note"' not in app.test_client().get("/rules").get_data(as_text=True)
+
+
+def test_a_few_real_failures_still_count(tmp_path, monkeypatch):
+    app, admin = make_app(tmp_path, monkeypatch)
+    dead = {p["url"] for p in apa_rules.pages()[:40]}  # 40 of 84: under half, so these are real problems
+    app.config["apa_link_fetch"] = lambda url: (404, url) if url in dead else (200, url)
+    admin.post("/admin/rules/check-links")
+    assert len(SearchSettings(tmp_path).load()["link_check"]["bad"]) == 40
+
+
+def test_after_an_outage_it_retries_within_the_hour(tmp_path):
+    s = SearchSettings(tmp_path)
+    s.record_check(apa_rules.check_links(lambda url: (200, url)))
+    data = s.load()
+    data["link_check"]["at"] = "2020-01-01T00:00:00"  # a week+ old: due
+    s._save(data)
+    assert s.check_is_stale()
+    s.record_failed_check({"at": datetime.now().isoformat(timespec="seconds"), "total": 84, "bad": [{}] * 84})
+    assert not s.check_is_stale()  # just tried: wait
+    data = s.load()
+    data["link_check_failed"]["at"] = (datetime.now() - timedelta(minutes=61)).isoformat(timespec="seconds")
+    s._save(data)
+    assert s.check_is_stale()  # an hour later: try again

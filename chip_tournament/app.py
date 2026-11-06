@@ -1091,6 +1091,9 @@ def create_app(data_dir: str | None = None) -> Flask:
         try:
             fetch = app.config["apa_link_fetch"]
             result = apa_rules.check_links(fetch) if fetch else apa_rules.check_links()
+            if apa_rules.looks_like_outage(result):  # couldn't reach APA: keep the last good result, retry soon
+                search_settings.record_failed_check(result)
+                return {**result, "outage": True}
             search_settings.record_check(result)
             return result
         finally:
@@ -1105,6 +1108,7 @@ def create_app(data_dir: str | None = None) -> Flask:
         sets = [{**r, **(edited or {})} if edited and r["id"] == edited["id"] else r for r in rule_book.load()]
         return render_template("admin_rules.html", t=None, rule_sets=sets, search=search_form or search_settings.load(),
                                check=search_settings.load()["link_check"], apa_count=len(apa_rules.pages()),
+                               check_failed=search_settings.load().get("link_check_failed"),
                                apa_sections=apa_rules.sections)
 
     @app.get("/admin/rules")
@@ -1130,6 +1134,10 @@ def create_app(data_dir: str | None = None) -> Flask:
         result = run_link_check()
         if result is None:
             flash("A link check is already running. Give it a minute, then reload this page.", "error")
+        elif result.get("outage"):
+            flash(f"Couldn't reach rules.poolplayers.com ({len(result['bad'])} of {result['total']} pages didn't open), "
+                  "so nothing was marked. That's usually a short outage. It tries again by itself within the hour, "
+                  "or press the button later.", "error")
         elif result["bad"]:
             flash(f"{len(result['bad'])} of {result['total']} APA links need a look. They're listed below.", "error")
         else:

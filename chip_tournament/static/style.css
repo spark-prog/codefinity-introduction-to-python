@@ -1222,3 +1222,8 @@ body.event-tabbed .topbar { position: relative; }
   .event-tab { padding: 14px 9px; font-size: .74rem; letter-spacing: .05em; }
   .tab-count { margin-left: 4px; padding: 0 6px; font-size: .7rem; }
 }
+
+.event-find { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.event-find input { flex: 1 1 200px; min-width: 0; }
+.bm.find-hit, .tcell.find-hit, tr.find-hit { outline: 2px solid var(--accent, #3aa0ff); outline-offset: 2px; border-radius: 8px; }
+.find-dim { opacity: .35; }

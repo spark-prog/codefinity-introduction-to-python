@@ -122,14 +122,31 @@ def register_label(t) -> str:
     return "Register" if is_bracket(t) else "Register a team"
 
 
+def partners_label(t) -> str:
+    """The Partners & waitlist tab's name, or '' when it has nothing to say: only while people can still sign up,
+    and only for team events (partner finding) or when somebody is on the waiting list."""
+    s = t.settings
+    doubles = not is_bracket(t) or s.team_size > 1
+    waiting = bool(getattr(t, "waitlist", None))
+    if t.status != "setup" or not (doubles or waiting):
+        return ""
+    if doubles and (waiting or getattr(s, "field_cap", 0)):
+        return "Partners & waitlist"
+    return "Partners" if doubles else "Waitlist"
+
+
 def tabs(t) -> list[dict]:
-    """The tabs under an event's header: Details, Teams (or Players), Bracket (Live for chips), Rules."""
+    """The tabs under an event's header: Details, Teams (or Players), Partners & waitlist (only when it applies),
+    Bracket (Live for chips), Rules."""
     s = t.settings
     bracket = is_bracket(t)
     count = len(t.field_entries if bracket else t.field_teams)
     people = "Players" if bracket and s.team_size == 1 else "Teams"
+    extra = partners_label(t)
+    waiting = len(getattr(t, "waitlist", None) or [])
     return [{"key": "details", "label": "Details", "endpoint": "event_details", "count": None},
             {"key": "teams", "label": people, "endpoint": "event_teams", "count": count},
+            *([{"key": "partners", "label": extra, "endpoint": "event_partners", "count": waiting or None}] if extra else []),
             {"key": "bracket", "label": "Bracket" if bracket else "Live", "endpoint": "event_bracket", "count": None},
             {"key": "rules", "label": "Rules", "endpoint": "rules_page", "count": None}]
 

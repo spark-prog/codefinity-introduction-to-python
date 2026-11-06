@@ -69,7 +69,7 @@ def test_the_tab_helper():
     assert [x["label"] for x in event_info.tabs(t)] == ["Details", "Players", "Bracket", "Rules"]
     t.settings.team_size = 2
     assert event_info.tabs(t)[1]["label"] == "Teams"
-    assert [x["label"] for x in event_info.tabs(Tournament())] == ["Details", "Teams", "Live", "Rules"]
+    assert [x["label"] for x in event_info.tabs(Tournament())] == ["Details", "Teams", "Partners", "Live", "Rules"]
     assert event_info.default_tab(t) == "teams"
     t.status = "running"
     assert event_info.default_tab(t) == "bracket"
@@ -80,7 +80,7 @@ def test_the_tab_helper():
 def test_an_event_opens_on_its_teams_while_people_sign_up(app):
     ev = bracket(app, size=2, entries=3)
     page = get(app, f"/t/{ev.id}/")
-    assert tab_bar(page) == [("Details", False), ("Teams 3", True), ("Bracket", False), ("Rules", False)]
+    assert tab_bar(page) == [("Details", False), ("Teams 3", True), ("Partners", False), ("Bracket", False), ("Rules", False)]
     assert 'aria-current="page"' in page and page.count('aria-current="page"') == 1
     assert "Who's in" in page and "Team 0" in page
     assert get(app, f"/t/{ev.id}/teams").count("Who's in") == page.count("Who's in")  # the same page, at its own address
@@ -121,7 +121,7 @@ def test_details_has_the_facts_but_not_the_fee_twice(app):
 def test_chip_events_get_the_tabs_too(app):
     ev = chip(app, teams=3)
     page = get(app, f"/t/{ev.id}/")
-    assert tab_bar(page) == [("Details", False), ("Teams 3", True), ("Live", False), ("Rules", False)]
+    assert tab_bar(page) == [("Details", False), ("Teams 3", True), ("Partners", False), ("Live", False), ("Rules", False)]
     details = get(app, f"/t/{ev.id}/details")
     assert "How a chip tournament works" in details and "Starting chips" in details
     assert "The tables open when the tournament starts" in get(app, f"/t/{ev.id}/bracket")
@@ -158,3 +158,32 @@ def test_reloads_and_tab_switches_keep_the_scroll_place(app):
     swap = page.split("function swapIn", 1)[1].split("function check", 1)[0]
     assert "ctKeepPlace(true)" in swap  # a live refresh notes the spot just before it swaps the page
     assert 'sessionStorage.setItem(KEY, location.pathname' in page and 'a.event-tab' in page  # tabs keep the bar's place
+
+
+def test_partners_and_waitlist_tab_only_when_it_applies(app):
+    singles = bracket(app, "Singles Night", size=1, entries=2)
+    assert [n for n, _ in tab_bar(get(app, f"/t/{singles.id}/"))] == ["Details", "Players 2", "Bracket", "Rules"]
+    assert app.test_client().get(f"/t/{singles.id}/partners").status_code == 302  # not a tab here: sent to the default one
+    full = bracket(app, "Full Singles", size=1, entries=3, field_cap=2)
+    labels = [n for n, _ in tab_bar(get(app, f"/t/{full.id}/"))]
+    assert labels[2].startswith("Waitlist")
+    page = get(app, f"/t/{full.id}/partners")
+    assert "Waiting list" in page and "1 waiting" in page and "Who&#39;s in" not in page
+    assert "1 waiting" in get(app, f"/t/{full.id}/teams") and "<h2>Waiting list" not in get(app, f"/t/{full.id}/teams")
+    doubles = bracket(app, "Doubles Night", size=2, entries=2)
+    assert "Partners" in [n for n, _ in tab_bar(get(app, f"/t/{doubles.id}/"))][2]
+    assert "Looking for a partner" in get(app, f"/t/{doubles.id}/partners") or "Find a partner" in get(app, f"/t/{doubles.id}/partners")
+    chips = chip(app, teams=2)
+    assert [n for n, _ in tab_bar(get(app, f"/t/{chips.id}/"))][2].startswith("Partners")
+    running = bracket(app, "Running Doubles", size=2, entries=4, start=True)
+    assert not any(n.startswith("Partners") for n, _ in tab_bar(get(app, f"/t/{running.id}/")))
+
+
+def test_find_box_on_teams_and_bracket_tabs(app):
+    ev = bracket(app, entries=3)
+    assert 'id="event-find-input"' in get(app, f"/t/{ev.id}/teams")
+    assert 'id="event-find-input"' not in get(app, f"/t/{ev.id}/details")
+    running = bracket(app, "Running Find", entries=4, start=True)
+    assert 'id="event-find-input"' in get(app, f"/t/{running.id}/bracket")
+    empty = bracket(app, "Empty", entries=0)
+    assert 'id="event-find-input"' not in get(app, f"/t/{empty.id}/teams")

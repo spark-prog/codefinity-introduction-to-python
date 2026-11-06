@@ -1,0 +1,17 @@
+{# Partners & waitlist tab: who's looking for a partner (with Ask to team up), and the waiting list. Needs t. #}
+{% set pf = partner_finder(t) %}
+{% include "_seeking.html" %}
+{% if pf.doubles and not pf.everyone and not player %}<section class="card" id="looking"><h2>Looking for a partner</h2>
+  <p class="muted">Nobody is looking for a partner right now. <a href="{{ url_for('player_login', next=request.path ~ '#looking') }}">Log in</a> to list yourself so others can find you.</p></section>{% endif %}
+{% if t.waitlist %}
+<section class="card" id="waitlist">
+  <div class="section-head"><h2>Waiting list</h2><span class="muted">{{ t.waitlist|length }} waiting</span></div>
+  <p class="muted">The field is full. If someone drops, the next in line is offered the spot.</p>
+  <ol class="entry-list">
+    {% for id in t.waitlist %}{% set w = (t.teams if t.teams is defined else t.entries)[id] %}
+    <li>{{ w.name }}{% if w.players|length > 1 and w.name != w.partners %} <span class="muted">{{ w.partners }}</span>{% endif %}{% if w.offer_until %} <span class="pill">spot offered</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+{% if not t.waitlist and not partner_finder(t).doubles %}<section class="card"><p class="muted">Nobody is on the waiting list.</p></section>{% endif %}

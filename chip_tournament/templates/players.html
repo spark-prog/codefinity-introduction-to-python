@@ -76,10 +76,14 @@
 </section>
 {% endif %}
 
-<section class="card">
+<section class="card jump-target" id="find-player">
   <h2>Find a player</h2>
-  <form method="get" class="reset-row"><input name="q" value="{{ q }}" placeholder="Name, member number or email" autocomplete="off">
+  {# Searching reloads the page; landing back here (with the cursor in the box) keeps your place. #}
+  <form method="get" action="#find-player" class="reset-row"><input name="q" value="{{ q }}" placeholder="Name, member number or email" autocomplete="off">
     <button class="button small">Search</button></form>
+  {% if q %}<script>window.addEventListener("load", function () {  /* after the jump to this section */
+    var box = document.querySelector("#find-player input[name=q]");
+    setTimeout(function () { box.focus({ preventScroll: true }); box.select(); }, 0); });</script>{% endif %}
   {% if q %}
     {% if results %}
     <div class="table-wrap"><table class="grid">

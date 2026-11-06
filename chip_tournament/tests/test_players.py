@@ -190,6 +190,9 @@ def test_players_page(app):
     assert "Synced 4 players: 4 added" in page and "1 row(s) need a look" in page and "isn&#39;t 8 digits" in page
     page = viewer.get("/admin/players?q=p3").get_data(as_text=True)
     assert "32200003" in page and "SL 4" in page and "9999" not in page
+    # Searching lands back on the search box (not the top of the page), with the cursor in it.
+    assert 'id="find-player"' in page and 'action="#find-player"' in page and 'box.focus({ preventScroll: true })' in page
+    assert "box.focus" not in viewer.get("/admin/players").get_data(as_text=True)  # no search yet: page opens normally
 
 
 def test_daily_schedule(tmp_path):

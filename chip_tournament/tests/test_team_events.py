@@ -66,7 +66,7 @@ def test_entries_can_be_singles_doubles_or_teams_of_3_to_10(app):
     assert 'id="unsaved-save">Save settings</button>' in page  # and on the unsaved-changes bar
     save(c, ev, team_size=4)
     assert ev.load().settings.team_size == 4 and ev.load().entries_label == "teams of 4"
-    assert "teams of 4" in app.test_client().get(f"/t/{ev.id}/").get_data(as_text=True)
+    assert "teams of 4" in app.test_client().get(f"/t/{ev.id}/details").get_data(as_text=True)
     page = save(c, ev, team_size=MAX_TEAM_SIZE + 1)
     assert "teams of 3 to 10" in page and ev.load().settings.team_size == 4
     assert [entries_label(n) for n in (1, 2, 5)] == ["singles", "doubles", "teams of 5"]

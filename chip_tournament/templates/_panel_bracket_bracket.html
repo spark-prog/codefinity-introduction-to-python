@@ -1,0 +1,23 @@
+{# Bracket tab: the live tables and the bracket. Needs t. #}
+{% set s = t.settings %}
+
+{% if t.status == RUNNING %}
+<section>
+  <div class="section-head"><h2>Live</h2><a href="{{ url_for('board') }}">Open the board</a></div>
+  {% include "_b_tables.html" %}
+</section>
+{% endif %}
+
+{% if t.status != SETUP %}
+<section>
+  <div class="section-head"><h2>{{ "Groups & bracket" if t.groups else "Bracket" }}</h2></div>
+  {% include "_bracket.html" %}
+</section>
+{% endif %}
+
+{% if t.status == SETUP %}
+<section class="card">
+  <h2>The bracket</h2>
+  <p class="lede">The bracket is drawn when the tournament starts. {{ t.field_entries|length }} {{ "entry" if t.field_entries|length == 1 else "entries" }} so far.</p>
+</section>
+{% endif %}

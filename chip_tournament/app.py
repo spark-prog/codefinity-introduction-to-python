@@ -35,6 +35,7 @@ import guest_web
 import photos_web
 import qr_web
 import cal_web
+import event_pages
 import player_web
 from chips import alerts, apa_rules, backup, bonus_event, guest_td, eligibility, event_info, export, importer, players, pool as pool_mod, rules as rulebook, schedule, skill_check, themes
 from chips.bracket import FINAL_CUTS, FORMATS, asks_two_levels
@@ -230,7 +231,9 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["event_when"] = event_when
     app.jinja_env.globals["reg_window"] = schedule.reg_window
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
-                                 skill_rule=event_info.skill_rule, skill_short=event_info.skill_short, short_when=lambda t: event_info.short_when(t.settings))
+                                 skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
+                                 event_can_register=event_info.can_register, event_register_label=event_info.register_label,
+                                 event_tabs=event_info.tabs, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
@@ -622,7 +625,7 @@ def create_app(data_dir: str | None = None) -> Flask:
 
     @app.get("/t/<event>/")
     def home():
-        return render_template("home.html", t=store.load())
+        return app.config["event_tab_page"]()
 
     @app.get("/t/<event>/board")
     def board():
@@ -1094,7 +1097,8 @@ def create_app(data_dir: str | None = None) -> Flask:
         if os.environ.get("CHIPS_PRODUCTION") == "1" and search_settings.check_is_stale():
             threading.Thread(target=run_link_check, daemon=True).start()  # weekly, in the background
         check = settings["link_check"]
-        return render_template("rules.html", t=t, rule_sets=sets, event_rules=event_rules,
+        return render_template("rules.html", t=t, active_tab="rules" if t is not None else None, rule_sets=sets,
+                               event_rules=event_rules,
                                apa=apa_rules.load(), apa_sections=apa_rules.sections(), link_check=check,
                                moved={b["url"] for b in check["bad"]} if check else set(),
                                shorthand=rulebook.parse_shorthand(settings["shorthand"]),
@@ -1980,6 +1984,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     photos_web.register(app, admin_required)  # header photo and flyer: every tournament type
     qr_web.register(app, director_view)  # table QR stickers: every tournament type
     cal_web.register(app)  # Add to calendar: every tournament type
+    event_pages.register(app)  # the event's tabs (after chip_only is worked out: these pages exist for both types)
 
     @app.before_request
     def dispatch_by_kind():

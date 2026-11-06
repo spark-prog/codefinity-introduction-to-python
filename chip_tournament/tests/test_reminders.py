@@ -144,7 +144,7 @@ def test_no_reminders_when_turned_off_or_a_test_event(app, mail):
 def test_calendar_links_on_the_event_page_and_my_account(app):
     ev = event_soon(app, hours_ahead=48)
     c = app.test_client()
-    page = c.get(f"/t/{ev.id}/").get_data(as_text=True)
+    page = c.get(f"/t/{ev.id}/details").get_data(as_text=True)
     assert "Add to calendar" in page and f"/t/{ev.id}/calendar.ics" in page and "calendar.google.com" in page
     r = c.get(f"/t/{ev.id}/calendar.ics")
     assert r.status_code == 200 and r.mimetype == "text/calendar" and b"SUMMARY:8-Ball Singles Board" in r.data
@@ -153,7 +153,7 @@ def test_calendar_links_on_the_event_page_and_my_account(app):
     assert f"/t/{ev.id}/calendar.ics" in me
     undated = app.config["hub"].create("No Date Yet", "chip")
     assert c.get(f"/t/{undated.id}/calendar.ics").status_code == 404
-    assert "Add to calendar" not in c.get(f"/t/{undated.id}/").get_data(as_text=True)
+    assert "Add to calendar" not in c.get(f"/t/{undated.id}/details").get_data(as_text=True)
 
 
 def test_director_turns_reminders_on_and_off(app):

@@ -1,6 +1,6 @@
 {# The top of an event page, chip or bracket: when, name, where, the facts a player needs, and the buttons.
-   Needs t, s, can_register (may this visitor register now?) and register_label. #}
-{% set es = event_status(t) %}
+   Needs t and s. #}
+{% set es = event_status(t) %}{% set can_register = event_can_register(t) %}{% set register_label = event_register_label(t) %}
 <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
 <h1>{{ s.name }}</h1>
 {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}
@@ -8,7 +8,7 @@
   <div><dt>Entry</dt><dd>{{ event_fee(t, false) }}{% if s.added_money_cents %} · {{ s.added_money_cents|money }} added{% endif %}</dd></div>
   {% if t.status != FINISHED %}<div><dt>Field</dt><dd>{{ event_spots(t) }}</dd></div>{% endif %}
   <div class="wide"><dt>Skill level</dt><dd>{{ skill_rule(t) }}</dd></div>
-  <div class="wide"><dt>Registration</dt><dd><span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
+  <div class="wide full"><dt>Registration</dt><dd><span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
     {% if t.status == SETUP and not t.entries_locked and not t.last_call %}{% include "_reg_window.html" %}{% endif %}</dd></div>
 </dl>
 <div class="button-row actions-row">

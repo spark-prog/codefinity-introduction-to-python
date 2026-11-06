@@ -121,7 +121,7 @@ def signup(c, name, member):
 
 def test_registration_checks_eligibility(app):
     ev = app.config["hub"].get("masters-night")
-    home = app.test_client().get("/t/masters-night/").get_data(as_text=True)
+    home = app.test_client().get("/t/masters-night/details").get_data(as_text=True)
     assert "Who can play" in home and "At least 6 lifetime matches" in home and "On the Masters list" in home
 
     assert "Membership is Past Due" in signup(app.test_client(), "Bo Ray", "32200002")

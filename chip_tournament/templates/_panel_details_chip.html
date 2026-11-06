@@ -1,21 +1,11 @@
-{% extends "base.html" %}
-{% block content %}
+{# Details tab: the event's facts, and how a chip tournament works. Needs t. #}
 {% set s = t.settings %}
-{% include "_event_banner.html" %}
-<header class="page-head split center">
-  <div class="hero-copy">
-    {% set can_register = t.status != FINISHED and not t.entries_locked and not t.last_call and not s.registration_shut %}{% set register_label = "Register a team" %}
-    {% include "_event_header.html" %}
-    {% if t.status == SETUP and t.seeking_partner and not s.registration_shut %}<p class="muted"><a href="{{ url_for('register') }}#looking">{{ t.seeking_partner|length }} player(s) looking for a partner</a></p>{% endif %}
-  </div>
-  <div class="card">
+  <div class="card event-details">
     <p class="eyebrow">Event details</p>
     <ul class="facts">
       {% set cal = calendar_links(g.event.id, t) if t.status == "setup" else none %}{% if cal %}<li><span class="k">Calendar</span><span class="v">{% include "_calendar_links.html" %}</span></li>{% endif %}
-      <li><span class="k">Entry</span><span class="v">{{ s.entry_fee_cents|money }} per team{% if s.added_money_cents %} · {{ s.added_money_cents|money }} added{% endif %}</span></li>
       <li><span class="k">Format</span><span class="v">Teams of {{ TEAM_SIZE }} · race to {{ s.race_to }}</span></li>
       {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} <span class="muted">at the tournament desk. Teams not checked in may lose their spot to the waiting list.</span></span></li>{% endif %}
-      {% if s.field_cap %}<li><span class="k">Field</span><span class="v">{{ t.field_teams|length }} of {{ s.field_cap }} spots filled{% if t.waitlist %} · {{ t.waitlist|length }} on the waiting list{% endif %}</span></li>{% endif %}
       {% if s.cash_in_time %}<li><span class="k">Cash-in</span><span class="v">Opens {{ s.cash_in_time }}</span></li>{% endif %}
       {% if s.last_call_time %}<li><span class="k">Last call</span><span class="v">{{ s.last_call_time }}</span></li>{% endif %}
       <li><span class="k">Starting chips</span><span class="v">{% for label, chips in t.bracket_labels() %}<span class="pill">{{ label }} → {{ chips }}</span>{% endfor %}
@@ -23,17 +13,6 @@
           {% include "_who_can_play.html" %}
     </ul>
   </div>
-</header>
-
-{% if t.status != SETUP %}
-<section>
-  <div class="section-head"><h2>Live</h2><a href="{{ url_for('board') }}">Open the board</a></div>
-  {% include "_stats.html" %}
-  {% include "_tables.html" %}
-</section>
-{% endif %}
-
-<section>{% include "_standings.html" %}</section>
 
 <section class="card howto-card">
   <div class="split">
@@ -55,4 +34,3 @@
     <li>At last call, your next match is your last. When it's over you're cashed in automatically. If you're on a table when last call happens, finish that match first, then play one more.</li>
   </ul>
 </section>
-{% endblock %}

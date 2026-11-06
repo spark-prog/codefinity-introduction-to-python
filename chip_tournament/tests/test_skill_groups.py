@@ -198,8 +198,9 @@ def test_movin_on_up_setup_and_registration(tmp_path, monkeypatch):
     assert "You&#39;re in the SL 6 group" in r.get_data(as_text=True)
     ann = next(iter(ev.load().entries.values()))
     assert (ann.players[0].skill_8, ann.players[0].skill_9, ann.skill, ann.division) == (4, 6, 6, "SL 6")
-    home = player.get(f"{base}/").get_data(as_text=True)
-    assert "Skill groups" in home and "Rack race chart" in home and "SL 6 <span" in home
+    home = player.get(f"{base}/details").get_data(as_text=True)
+    assert "Skill groups" in home and "Rack race chart" in home
+    assert "SL 6 <span" in player.get(f"{base}/teams").get_data(as_text=True)  # the teams, grouped
 
     # the director adds a player by name, then fills in their skill levels
     admin.post(f"{base}/admin/entries/add", data={"bulk": "Bob"})
@@ -224,7 +225,7 @@ def test_pages_describe_the_events_own_skill_rule(tmp_path, monkeypatch):
             "race_winners": "3", "race_losers": "3", "race_finals": "3", "skill_game": basis})
         assert ev.load().settings.skill_game == basis
         player = app.test_client()
-        for path in ("/register", "/"):
+        for path in ("/register", "/details"):
             page = player.get(base + path).get_data(as_text=True)
             assert says in page, (basis, path)
             if basis in ("8", "9"):

@@ -1,0 +1,25 @@
+{# Details tab: the event's facts. Needs t. #}
+{% set s = t.settings %}
+  <div class="card event-details">
+    <p class="eyebrow">Event details</p>
+    <ul class="facts">
+      {% set cal = calendar_links(g.event.id, t) if t.status == "setup" else none %}{% if cal %}<li><span class="k">Calendar</span><span class="v">{% include "_calendar_links.html" %}</span></li>{% endif %}
+      <li><span class="k">Format</span><span class="v">{{ t.format_name }} · {{ t.entries_label }}</span></li>
+      {% if s.skill_groups %}<li><span class="k">Skill groups</span><span class="v">{% for lo, hi in s.skill_groups %}<span class="pill">SL {{ lo }}{% if hi != lo %}–{{ hi }}{% endif %}</span>{% endfor %}
+        <br><span class="muted">You play in the group for {{ level_rule(s.skill_game) }}. Each group has its own bracket and champion.</span></span></li>{% endif %}
+      <li><span class="k">Races</span><span class="v">
+        {% if s.race_method == RACK_CHART %}Rack race chart: each player's race is set by both players' skill levels
+        {% elif s.race_method == RACK_RACE %}{{ race_charts.method_label(s.race_method, s.race_chart) }}: each {{ "player's" if s.team_size == 1 else "team's" }} race is set by both {{ "players' skill levels" if s.team_size == 1 else "teams' combined skill levels" }}
+        {% elif s.race_method == BALL_COUNT %}{{ race_charts.method_label(s.race_method, s.race_chart) }}: each {{ "player" if s.team_size == 1 else "team" }} needs the points for {{ "their 9-Ball skill level" if s.team_size == 1 else "its combined 9-Ball skill level" }} (1 per ball, 2 for the 9)
+        {% elif s.format == "round_robin" %}Race to {{ s.race_winners }}{% if s.advance %} · playoff final race to {{ s.race_finals }}{% endif %}
+        {% elif s.format == "single" %}Race to {{ s.race_winners }} · final race to {{ s.race_finals }}
+        {% else %}Winners side race to {{ s.race_winners }} · losers side race to {{ s.race_losers }} · {{ "finals" if s.format == "double" else "final" }} race to {{ s.race_finals }}{% endif %}</span></li>
+      {% if s.payouts and s.skill_groups %}<li><span class="k">Payouts</span><span class="v">{% for p in s.payouts if p %}<span class="pill">{{ place_text((loop.index, loop.index)) }} {{ p }}%</span>{% endfor %}
+        <br><span class="muted">Of each group's share of the pot.</span></span></li>
+      {% elif s.payouts %}<li><span class="k">Payouts</span><span class="v">{% for place, cents in t.payout_table() %}<span class="pill">{{ place }} {{ cents|money }}</span>{% endfor %}
+        {% if t.status == SETUP %}<br><span class="muted">Based on the entries so far.</span>{% endif %}</span></li>{% endif %}
+      {% if s.checkin_by %}<li><span class="k">Check-in</span><span class="v">By {{ s.checkin_by }} at the tournament desk.</span></li>{% endif %}
+          {% include "_who_can_play.html" %}
+    </ul>
+    {% if s.details %}<p class="details">{{ s.details }}</p>{% endif %}
+  </div>

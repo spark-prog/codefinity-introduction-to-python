@@ -197,7 +197,7 @@ def test_settings_pick_the_race_type_and_chart(app):
     s = ev.load().settings
     assert (s.race_method, s.race_chart) == (BALL_COUNT, ADJUSTED)
     assert "Ball count chart (adjusted)" in html
-    assert "Ball count chart (adjusted)" in c.get(f"/t/{ev.id}/").get_data(as_text=True)
+    assert "Ball count chart (adjusted)" in c.get(f"/t/{ev.id}/details").get_data(as_text=True)
     assert "9-Ball skill level" in c.get(f"/t/{ev.id}/register").get_data(as_text=True)  # asks both levels
     html = c.post(f"/t/{ev.id}/admin/settings", data=settings_form(s, team_size="3"),
                   follow_redirects=True).get_data(as_text=True)

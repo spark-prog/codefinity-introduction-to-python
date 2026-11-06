@@ -2,8 +2,9 @@
    the skill rule, and the Register button. Needs t, s, es, can_register and register_label. #}
 <div class="event-strip" id="event-strip" aria-hidden="true">
   <div class="event-strip-inner">
+    <a class="strip-back" href="{{ url_for('index') }}" aria-label="All events" title="All events">‹</a>
     <div class="event-strip-text"><b>{{ s.name }}</b>
-      <span>{% set when = short_when(t) %}{% if when %}{{ when }} · {% endif %}{{ event_fee(t) }} · {{ skill_short(t) }}</span></div>
+      <span>{% set when = short_when(t) %}{% if when %}{{ when }} · {% endif %}{{ event_fee(t, false) }} · {{ skill_short(t) }}</span></div>
     {% if my_registration(t) %}<span class="status-chip status-open">Registered</span>
     {% elif can_register %}<a class="button small" href="{{ url_for('register') }}">Register</a>
     {% else %}<span class="status-chip status-{{ es.key }}">{{ es.label }}</span>{% endif %}
@@ -18,9 +19,10 @@
   var waiting = false;
   function check() {  // the bar shows once the header's buttons have scrolled up under the site bar
     waiting = false;
-    var gone = end.getBoundingClientRect().top < (bar ? bar.offsetHeight : 84);
+    var gone = end.getBoundingClientRect().top < (parseInt(window.getComputedStyle(strip).top, 10) || 0);
     strip.classList.toggle("show", gone);
     strip.setAttribute("aria-hidden", gone ? "false" : "true");
+    document.documentElement.style.setProperty("--strip-h", gone ? strip.offsetHeight + "px" : "0px");  // the tab bar sits under it
   }
   function later() { if (!waiting) { waiting = true; window.requestAnimationFrame(check); } }
   size(); check();

@@ -1,0 +1,10 @@
+{# The rules search box. #}
+  <div class="card rules-search">
+    <label for="rule-search" class="eyebrow">Search the rules</label>
+    <input id="rule-search" type="search" placeholder="e.g. scratch, foul, ball in hand" autocomplete="off">
+    {% if popular %}<div class="popular-searches" aria-label="Popular searches">
+      {% for q in popular %}<button type="button" class="popular-search" data-q="{{ q }}">{{ q }}</button>{% endfor %}
+    </div>{% endif %}
+    <p class="muted search-tip">Tip: put words in quotes for an exact phrase, like “ball on the floor”.</p>
+    <p id="rule-count" class="muted" aria-live="polite"></p>
+  </div>

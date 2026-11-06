@@ -37,7 +37,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {% block head %}{% endblock %}
 </head>
-<body style="--bg-image: url('{{ background_url }}')" {% if not has_custom_background %}class="default-bg"{% endif %}>
+<body style="--bg-image: url('{{ background_url }}')" class="{% if not has_custom_background %}default-bg{% endif %}{% if active_tab %} event-tabbed{% endif %}">
   {% set ep = request.endpoint or "" %}
   <header class="topbar">
     <div class="topbar-inner">
@@ -68,9 +68,11 @@
         <a href="{{ url_for('admin_backups') }}" class="hide-xs {{ 'active' if ep.startswith('admin_backup') }}">Backups</a>
         {% elif event %}
         <a href="{{ url_for('index') }}"><span class="hide-xs">All </span>Events</a>
-        <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
+        <a href="{{ url_for('home') }}" class="nav-home nav-title hide-sm {{ 'active' if ep in ('home', 'b_entry', 'event_details', 'event_teams', 'event_bracket') }}" title="{{ t.settings.name if t else '' }}">{{ t.settings.name if t else "Tournament" }}</a>
+        {% if not active_tab %}{# on the tabbed event pages, Bracket and Rules are tabs #}
         <a href="{{ url_for('board') }}" class="{{ 'active' if ep == 'board' }}">{{ "Bracket" if event.kind == BRACKET else "Board" }}</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
+        {% endif %}
         {% if t and t.status == SETUP and not t.settings.registration_shut and not my_registration(t) %}<a href="{{ url_for('register') }}" class="nav-cta {{ 'active' if ep == 'register' }}">Register</a>{% endif %}
         <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
         {% if guest_listed %}<a href="{{ url_for('guest_home') }}" class="{{ 'active' if ep.startswith('guest') }}">My events</a>{% endif %}

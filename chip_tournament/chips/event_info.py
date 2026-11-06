@@ -101,3 +101,32 @@ def short_when(s) -> str:
     except ValueError:
         return ""
     return f"{day:%a, %b} {day.day}"
+
+
+def can_register(t) -> bool:
+    """May a visitor register now? (The Register button, here and in the slim bar.)"""
+    s = t.settings
+    if is_bracket(t):
+        return t.status == "setup" and not s.registration_shut
+    return t.status != "finished" and not t.entries_locked and not t.last_call and not s.registration_shut
+
+
+def register_label(t) -> str:
+    return "Register" if is_bracket(t) else "Register a team"
+
+
+def tabs(t) -> list[dict]:
+    """The tabs under an event's header: Details, Teams (or Players), Bracket (Live for chips), Rules."""
+    s = t.settings
+    bracket = is_bracket(t)
+    count = len(t.field_entries if bracket else t.field_teams)
+    people = "Players" if bracket and s.team_size == 1 else "Teams"
+    return [{"key": "details", "label": "Details", "endpoint": "event_details", "count": None},
+            {"key": "teams", "label": people, "endpoint": "event_teams", "count": count},
+            {"key": "bracket", "label": "Bracket" if bracket else "Live", "endpoint": "event_bracket", "count": None},
+            {"key": "rules", "label": "Rules", "endpoint": "rules_page", "count": None}]
+
+
+def default_tab(t) -> str:
+    """The tab an event opens on: who's registered while people are signing up, the bracket once it's running."""
+    return "teams" if t.status == "setup" else "bracket"

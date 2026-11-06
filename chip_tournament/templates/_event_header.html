@@ -9,12 +9,12 @@
   {% if t.status != FINISHED %}<div><dt>Field</dt><dd>{{ event_spots(t) }}</dd></div>{% endif %}
   <div class="wide"><dt>Skill level</dt><dd>{{ skill_rule(t) }}</dd></div>
   <div class="wide full"><dt>Registration</dt><dd><span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
-    {% if t.status == SETUP and not t.entries_locked and not t.last_call %}{% include "_reg_window.html" %}{% endif %}</dd></div>
+    {% if t.status == SETUP and not t.entries_locked and not t.last_call %}{% set countdown_only = true %}{% include "_reg_window.html" %}{% endif %}</dd></div>
 </dl>
 <div class="button-row actions-row">
   {% if my_registration(t) %}{% set hide_push = true %}{% include "_already_registered.html" %}
   {% elif can_register %}<a class="button big" href="{{ url_for('register') }}">{{ register_label }}</a>{% endif %}
-  {% if not my_registration(t) %}{% include "_push_button.html" %}{% endif %}
+  {% if not my_registration(t) %}{% include "_alert_me.html" %}{% include "_push_button.html" %}{% endif %}
   {% include "_share_button.html" %}
   {% if s.address %}<a class="button big secondary" href="https://www.google.com/maps/search/?api=1&query={{ (s.venue ~ ' ' ~ s.address)|urlquote }}" target="_blank" rel="noopener">Map &amp; directions</a>{% endif %}
 </div>

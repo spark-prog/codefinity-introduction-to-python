@@ -13,7 +13,7 @@ from datetime import datetime
 from flask import abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from chips import backup, eligibility, players, reminders, schedule
+from chips import backup, eligibility, open_alerts, players, reminders, schedule
 from chips import pending as pending_mod
 from chips import pool as pool_mod
 from chips import series as series_mod
@@ -1043,6 +1043,63 @@ def register_registration(app) -> None:
             ev.store.save(t)
         return counts
 
+    def send_open_alerts(ev) -> int:
+        """Email (and text, for those who agreed) everyone who tapped Alert me, 5 minutes before registration opens."""
+        if not open_alerts.due(ev.load().settings):
+            return 0
+        with ev.store.lock:  # bookkeeping: no undo step. Marked before sending, so a restart never sends one twice.
+            t = ev.load()
+            members = open_alerts.due(t.settings)
+            for m in members:
+                t.settings.open_alerts[m]["sent"] = datetime.now().isoformat(timespec="seconds")
+            if not members:
+                return 0
+            ev.store.save(t)
+        s, root = t.settings, reminders.site_root(t)
+        link = f"{root}/t/{ev.id}/register" if root else ""
+        subject, text = open_alerts.email_text(t, link)
+        body = open_alerts.text_body(t, link)
+        if s.sms_name:
+            body = f"{s.sms_name}: {body}"
+        for m in members:
+            rec = t.settings.open_alerts[m]
+            email_player(m, subject, text)
+            if rec.get("texts") and rec.get("phone"):
+                ev.sms.send(rec["phone"], body, test=s.test_event)
+        return len(members)
+
+    @app.context_processor
+    def alert_helpers():
+        return {"open_alert_of": lambda t: open_alerts.wanted(t.settings, (g.get("player") or {}).get("member", ""))}
+
+    @app.post("/t/<event>/alert-me")
+    def open_alert():
+        """Alert me 5 minutes before registration opens (the button also says yes to texts for this event)."""
+        me, back = g.get("player"), url_for("home")
+        if not me:
+            flash("Log in first, so we know where to send the alert.", "error")
+            return redirect(url_for("player_login", next=back))
+        if request.form.get("cancel") == "1":
+            with g.event.store.lock:
+                t = g.event.load()
+                open_alerts.remove(t.settings, me["member"])
+                g.event.store.save(t)
+            flash("Alert cancelled.", "ok")
+            return redirect(back)
+        t = g.event.load()
+        if not open_alerts.can_ask(t.settings):
+            flash("Registration isn't waiting to open, so there's nothing to be alerted about.", "error")
+            return redirect(back)
+        cell = re.sub(r"\D", "", me.get("cell") or "")
+        phone = ("+1" + cell) if len(cell) == 10 else ""
+        with g.event.store.lock:
+            t = g.event.load()
+            open_alerts.add(t.settings, me["member"], request.form.get("texts") == "1", phone)
+            g.event.store.save(t)
+        flash("You're on the list. We'll alert you 5 minutes before registration opens"
+              + (" by email and text." if phone and request.form.get("texts") == "1" else "."), "ok")
+        return redirect(back)
+
     def lock_loop(log=None, sleep: float = 60) -> None:
         """Background: lock an event's eligibility once its registration closes or it starts."""
         import time as _time
@@ -1063,6 +1120,7 @@ def register_registration(app) -> None:
                         if email_offers(ev, t):
                             ev.store.save(t)
                     send_reminders(ev)
+                    send_open_alerts(ev)
                     if probe.status == "finished" and not history.recorded(ev.id):
                         history.record(ev.id, ev.kind, probe)
                     if eligibility.lock_due(ev.load()):
@@ -1077,6 +1135,7 @@ def register_registration(app) -> None:
 
     app.config["eligibility_lock_loop"] = lock_loop
     app.config["send_reminders"] = send_reminders
+    app.config["send_open_alerts"] = send_open_alerts
 
     def my_prefill(t) -> dict:
         """Partner 1 / the player: the logged-in player's own details, phone included (it's theirs)."""

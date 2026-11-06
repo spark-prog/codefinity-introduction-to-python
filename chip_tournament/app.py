@@ -233,7 +233,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
                                  event_can_register=event_info.can_register, event_register_label=event_info.register_label,
-                                 event_tabs=event_info.tabs, short_when=lambda t: event_info.short_when(t.settings))
+                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now

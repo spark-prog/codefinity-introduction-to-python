@@ -1,0 +1,17 @@
+{# Registration isn't open yet: an Alert me button, 5 minutes before it opens. Needs t. #}
+{% if t.status == SETUP and event_alertable(t) %}
+{% set mine = open_alert_of(t) %}
+{% if not player %}
+  <a class="button big" href="{{ url_for('player_login', next=request.path) }}">Log in to get an alert</a>
+{% elif mine %}
+  <form method="post" action="{{ url_for('open_alert') }}" class="inline">
+    <input type="hidden" name="cancel" value="1">
+    <span class="status-chip status-open">✓ We'll alert you 5 min before{% if mine.texts %} (email &amp; text){% endif %}</span>
+    <button class="button small secondary">Cancel alert</button></form>
+{% else %}
+  <form method="post" action="{{ url_for('open_alert') }}" class="inline alert-me">
+    <button class="button big">🔔 Alert me 5 min before</button>
+    {% if player.cell %}<label class="checkbox small-note"><input type="checkbox" name="texts" value="1" checked>
+      Also text me for this event. Msg &amp; data rates may apply. Reply STOP to opt out.</label>{% endif %}</form>
+{% endif %}
+{% endif %}

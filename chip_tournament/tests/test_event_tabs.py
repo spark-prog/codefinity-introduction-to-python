@@ -150,3 +150,11 @@ def test_the_top_menu_loses_bracket_and_rules_only_on_the_tab_pages(app):
 def test_the_register_button_is_in_the_header_on_every_tab(app):
     ev = bracket(app)
     assert ">Register</a>" in get(app, f"/t/{ev.id}/teams") and ">Register</a>" in get(app, f"/t/{ev.id}/rules")
+
+
+def test_reloads_and_tab_switches_keep_the_scroll_place(app):
+    ev = bracket(app, entries=4, start=True)
+    page = get(app, f"/t/{ev.id}/")
+    swap = page.split("function swapIn", 1)[1].split("function check", 1)[0]
+    assert "ctKeepPlace(true)" in swap  # a live refresh notes the spot just before it swaps the page
+    assert 'sessionStorage.setItem(KEY, location.pathname' in page and 'a.event-tab' in page  # tabs keep the bar's place

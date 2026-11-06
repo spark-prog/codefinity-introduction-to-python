@@ -132,6 +132,7 @@ window.ctSafeReload = (function () {
   }
   function swapIn(html) {
     var y = window.scrollY;
+    window.ctKeepPlace && window.ctKeepPlace(true);  // the new page puts back the open sections and the spot on screen
     var last = setTimeout(function () {}, 0);  // stop this page's timers (the new page starts its own)
     for (var i = 0; i <= last; i++) { clearTimeout(i); clearInterval(i); }
     document.open();  // also drops this page's event listeners
@@ -139,7 +140,6 @@ window.ctSafeReload = (function () {
     document.close();
     if (y) window.addEventListener("load", function () { window.scrollTo(0, y); });
   }
-  window.ctKeepPlace && window.ctKeepPlace(true);  // the new page puts back the open sections and the spot on screen
   function check() {
     var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
@@ -277,6 +277,25 @@ window.ctSafeReload = (function () {
     close.addEventListener("click", hide);
     setTimeout(hide, note.querySelector(".flash.error") ? 12000 : 5000);
   }
+})();
+(function () {
+  // Switching tabs keeps your place: if the tab bar has stuck to the top (you scrolled past the header), the next
+  // tab opens with its bar at the same spot, so you see the start of that tab, not the header again.
+  var KEY = "ct-tab", nav = document.querySelector(".event-tabs");
+  if (!nav) return;
+  function stick() { return parseInt(getComputedStyle(nav).top, 10) || 0; }
+  nav.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a.event-tab");
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    try { if (nav.getBoundingClientRect().top <= stick() + 1) sessionStorage.setItem(KEY, location.pathname.replace(/[^/]*$/, "")); } catch (x) {}
+  });
+  var base = null;
+  try { base = sessionStorage.getItem(KEY); sessionStorage.removeItem(KEY); } catch (x) {}
+  if (base === null || base !== location.pathname.replace(/[^/]*$/, "")) return;
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  function go() { window.scrollTo(0, Math.max(0, Math.round(window.scrollY + nav.getBoundingClientRect().top - stick()))); }
+  go();
+  window.addEventListener("load", function () { go(); setTimeout(go, 50); });
 })();
 (function () {
   // Live pages reload on a timer, but never while someone is using them: a field in focus, anything

@@ -20,7 +20,7 @@
     </tbody>
   </table>
 </div>
-{% if t.waitlist %}
+{% if t.waitlist and t.status != SETUP %}
 <h3>Waiting list</h3>
 <ol>{% for id in t.waitlist %}<li><a href="{{ url_for('team_page', team_id=id) }}">{{ t.name_of(id) }}</a>
   <span class="muted">(combined skill {{ t.teams[id].combined_skill }})</span></li>{% endfor %}</ol>

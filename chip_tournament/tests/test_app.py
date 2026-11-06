@@ -151,7 +151,7 @@ def test_field_cap_and_waiting_list(client):
     store = client.application.config["store"]
     t = store.load()
     assert [x.status for x in sorted(t.teams.values(), key=lambda x: x.name)] == ["registered", "registered", "waitlisted"]
-    assert b"Waiting list" in client.get("/").data
+    assert b"Waiting list" in client.get("/partners").data
     first = next(x for x in t.teams.values() if x.name == "A Team")
     client.post(f"/admin/team/{first.id}/remove")
     assert next(x for x in store.load().teams.values() if x.name == "C Team").status == "registered"

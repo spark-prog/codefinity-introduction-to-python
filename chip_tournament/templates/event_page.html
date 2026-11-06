@@ -4,6 +4,7 @@
 {% block content %}
 {% include "_event_top.html" %}
 <div class="event-panel" id="panel" data-tab="{{ active_tab }}">
+  {% if active_tab in ("teams", "bracket") and (t.field_entries if t.field_entries is defined else t.field_teams) %}{% include "_event_find.html" %}{% endif %}
   {% include panel %}
 </div>
 {% endblock %}

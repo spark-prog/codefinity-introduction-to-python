@@ -5,7 +5,7 @@
 <header class="page-head event-head">
   <div class="hero-copy">
     {% include "_event_header.html" %}
-    {% if event.kind != BRACKET and t.status == SETUP and t.seeking_partner and not s.registration_shut %}<p class="muted"><a href="{{ url_for('register') }}#looking">{{ t.seeking_partner|length }} player(s) looking for a partner</a></p>{% endif %}
+    {% if t.status == SETUP and not s.registration_shut and (event.kind != BRACKET or s.team_size > 1) %}{% set pf = partner_finder(t) %}{% if pf.everyone %}<p class="muted"><a href="{{ url_for('event_partners') }}#looking">{{ pf.everyone|length }} player{{ "s" if pf.everyone|length != 1 }} looking for a partner</a></p>{% endif %}{% endif %}
   </div>
 </header>
 <nav class="event-tabs" aria-label="This event">

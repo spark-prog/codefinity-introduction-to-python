@@ -32,6 +32,6 @@
   <ol class="entry-list">{% for e in t.field_entries %}<li>{{ e.name }}{% if s.team_size > 1 and e.name != e.partners %} <span class="muted">{{ e.partners }}</span>{% endif %}</li>{% endfor %}</ol>
   {% endif %}
   {% else %}<p class="muted">Be the first to register.</p>{% endif %}
-  {% if t.waitlist %}<p class="muted">Waiting list: {% for i in t.waitlist %}{{ t.name_of(i) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  {% if t.waitlist %}<p class="muted">{{ t.waitlist|length }} waiting. <a href="{{ url_for('event_partners') }}">See the waiting list</a></p>{% endif %}
 </section>
 {% endif %}

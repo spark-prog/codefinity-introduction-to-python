@@ -1,0 +1,51 @@
+{# Find a team or player inside this event: filters the lists on the Teams tab, highlights the matches on the
+   bracket / tables. Needs t. #}
+{% set mine = my_registration(t) %}
+<div class="event-find" id="event-find">
+  <label class="sr-only" for="event-find-input">Find a {{ "player" if t.settings.team_size is defined and t.settings.team_size == 1 else "team" }}</label>
+  <input id="event-find-input" type="search" data-no-dirty autocomplete="off" placeholder="Find a {{ 'player' if t.settings.team_size is defined and t.settings.team_size == 1 else 'team or player' }}…">
+  {% if mine %}<button type="button" class="button small secondary" data-find="{{ mine.name }}">Find mine</button>{% endif %}
+  <span class="muted small-note" id="event-find-note" aria-live="polite"></span>
+</div>
+<script>
+(function () {
+  var input = document.getElementById("event-find-input"), note = document.getElementById("event-find-note");
+  if (!input) return;
+  var panel = document.getElementById("panel"), tab = panel.dataset.tab;
+  var rows, titles;
+  function collect() {  // the lists come after this box on the page: look when someone types, not before
+    rows = tab === "teams"
+      ? panel.querySelectorAll(".entry-list li, table.grid tbody tr")
+      : panel.querySelectorAll(".bm, .tcell, .group-card tbody tr");
+    titles = panel.querySelectorAll(".division-title");
+  }
+  function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+  function run() {
+    collect();
+    var q = norm(input.value), hits = [];
+    rows.forEach(function (r) {
+      var hit = !q || norm(r.textContent + " " + (r.dataset.teams || "")).indexOf(q) >= 0;
+      if (tab === "teams") r.hidden = !hit;
+      else { r.classList.toggle("find-hit", !!q && hit); r.classList.toggle("find-dim", !!q && !hit); }
+      if (q && hit) hits.push(r);
+    });
+    if (tab === "teams") titles.forEach(function (h) {  // a group heading with nothing left under it goes too
+      var list = h.nextElementSibling;
+      h.hidden = !!q && !!list && list.tagName === "OL" && !list.querySelector("li:not([hidden])");
+    });
+    note.textContent = !q ? "" : hits.length ? hits.length + " found" : "No match";
+    if (q && hits.length && tab !== "teams") {
+      var top = hits[0].getBoundingClientRect().top + window.scrollY - 170;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }
+  }
+  var SK = "ct-find:" + location.pathname;  // a live refresh swaps the page: keep the search
+  try { var saved = sessionStorage.getItem(SK); if (saved) { input.value = saved; document.addEventListener('DOMContentLoaded', run); } } catch (e) {}
+  input.addEventListener("input", function () { try { sessionStorage.setItem(SK, input.value); } catch (e) {} });
+  input.addEventListener("input", run);
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+  document.querySelectorAll("[data-find]").forEach(function (b) {
+    b.addEventListener("click", function () { input.value = b.dataset.find; run(); });
+  });
+})();
+</script>

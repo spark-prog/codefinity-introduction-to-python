@@ -495,7 +495,7 @@
     <label>Round robin: advance to a playoff from each group (0 = no playoff) <input name="advance" type="number" min="0" value="{{ s.advance }}" {% if not setup %}disabled{% endif %}></label>
     <label class="wide">Skill groups, singles (blank = one bracket)
       <input name="skill_groups" value="{{ skill_groups_text(s.skill_groups) }}" placeholder="1-3, 4, 5, 6, 7-9" {% if not setup %}disabled{% endif %}>
-      <span class="muted small-note">Each player plays in the group for the higher of their 8-Ball and 9-Ball skill levels; each group has its own bracket and champion. Groups never merge. A group with one player joins the neighboring group with the fewest players, and a group too small for the format plays single elimination.</span></label>
+      <span class="muted small-note">Each player plays in the group for {{ level_rule(s.skill_game, "their") }} (set by "Skill levels from the player list"); each group has its own bracket and champion. Groups never merge. A group with one player joins the neighboring group with the fewest players, and a group too small for the format plays single elimination.</span></label>
 
       </div>
     </details>

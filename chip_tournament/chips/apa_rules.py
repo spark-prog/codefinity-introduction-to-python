@@ -80,6 +80,15 @@ def check_links(fetch=_fetch) -> dict:
             "bad": [{"title": b["title"], "url": b["url"], "problem": b["problem"]} for b in bad]}
 
 
+# More than this share of pages failing at once means we couldn't reach APA's site (an outage on our side or
+# theirs), not that the pages moved: the check counts as failed and marks nothing.
+OUTAGE_SHARE = 0.5
+
+
+def looks_like_outage(result: dict) -> bool:
+    return result["total"] > 0 and len(result["bad"]) > result["total"] * OUTAGE_SHARE
+
+
 def check(pages: list[dict]) -> list[str]:
     """Problems that would put a bad link in front of players. Empty means the list is good."""
     problems, seen = [], set()

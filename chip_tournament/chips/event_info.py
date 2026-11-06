@@ -30,7 +30,7 @@ def status(t) -> dict:
         return {"key": "open", "label": "Registration open",
                 "detail": f"Closes {schedule.when_text(when)}" if when else ""}
     if state == schedule.BEFORE:
-        return {"key": "before", "label": "Registration not open yet", "detail": f"Opens {schedule.when_text(when)}"}
+        return {"key": "before", "label": f"Registration opens {schedule.when_text(when)}", "detail": ""}
     return {"key": "closed", "label": "Registration closed",
             "detail": f"Closed {schedule.when_text(when)}" if state == schedule.AFTER and when else ""}
 
@@ -109,6 +109,13 @@ def can_register(t) -> bool:
     if is_bracket(t):
         return t.status == "setup" and not s.registration_shut
     return t.status != "finished" and not t.entries_locked and not t.last_call and not s.registration_shut
+
+
+def can_alert(t) -> bool:
+    """Is registration waiting to open at a set time (so 'Alert me' makes sense)?"""
+    s = t.settings
+    state, when = schedule.reg_window(s)
+    return t.status == "setup" and state == schedule.BEFORE and when is not None and not getattr(t, "entries_locked", False)
 
 
 def register_label(t) -> str:

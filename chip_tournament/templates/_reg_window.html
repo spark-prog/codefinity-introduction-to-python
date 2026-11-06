@@ -2,7 +2,7 @@
 {% if t.status != FINISHED %}
 {% set st, when = reg_window(t.settings) %}
 {% if st == "before" %}
-  <p class="reg-window">Registration opens <b>{{ reg_when(when) }}</b>
+  <p class="reg-window">{% if not countdown_only %}Registration opens <b>{{ reg_when(when) }}</b>{% endif %}
     <span class="countdown" data-seconds="{{ ((when - now()).total_seconds())|int }}" data-label="Opens in"></span></p>
 {% elif st == "open" and when %}
   <p class="reg-window">Registration closes <b>{{ reg_when(when) }}</b>

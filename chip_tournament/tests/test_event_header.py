@@ -31,7 +31,7 @@ def test_status_in_words():
     st = event_info.status(bracket(registration_closes=soon))
     assert st["key"] == "open" and st["detail"].startswith("Closes ")
     st = event_info.status(bracket(registration_opens=soon))
-    assert (st["key"], st["label"]) == ("before", "Registration not open yet") and st["detail"].startswith("Opens ")
+    assert st["key"] == "before" and st["label"].startswith("Registration opens ")
     assert event_info.status(bracket(registration_closed=True))["key"] == "closed"
     past = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT09:00")
     st = event_info.status(bracket(registration_closes=past))
@@ -130,7 +130,7 @@ def test_all_events_groups_and_cards(app):
     done.store.save(t)
     page = app.test_client().get("/").get_data(as_text=True)
     assert page.index("Live now") < page.index("Open for registration") < page.index("Upcoming") < page.index("Results")
-    assert "Registration open" in page and "Registration not open yet" in page and "Opens " in page
+    assert "Registration open" in page and "Registration opens " in page
     assert "$20.00 per team" in page and "Doubles · combined SL 9 or less" in page
     assert page.count("Live Night") == 1 and "Done Night" in page.split("Results", 1)[1]
     assert 'id="event-search"' not in page  # a search box only when there are many events
@@ -191,3 +191,42 @@ def test_chip_event_header(app):
     page = app.test_client().get(f"/t/{ev.id}/").get_data(as_text=True)
     assert "$20.00 per team" in page and "Teams of 2 · combined SL 9 or less to register" in page
     assert "0 of 32 spots filled" in page and ">Register a team</a>" in page and 'id="event-strip"' in page
+
+
+# ------------------------------------------------------------------ Alert me, before registration opens
+
+def test_alert_me_before_registration_opens(app, monkeypatch):
+    from chips import open_alerts
+    soon = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%dT18:00")
+    ev = make(app, "Later Night", date="2026-12-05", registration_opens=soon)
+    page = app.test_client().get(f"/t/{ev.id}/").get_data(as_text=True)
+    assert "Registration opens " in page and "Log in to get an alert" in page and 'class="countdown"' in page
+    c = Clients(app).logged_in("32200001")
+    page = c.get(f"/t/{ev.id}/").get_data(as_text=True)
+    assert "Alert me 5 min before" in page and ">Register<" not in page.split('class="button-row')[1].split("</div>")[0]
+    c.post(f"/t/{ev.id}/alert-me", data={})
+    s = ev.load().settings
+    assert "32200001" in s.open_alerts and s.open_alerts["32200001"]["texts"] is False
+    assert "alert you 5 min before" in c.get(f"/t/{ev.id}/").get_data(as_text=True)
+    c.post(f"/t/{ev.id}/alert-me", data={"cancel": "1"})
+    assert not ev.load().settings.open_alerts
+
+
+def test_alert_goes_out_five_minutes_before_and_only_once(app):
+    from chips import open_alerts
+    opens = (datetime.now() + timedelta(minutes=4)).replace(second=0, microsecond=0)
+    ev = make(app, "Soon Night", date="2026-12-05", registration_opens=opens.strftime("%Y-%m-%dT%H:%M"))
+    t = ev.load()
+    open_alerts.add(t.settings, "32200001", True, "+19045550100")
+    open_alerts.add(t.settings, "32200003", False, "")
+    ev.store.save(t)
+    sent, texts = [], []
+    ev.sms.send = lambda to, body, test=False: texts.append((to, body))
+    # no mailer in tests: counting what the sender handled is enough
+    assert open_alerts.due(ev.load().settings, opens - timedelta(minutes=10)) == []
+    assert sorted(open_alerts.due(ev.load().settings, opens - timedelta(minutes=4))) == ["32200001", "32200003"]
+    assert open_alerts.due(ev.load().settings, opens + timedelta(minutes=31)) == []
+    assert app.config["send_open_alerts"](ev) == 2
+    assert [x[0] for x in texts] == ["+19045550100"] and "registration opens at" in texts[0][1]
+    assert app.config["send_open_alerts"](ev) == 0
+    assert open_alerts.due(ev.load().settings, opens) == []

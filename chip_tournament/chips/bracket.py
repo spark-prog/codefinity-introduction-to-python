@@ -277,6 +277,7 @@ class BracketSettings:
     reminders: bool = True  # email registered players the day before and 2 hours before (chips/reminders.py)
     reminder_texts: bool = False  # and text them (players who agreed to texts)
     reminders_sent: dict = field(default_factory=dict)  # {"day" / "2h": when it went out}: bookkeeping
+    open_alerts: dict = field(default_factory=dict)  # 'Alert me' before registration opens: {member: {at, texts, phone, sent}}
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
     member_exceptions: list[dict] = field(default_factory=list)

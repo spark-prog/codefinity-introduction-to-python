@@ -235,6 +235,12 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals["skill_for"] = players.skill_for
     app.jinja_env.globals["skill_bases"] = players.SKILL_BASES
     app.jinja_env.globals["level_rule"] = players.level_rule
+
+    def public_url(path: str) -> str:
+        """A link to share outside the app: on the SITE_URL domain (e.g. https://controltable.app) when set."""
+        root = os.environ.get("SITE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+        return root + path
+    app.jinja_env.globals["public_url"] = public_url
     app.jinja_env.globals["elig_rules"] = eligibility.rules_of
     app.jinja_env.globals["elig_describe"] = eligibility.describe
     app.jinja_env.globals["elig_genders"] = eligibility.GENDERS

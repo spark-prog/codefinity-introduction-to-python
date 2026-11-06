@@ -1,0 +1,21 @@
+{# "Share this event": the phone's share menu (Text, Facebook, Messenger…); where there isn't one, copies the link. Needs s. #}
+{% set share_link = public_url(url_for("home")) %}
+<button type="button" class="button big secondary share-event" data-url="{{ share_link }}"
+        data-title="{{ s.name }}" data-text="{{ s.name }}{% if s.date %} · {{ event_when(s.date, s.start_time) }}{% endif %}">Share this event</button>
+<span class="share-done muted" role="status" aria-live="polite"></span>
+<script>
+document.querySelectorAll(".share-event:not([data-ready])").forEach(btn => {
+  btn.dataset.ready = "1";
+  const note = btn.nextElementSibling;
+  const say = msg => { note.textContent = msg; setTimeout(() => { note.textContent = ""; }, 4000); };
+  btn.addEventListener("click", async () => {
+    const { url, title, text } = btn.dataset;
+    if (navigator.share) {
+      try { await navigator.share({ title, text, url }); return; }
+      catch (e) { if (e.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(url); say("Link copied: " + url); }
+    catch (e) { window.prompt("Copy this link:", url); }
+  });
+});
+</script>

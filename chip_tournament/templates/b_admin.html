@@ -427,8 +427,8 @@
       <div class="settings section-fields">
     <label class="checkbox wide"><input type="checkbox" name="registration_closed" value="1" {% if s.registration_closed %}checked{% endif %}>
       Close online registration (the Register button disappears; you can still add teams here)</label>
-    <label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
-      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>
+    {% if not is_guest_td %}<label class="checkbox wide"><input type="hidden" name="require_member_shown" value="1"><input type="checkbox" name="require_member" value="1" {% if s.require_member %}checked{% endif %}>
+      Require an APA member number for every player who registers online (numbers not in the player list wait for your check under Pending verification)</label>{% endif %}
     <label>Waiting list: offer an open spot for this many hours (0 = the next team moves in at once)
       <input name="waitlist_offer_hours" type="number" min="0" max="72" value="{{ s.waitlist_offer_hours }}">
       <span class="muted small-note">The next team is texted and has until then to accept (never later than 30 minutes before the start).</span></label>
@@ -442,7 +442,10 @@
     <details class="settings-section" data-key="who">
       <summary><span class="settings-title">Who can play</span><span class="settings-sum">{% set who = elig_describe(elig_rules(s)) %}{{ who|join(" · ") if who else "Open to everyone" }}</span></summary>
       <div class="settings section-fields">
-    {% include "_eligibility_settings.html" %}
+    {% if is_guest_td %}<div class="settings-group">Who can play (eligibility)</div>
+    <p class="muted small-note wide guest-locked">Set by the league office.{% if s.require_member %} Member numbers are required.{% endif %}
+      {% set rules = elig_describe(elig_rules(s)) %}{% if rules %}</p><ul class="small-note wide guest-locked">{% for x in rules %}<li>{{ x }}</li>{% endfor %}</ul>{% else %} Open to everyone.</p>{% endif %}
+    {% else %}{% include "_eligibility_settings.html" %}{% endif %}
     <label>Skill levels from the player list
       <select name="skill_game">
         {% for key, name in skill_bases.items() %}<option value="{{ key }}" {% if s.skill_game == key %}selected{% endif %}>{{ name }}</option>{% endfor %}

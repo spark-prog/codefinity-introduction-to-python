@@ -162,7 +162,7 @@ def register(app, h) -> dict:
             except ValueError as exc:
                 raise TournamentError(str(exc).replace("Not saved: ", "Settings not saved: ")) from None
             s.registration_closed = f.get("registration_closed") == "1"
-            push_before = s.push_to
+            push_before = h["guest_locked"](s)
             if f.get("require_member_shown"):
                 s.require_member = f.get("require_member") == "1"
             if f.get("elig_shown"):

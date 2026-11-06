@@ -39,6 +39,17 @@ class Pushes:
             tmp.replace(self.path)
         return rec
 
+    def remove(self, event_id: str, member: str) -> list[dict]:
+        """Take back a member's push away from an event (the director undoing it). Returns what was removed."""
+        with self.lock:
+            rows = self.all()
+            gone = [p for p in rows if p["from_event"] == event_id and p["member"] == member]
+            if gone:
+                tmp = self.path.with_suffix(".tmp")
+                tmp.write_text(json.dumps([p for p in rows if p not in gone], indent=1))
+                tmp.replace(self.path)
+        return gone
+
     def from_event(self, event_id: str) -> list[dict]:
         return [p for p in self.all() if p["from_event"] == event_id]
 

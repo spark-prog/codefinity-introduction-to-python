@@ -53,7 +53,14 @@
   {% if target or pushed_out %}
   <h4 style="margin-top: 16px">Pushed to {{ target[1] if target else "another event" }}{% if pushed_out %} ({{ pushed_out|length }}){% endif %}</h4>
   {% for x in pushed_out %}
-  <p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · {{ x.at|day }} · by the {{ x.by }}{% if x.to_name and (not target or x.to_name != target[1]) %} · to {{ x.to_name }}{% endif %}</span></p>
+  <div class="pending-row"><p class="small-note">{{ x.name }} <span class="muted">· {{ x.member }} · {{ x.at|day }} · by the {{ x.by }}{% if x.to_name and (not target or x.to_name != target[1]) %} · to {{ x.to_name }}{% endif %}</span></p>
+    {% if not is_viewer and t.status != FINISHED %}
+    <form method="post" action="{{ url_for('admin_push_undo') }}" class="inline"
+          data-dialog-title="Undo {{ x.name }}'s push?"
+          data-dialog-text="{{ x.name }} can enter this event again and loses the one-time grace for {{ x.to_name or 'the next event' }}. They are not registered automatically."
+          data-dialog-ok="Undo push">
+      <input type="hidden" name="member" value="{{ x.member }}"><button class="button small secondary">Undo push</button></form>
+    {% endif %}</div>
   {% else %}<p class="muted small-note">Nobody yet.</p>{% endfor %}
   {% if pushed_out %}<p class="muted small-note">Mark them <b>Push</b> in the sheet's {{ elig_rules(s).list_column or "eligible list" }} column for that event (the app already treats them as Push there).</p>{% endif %}
   {% if target and not is_viewer and t.status == "setup" %}

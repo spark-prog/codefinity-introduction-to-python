@@ -838,6 +838,27 @@ def register_registration(app) -> None:
             flash(str(exc), "error")
         return redirect(url_for("admin_skill_check"))
 
+    @app.post("/t/<event>/admin/push-undo")
+    def admin_push_undo():
+        """The director takes back a push: the player is eligible for this event again (and loses the grace)."""
+        if (stop := admin_only()) is not None:
+            return stop
+        member = re.sub(r"\D", "", request.form.get("member", ""))
+        try:
+            if g.event.load().status == "finished":
+                raise TournamentError("This event is finished.")
+            if not any(p["member"] == member for p in pushes.from_event(g.event.id)):
+                raise TournamentError("That player hasn't pushed this event.")
+            rec = store.get(member)
+            name = full_name(rec) if rec else member
+            with g.event.store.change(f"Push undone: {name}") as t:
+                pushes.remove(g.event.id, member)
+                eligibility.audit(t, "push undone", member, name, "by the director")
+            flash(f"{name}'s push is undone. They can register for this event again; their grace for the next one is gone.", "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin") + "#eligibility")
+
     @app.post("/t/<event>/admin/overrides")
     def admin_overrides():
         if (stop := admin_only()) is not None:

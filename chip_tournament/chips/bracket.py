@@ -639,15 +639,16 @@ class BracketTournament:
             raise TournamentError("Enter a team name.")
         name = (name or "").strip() or " & ".join(p.name for p in players)
         self._unique_name(name)
+        full = self.field_full  # asked before the new entry is added, so it doesn't count itself
         entry = Entry(id=uuid.uuid4().hex[:8], name=name, players=players, pin=self._new_pin())
         entry.division = self.preview_division(entry)
         self.entries[entry.id] = entry
         self.order.append(entry.id)
-        if self.field_full and not by_director:
+        if full and not by_director:
             entry.status = WAITLISTED
             self.waitlist.append(entry.id)
             spot = f"You're #{len(self.waitlist)} on the waiting list; we'll text you if a spot opens."
-        elif self.field_full:
+        elif full:
             entry.status = WAITLISTED
             self.waitlist.append(entry.id)
             spot = f"The field is full, so you're #{len(self.waitlist)} on the waiting list."

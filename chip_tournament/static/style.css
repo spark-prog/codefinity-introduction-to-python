@@ -1254,3 +1254,14 @@ body.event-tabbed .topbar { position: relative; }
 .draft-player:hover { border-color: var(--accent); }
 .draft-player.picked { background: var(--accent-grad); color: var(--on-accent); border-color: var(--accent-2); }
 .group-card .draft-player { display: block; width: 100%; margin-top: 6px; }
+
+/* Add to calendar sits with the other header buttons; its choices drop down under it. */
+.event-head .cal-menu { position: relative; }
+.event-head .cal-menu summary { list-style: none; }
+.event-head .cal-menu summary::-webkit-details-marker { display: none; }
+.event-head .cal-options { position: absolute; top: 100%; left: 0; z-index: 12; flex-direction: column; width: max-content; margin-top: 6px; padding: 8px;
+  border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(var(--bg-rgb), .97); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.event-head details.inline-details.cal-menu, .event-head details.inline-details.cal-menu[open] { border: 0; padding: 0; background: none; box-shadow: none; }
+.event-head details.inline-details.cal-menu[open] { display: inline-block; margin-top: 0; }
+.event-head { position: relative; z-index: 9; }  /* so the calendar choices drop down over the tab bar */
+.event-head details.inline-details.cal-menu { overflow: visible; }

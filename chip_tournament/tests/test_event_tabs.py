@@ -113,7 +113,7 @@ def test_details_has_the_facts_but_not_the_fee_twice(app):
     ev = bracket(app, entry_fee_cents=2000, venue="Park Ave", checkin_by="10:15 AM", start_time="10:30 AM")
     page = get(app, f"/t/{ev.id}/details")
     panel = page.split('id="panel"', 1)[1]
-    assert "Check-in" in panel and "Format" in panel and "Add to calendar" in panel
+    assert "Check-in" in panel and "Format" in panel and "Add to calendar" not in panel and "Add to calendar" in page
     assert '<span class="k">Entry</span>' not in panel and '<span class="k">Field</span>' not in panel
     assert "<dt>Entry</dt><dd>$20.00" in page  # it's in the header
 

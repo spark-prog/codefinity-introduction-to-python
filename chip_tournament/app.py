@@ -233,7 +233,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
                                  event_can_register=event_info.can_register, event_register_label=event_info.register_label,
-                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_fill=event_info.fill, event_play=event_info.play_phrase,
+                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_filter_data=event_info.filter_data, event_fill=event_info.fill, event_play=event_info.play_phrase,
                                  event_access=event_info.access_phrase, event_skill=event_info.skill_phrase,
                                  event_wants_partner=event_info.partner_link_wanted, event_categories=event_info.categories, event_games=lambda: event_info.GAMES, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text

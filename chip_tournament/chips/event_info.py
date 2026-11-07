@@ -245,6 +245,14 @@ def partner_link_wanted(t) -> bool:
     return t.status == "setup" and not t.settings.registration_shut and entry_kind(t) == "Doubles"
 
 
+def filter_data(t, my: str = "") -> dict:
+    """What the Home filters need to know about an event: the tokens each filter group matches on."""
+    c = categories(t)
+    return {"entry": c["entry"].lower(), "game": {"8": "8ball", "9": "9ball"}.get(c["game_key"], "other"),
+            "types": " ".join("qualifier" if x == "Qualifier" else "bonus" for x in c["types"]),
+            "access": "rules" if access_phrase(t) == "Eligibility required" else "open", "me": my or ""}
+
+
 def partners_label(t) -> str:
     """The Partners & waitlist tab's name, or '' when it has nothing to say: only while people can still sign up,
     and only for team events (partner finding) or when somebody is on the waiting list."""

@@ -140,7 +140,7 @@ def test_the_home_page_has_a_search_box_and_a_count(app):
         make(app, f"Night {n}", date=f"2026-12-{n + 1:02d}")
     page = app.test_client().get("/").get_data(as_text=True)
     assert 'id="event-search"' in page and 'placeholder="Find a tournament"' in page
-    assert '<span id="home-count-n">3</span> tournaments shown' in page and "control-table-wordmark.png" in page
+    assert '<span id="home-count-n">3</span> <span id="home-count-word">tournaments</span> shown' in page and "control-table-wordmark.png" in page
 
 
 def test_what_each_event_means_for_the_logged_in_player(app):
@@ -246,3 +246,24 @@ def test_a_card_answers_the_players_questions(app):
                  "9 of 10 teams", 'class="hc-bar low"', "Bring a partner", "Eligibility required", "Combined SL 10 or less",
                  "Need a partner?", "View &amp; Register"):
         assert want in card, want
+
+
+def test_cards_carry_what_the_filters_need(app):
+    make(app, "Vegas Night", date="2026-11-14", team_size=2, game="9", is_qualifier=True, categories_set=True)
+    make(app, "Solo Bonus", date="2026-11-21", team_size=1, game="8", is_bonus=True, categories_set=True,
+         eligibility=rules(min_matches=6, list_label="Gated"))
+    make(app, "Team Fun", date="2026-11-28", team_size=4, game="other", categories_set=True)
+    page = app.test_client().get("/").get_data(as_text=True)
+    cards = {}
+    for chunk in page.split('<article class="card hc')[1:]:
+        head = chunk.split(">", 1)[0]
+        name = chunk.split('class="hc-link"', 1)[1].split(">", 1)[1].split("<", 1)[0]
+        cards[name] = head
+    assert 'data-entry="doubles" data-game="9ball" data-types="qualifier" data-access="open"' in cards["Vegas Night"]
+    assert 'data-entry="singles" data-game="8ball" data-types="bonus" data-access="rules"' in cards["Solo Bonus"]
+    assert 'data-entry="teams" data-game="other" data-types="" data-access="open"' in cards["Team Fun"]
+    for want in ('data-token="doubles"', 'data-token="9ball"', 'data-token="qualifier"', 'data-token="open"', 'id="filters-btn"'):
+        assert want in page, want
+    assert 'data-token="noteligible"' not in page and 'id="hide-no"' not in page  # logged-out: no personal filters
+    ann = Clients(app).logged_in("32200001").get("/").get_data(as_text=True)
+    assert 'data-token="noteligible"' in ann and 'id="hide-no"' in ann

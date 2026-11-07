@@ -1247,3 +1247,10 @@ body.event-tabbed .topbar { position: relative; }
 .event-find input::placeholder { color: var(--muted); }
 .event-find input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .3); }
 .event-tab.active { text-shadow: none; }
+
+.draft-pairs { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.draft-pairs li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.draft-player { font: inherit; font-size: .95rem; font-weight: 600; color: var(--ink); background: rgba(var(--bg-rgb), .6); border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 12px; cursor: pointer; text-align: left; }
+.draft-player:hover { border-color: var(--accent); }
+.draft-player.picked { background: var(--accent-grad); color: var(--on-accent); border-color: var(--accent-2); }
+.group-card .draft-player { display: block; width: 100%; margin-top: 6px; }

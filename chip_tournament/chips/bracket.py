@@ -298,6 +298,7 @@ class BracketSettings:
     no_rack_minutes: int = 15  # a called match with no rack scored this long after the call turns orange
     field_cap: int = 0
     seeding: str = "random"  # "random" draw at the start, or "manual" (the order on the Entries list)
+    review_draw: bool = False  # the director reviews (and can swap players in) a draft of the draw before starting
     final_cut: int = 8  # modified single elimination: single elimination from this many
     true_double: bool = True  # a reset grand final if the losers-side champion wins the first
     groups: int = 1  # round robin groups
@@ -338,6 +339,7 @@ class BracketTournament:
     division_formats: dict[str, str] = field(default_factory=dict)  # a skill group that plays another format than the event's
     matches: list[BMatch] = field(default_factory=list)
     status: str = SETUP
+    draft_ids: list[str] = field(default_factory=list)  # the draft draw (everyone in seed order) the director is reviewing
     site_url: str = ""
     pot_cents: int = 0
     started_at: str | None = None
@@ -850,16 +852,18 @@ class BracketTournament:
             if s.advance and s.groups * s.advance < 2:
                 raise TournamentError("A playoff needs at least 2 entries advancing.")
 
-    def start(self, rng: random.Random | None = None) -> None:
-        if self.status != SETUP:
-            raise TournamentError("The bracket is already drawn.")
+    def _draw_ids(self, rng: random.Random | None = None, use_draft: bool = True) -> list[str]:
+        """Check the field can be drawn, and give everyone in seed order: the reviewed draft if there is one, else
+        the manual order or a random shuffle."""
         field_entries = self.field_entries
         if self.settings.require_checkin and self.not_checked_in:
             names = ", ".join(e.name for e in self.not_checked_in[:5])
             raise TournamentError(f"Check in or mark as no-shows first: {names}.")
         self.check_format(len(field_entries))
         ids = [e.id for e in field_entries]
-        if self.settings.seeding == "random":
+        if use_draft and self.draft_valid():
+            ids = list(self.draft_ids)
+        elif self.settings.seeding == "random":
             (rng or random).shuffle(ids)
         needs_skill = self.settings.skill_groups or self.settings.race_method == RACK_CHART
         missing = [self.entries[i].name for i in ids if needs_skill and not self.entries[i].skill]
@@ -872,8 +876,72 @@ class BracketTournament:
             if missing:
                 raise TournamentError(f"The race chart needs a {game} skill level for: {', '.join(missing[:5])} "
                                       "(Edit under Entries).")
+        return ids
+
+    # --- the draft: draw first, look it over and swap players, then start
+
+    def draft_valid(self) -> bool:
+        """Is there a draft for exactly the people in the field now? (Any change to the field throws it out.)"""
+        return (self.status == SETUP and bool(self.draft_ids)
+                and sorted(self.draft_ids) == sorted(e.id for e in self.field_entries))
+
+    def make_draft(self, rng: random.Random | None = None) -> None:
+        """Draw the bracket on paper only: nothing is built or called until start()."""
+        if self.status != SETUP:
+            raise TournamentError("The bracket is already drawn.")
+        ids = self._draw_ids(rng, use_draft=False)
+        self._plan_divisions(ids)  # every group has to be able to make a bracket
+        self.draft_ids = ids
+        self._say(f"Drafted the draw for {len(ids)} entries (not started).")
+
+    def discard_draft(self) -> None:
+        if not self.draft_ids:
+            raise TournamentError("There's no draft to cancel.")
+        self.draft_ids = []
+        self._say("Cancelled the draft draw.")
+
+    def swap_in_draft(self, a: str, b: str) -> None:
+        """Two players trade places in the draft. They must be in the same skill group."""
+        if not self.draft_valid():
+            raise TournamentError("The draft is out of date: draw it again.")
+        if a == b or a not in self.draft_ids or b not in self.draft_ids:
+            raise TournamentError("Pick two different players from the draft.")
+        divisions, _, _ = self._plan_divisions(self.draft_ids)
+        if not any(a in members and b in members for _, members, _ in divisions):
+            raise TournamentError("They're in different groups, which are set by skill level. Swap within a group.")
+        i, j = self.draft_ids.index(a), self.draft_ids.index(b)
+        self.draft_ids[i], self.draft_ids[j] = self.draft_ids[j], self.draft_ids[i]
+        self._say(f"Swapped {self.entries[a].name} and {self.entries[b].name} in the draft.")
+
+    def draft_view(self) -> list[dict]:
+        """The draft for the director: per group, its first-round matchups (or round robin groups).
+        [{'label', 'format', 'pairs': [(id, id|None)], 'groups': {letter: [ids]}}]"""
+        if not self.draft_valid():
+            return []
+        divisions, _, _ = self._plan_divisions(self.draft_ids)
+        out = []
+        for label, members, fmt in divisions:
+            row = {"label": label, "format": fmt, "pairs": [], "groups": {}}
+            if fmt == ROUND_ROBIN:
+                count = max(1, min(self.settings.groups, len(members) // 2))
+                letters = [chr(ord("A") + i) for i in range(count)]
+                row["groups"] = {g: [] for g in letters}
+                for n, entry_id in enumerate(members):
+                    lap, pos = divmod(n, count)
+                    row["groups"][letters[pos if lap % 2 == 0 else count - 1 - pos]].append(entry_id)
+            else:
+                slots = self._seeded_slots(members)
+                row["pairs"] = [(slots[2 * i]["entry"], slots[2 * i + 1]["entry"]) for i in range(len(slots) // 2)]
+            out.append(row)
+        return out
+
+    def start(self, rng: random.Random | None = None) -> None:
+        if self.status != SETUP:
+            raise TournamentError("The bracket is already drawn.")
+        ids = self._draw_ids(rng)
         divisions, notes, small = self._plan_divisions(ids)  # checks every group can make a bracket before anything changes
         self.order = ids + [i for i in self.order if i not in ids]
+        self.draft_ids = []
         for n, entry_id in enumerate(ids, 1):
             entry = self.entries[entry_id]
             entry.seed, entry.status = n, ACTIVE

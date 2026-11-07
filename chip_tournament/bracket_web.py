@@ -228,6 +228,7 @@ def register(app, h) -> dict:
                     if e.status != NO_SHOW:
                         t.check_skill_limits(e.players, e.name)
                 s.seeding = "manual" if f.get("seeding") == "manual" else "random"
+                s.review_draw = f.get("review_draw") == "1"
                 cut = f.get("final_cut", str(s.final_cut))
                 s.final_cut = int(cut) if cut.isdigit() and int(cut) in FINAL_CUTS else s.final_cut
                 s.true_double = f.get("true_double") == "1"
@@ -266,6 +267,9 @@ def register(app, h) -> dict:
         return redirect(back("settings"))
 
     def admin_start():
+        if getattr(store.load().settings, "review_draw", False) and not store.load().draft_valid():
+            act("Draft the draw", lambda t: t.make_draft(), "The draw is drafted. Look it over, swap anyone, then start.")
+            return redirect(back("draft"))
         act("Draw the bracket", lambda t: t.start(), "The bracket is drawn and the first matches are called.")
         return redirect(back())
 
@@ -498,6 +502,28 @@ def register(app, h) -> dict:
     @admin_required
     def b_shuffle():
         act("Shuffle entries", lambda t: t.shuffle_order(), "Shuffled. With manual seeding, this is the draw.")
+        return redirect(back("entries"))
+
+    @app.post("/t/<event>/admin/draft/swap")
+    @admin_required
+    def b_draft_swap():
+        act("Swap in the draft", lambda t: t.swap_in_draft(request.form.get("a", ""), request.form.get("b", "")),
+            "Swapped.")
+        return redirect(back("draft"))
+
+    @app.post("/t/<event>/admin/draft/redraw")
+    @admin_required
+    def b_draft_redraw():
+        def redo(t):
+            t.draft_ids = []
+            t.make_draft()
+        act("Redraw the draft", redo, "Drafted again.")
+        return redirect(back("draft"))
+
+    @app.post("/t/<event>/admin/draft/cancel")
+    @admin_required
+    def b_draft_cancel():
+        act("Cancel the draft draw", lambda t: t.discard_draft(), "The draft is cancelled.")
         return redirect(back("entries"))
 
     # ------------------------------------------------------------- director: matches

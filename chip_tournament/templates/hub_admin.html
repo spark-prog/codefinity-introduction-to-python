@@ -23,6 +23,24 @@
 </section>
 {% endif %}
 
+{% set uncategorized = rows|rejectattr("t.settings.categories_set")|list %}
+{% if uncategorized and not is_viewer %}
+<section class="card" id="categorize">
+  <div class="section-head"><h2>Categorize your tournaments ({{ uncategorized|length }})</h2></div>
+  <p class="muted">Players see each tournament's game, whether it's singles, doubles or teams, and whether it's a qualifier or bonus tournament, and
+    can filter by them. These were guessed from the name; confirm each one. Singles, doubles and teams come from the tournament's settings.</p>
+  {% for r in uncategorized %}{% set c = event_categories(r.t) %}
+  <form method="post" action="{{ url_for('categorize_event', event_id=r.event.id) }}" class="cat-form">
+    <div class="cat-name"><b>{{ r.t.settings.name }}</b> <span class="muted">· {{ c.entry }} · {{ event_when(r.t.settings.date, "") or "no date" }}</span></div>
+    <select name="game" aria-label="Game for {{ r.t.settings.name }}">{% for key, label in event_games().items() %}<option value="{{ key }}" {% if c.game_key == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <label class="cat-check"><input type="checkbox" name="qualifier" value="1" {% if "Qualifier" in c.types %}checked{% endif %}> Qualifier</label>
+    <label class="cat-check"><input type="checkbox" name="bonus" value="1" {% if "Bonus Tournament" in c.types %}checked{% endif %}> Bonus</label>
+    <button class="button small">Confirm</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+
 <section class="card">
   <div class="section-head"><h2>Tournaments</h2></div>
   {% if rows %}
@@ -64,6 +82,22 @@
         </optgroup>
         <optgroup label="Chips"><option value="{{ CHIP }}">Chip tournament (teams, chips, cash-in)</option></optgroup>
       </select></label>
+    <label id="entry-field">Players per entry
+      <select name="entry" id="entry-select" required>
+        <option value="" selected disabled>Choose…</option>
+        <option value="1">Singles (play on your own)</option>
+        <option value="2">Doubles (bring a partner)</option>
+        <option value="teams">Teams (3 or more players)</option>
+      </select>
+      <input name="team_n" id="team-n" type="number" min="3" max="{{ max_team_size }}" value="4" hidden aria-label="Players per team" style="margin-top: 6px">
+      <span class="muted small-note" id="chip-note" hidden>Chip tournaments are always teams of two (doubles).</span></label>
+    <label>Game
+      <select name="game" required>
+        <option value="" selected disabled>Choose…</option>
+        {% for key, label in event_games().items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="checkbox"><input type="checkbox" name="qualifier" value="1"> Qualifier</label>
+    <label class="checkbox"><input type="checkbox" name="bonus" value="1"> Bonus Tournament</label>
     <label>Date <input name="date" type="date" value="{{ today }}"></label>
     <label>Start time <input name="start_time" placeholder="7:00 PM"></label>
     <label class="wide">Venue <input name="venue" placeholder="Corner Pocket Billiards"></label>
@@ -72,6 +106,18 @@
       Round robin can send the top entries of each group to a playoff. You'll set races, tables, payouts and the rest next.</p>
     <button class="button big">Create tournament</button>
   </form>
+  <script>
+  (function () {
+    var kind = document.querySelector('#new select[name="kind"]'), entry = document.getElementById("entry-select"),
+        n = document.getElementById("team-n"), note = document.getElementById("chip-note");
+    function sync() {
+      var chip = kind.value === "{{ CHIP }}";
+      entry.disabled = chip; entry.required = !chip; note.hidden = !chip;
+      n.hidden = chip || entry.value !== "teams";
+    }
+    kind.addEventListener("change", sync); entry.addEventListener("change", sync); sync();
+  })();
+  </script>
 </section>
 
 {% if not is_viewer %}

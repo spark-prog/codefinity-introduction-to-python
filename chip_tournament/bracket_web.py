@@ -19,7 +19,7 @@ from chips.bracket import (
     CALLED, FINAL_CUTS, FORMATS, MAX_TEAM_SIZE, MODIFIED, NO_SHOW, RACK_CHART, READY, ROUND_ROBIN, SETUP, STRAIGHT,
     asks_two_levels, entries_label, place_text,
 )
-from chips import race_charts, seeding
+from chips import event_info, race_charts, seeding
 from chips.race_charts import ADJUSTED, BALL_COUNT, RACK_RACE, STANDARD
 from chips.engine import (
     CONTINUOUS, DIRECTOR_CALLS, MAX_PLAYER_SKILL, Player, TournamentError, check_form_entry, money,
@@ -150,6 +150,9 @@ def register(app, h) -> dict:
             s.venue, s.address, s.details = f.get("venue", ""), f.get("address", ""), f.get("details", "")
             s.checkin_by = f.get("checkin_by", "").strip()
             s.sms_name = f.get("sms_name", "").strip()
+            if f.get("categories_shown") and f.get("game"):  # blank = not chosen yet: leave it unconfirmed
+                for key, value in event_info.parse_categories(f).items():
+                    setattr(s, key, value)
             if f.get("reminders_shown"):
                 s.reminders, s.reminder_texts = f.get("reminders") == "1", f.get("reminder_texts") == "1"
             s.contact_phone = f.get("contact_phone", "").strip()

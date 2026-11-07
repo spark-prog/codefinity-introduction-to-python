@@ -17,6 +17,7 @@
     <span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
     {% if my == "registered" or (my in ("eligible", "check", "no") and es.key == "open") %}<span class="mine-chip mine-{{ my }}">{{ mine_labels[my] }}</span>{% endif %}
   </div>
+  <p class="tag-line">{{ event_tag_line(r.t) }}</p>
   <h2>{{ s.name }}</h2>
   <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
   {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}

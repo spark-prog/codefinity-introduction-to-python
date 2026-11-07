@@ -305,6 +305,12 @@ class Settings:
     reminder_texts: bool = False  # and text them (players who agreed to texts)
     reminders_sent: dict = field(default_factory=dict)  # {"day" / "2h": when it went out}: bookkeeping
     open_alerts: dict = field(default_factory=dict)  # 'Alert me' before registration opens: {member: {at, texts, phone, sent}}
+    # What kind of event this is, for the tag line and the Home filters (chips/event_info.py). game is "8", "9" or
+    # "other"; categories_set says the director has chosen these (older events are guessed until they do).
+    game: str = ""
+    is_qualifier: bool = False
+    is_bonus: bool = False
+    categories_set: bool = False
     skill_game: str = "8"  # whose skill levels fill registrations from the player list: "8"-Ball or "9"-Ball
     # Director's exceptions to one player, one spot: [{"member", "note", "at"}]. They may be on more than one team.
     member_exceptions: list[dict] = field(default_factory=list)

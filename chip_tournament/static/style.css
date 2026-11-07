@@ -1270,3 +1270,12 @@ body.event-tabbed .topbar { position: relative; }
 .event-head .actions-row form.inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
 .event-head .actions-row .status-chip { white-space: normal; max-width: 100%; }
 .key-facts .status-chip { white-space: normal; max-width: 100%; }
+
+.tag-line { margin: 8px 0 0; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--accent-2); }
+.event-card .tag-line { margin: 10px 0 0; }
+
+.cat-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.cat-form .cat-name { flex: 1 1 100%; }
+.cat-form select { width: auto; min-width: 110px; }
+.cat-form .cat-check { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.cat-form .cat-check input { width: 20px; height: 20px; margin: 0; }

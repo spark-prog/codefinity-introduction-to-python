@@ -233,7 +233,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
                                  event_can_register=event_info.can_register, event_register_label=event_info.register_label,
-                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, short_when=lambda t: event_info.short_when(t.settings))
+                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_categories=event_info.categories, event_games=lambda: event_info.GAMES, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
@@ -993,6 +993,9 @@ def create_app(data_dir: str | None = None) -> Flask:
                 s.waitlist_offer_hours = int(hours)
             if f.get("skill_game") in ("8", "9", "high", "high7"):
                 s.skill_game = f["skill_game"]
+            if f.get("categories_shown") and f.get("game"):  # blank = not chosen yet: leave it unconfirmed
+                for key, value in event_info.parse_categories(f).items():
+                    setattr(s, key, value)
             if "registration_opens" in f:
                 s.registration_opens, s.registration_closes = schedule.check_times(
                     f.get("registration_opens", ""), f.get("registration_closes", ""))
@@ -1843,12 +1846,32 @@ def create_app(data_dir: str | None = None) -> Flask:
             flash("Pick a tournament type.", "error")
             return redirect(url_for("director"))
         try:
+            settings.update(event_info.parse_categories(f, need_entry=kind == BRACKET))  # chips are always teams of two
             ev = hub.create(f.get("name", ""), kind, **settings)
         except TournamentError as exc:
             flash(str(exc), "error")
             return redirect(url_for("director"))
         flash(f"Created {f.get('name', '').strip()}. Finish its settings below, then share the link.", "ok")
         return redirect(url_for("admin", event=ev.id) + "#settings")
+
+    @app.post("/admin/categorize/<event_id>")
+    @admin_required
+    def categorize_event(event_id):
+        """The director chooses an older event's game and type (Qualifier / Bonus) so cards and filters are right."""
+        ev = hub.get(event_id)
+        if ev is None:
+            abort(404)
+        try:
+            chosen = event_info.parse_categories(request.form)
+            with ev.store.lock:  # bookkeeping about the event, not a tournament action: no undo step
+                t = ev.load()
+                for key, value in chosen.items():
+                    setattr(t.settings, key, value)
+                ev.store.save(t)
+            flash(f"Saved the categories for {t.settings.name}.", "ok")
+        except TournamentError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("director") + "#categorize")
 
     # ------------------------------------------------- an event from the Bonus Event form
 

@@ -122,6 +122,75 @@ def register_label(t) -> str:
     return "Register" if is_bracket(t) else "Register a team"
 
 
+GAMES = {"8": "8-Ball", "9": "9-Ball", "other": "Other"}
+
+
+def entry_kind(t) -> str:
+    """'Singles', 'Doubles' or 'Teams'. Chip tournaments are teams of two, so Doubles."""
+    if not is_bracket(t):
+        return "Doubles"
+    size = t.settings.team_size
+    return "Singles" if size == 1 else "Doubles" if size == 2 else "Teams"
+
+
+def game_key(t) -> str:
+    """'8', '9' or 'other'. The director's choice; an older event without one is guessed from its name and race."""
+    s = t.settings
+    if s.game in GAMES:
+        return s.game
+    from . import seeding
+    return seeding.game_for(s)
+
+
+def event_types(t) -> list[str]:
+    """['Qualifier', 'Bonus Tournament'] as chosen (either, both or neither). Older events: from the name and the
+    Bonus Event form they came from, until the director chooses."""
+    s = t.settings
+    if s.categories_set:
+        qualifier, bonus = s.is_qualifier, s.is_bonus
+    else:
+        qualifier, bonus = "qualifier" in (s.name or "").lower(), bool(s.bonus_event_id)
+    return (["Qualifier"] if qualifier else []) + (["Bonus Tournament"] if bonus else [])
+
+
+def categories(t) -> dict:
+    """What kind of event this is: {'entry', 'game', 'game_key', 'types', 'confirmed'}."""
+    key = game_key(t)
+    return {"entry": entry_kind(t), "game": GAMES[key], "game_key": key, "types": event_types(t),
+            "confirmed": bool(t.settings.categories_set)}
+
+
+def tag_line(t) -> str:
+    """'9-Ball · Doubles · Qualifier' (the small line on cards and event pages)."""
+    c = categories(t)
+    return " · ".join([c["game"], c["entry"], *c["types"]])
+
+
+def parse_categories(form, need_entry: bool = False) -> dict:
+    """The game and event-type boxes from a form, as settings. Raises if the game wasn't chosen.
+    With need_entry, also the players-per-entry choice: adds team_size ('1', '2' or 'teams' with team_n)."""
+    from .engine import TournamentError
+    game = (form.get("game") or "").strip()
+    if game not in GAMES:
+        raise TournamentError("Choose the game: 8-Ball, 9-Ball or Other.")
+    out = {"game": game, "is_qualifier": form.get("qualifier") == "1", "is_bonus": form.get("bonus") == "1",
+           "categories_set": True}
+    if need_entry:
+        entry = (form.get("entry") or "").strip()
+        if entry == "1":
+            out["team_size"] = 1
+        elif entry == "2":
+            out["team_size"] = 2
+        elif entry == "teams":
+            n = (form.get("team_n") or "").strip()
+            if not n.isdigit() or not 3 <= int(n) <= 10:
+                raise TournamentError("Teams need 3 or more players: enter how many.")
+            out["team_size"] = int(n)
+        else:
+            raise TournamentError("Choose singles, doubles or teams.")
+    return out
+
+
 def partners_label(t) -> str:
     """The Partners & waitlist tab's name, or '' when it has nothing to say: only while people can still sign up,
     and only for team events (partner finding) or when somebody is on the waiting list."""

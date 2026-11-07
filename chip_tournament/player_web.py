@@ -364,15 +364,17 @@ def register_registration(app) -> None:
                     raise TournamentError(f"Enter {p.name or 'each player'}'s APA member number (8 digits starting "
                                           "with 322). It's on their APA card and in the APA app.")
         if t is not None and not session.get("admin"):
-            check_eligibility(t, plist, existing)
+            check_eligibility(t, plist, existing, hold=form.get("hold_review") == "1")
             already = {o.member for o in existing if o.member}
             pool_mod.check_times(app.config["hub"], app.config["pools"], g.event.id, t,
                                  [p for p in plist if p.member not in already])
         return plist
 
-    def check_eligibility(t, plist: list[Player], existing=()) -> None:
+    def check_eligibility(t, plist: list[Player], existing=(), hold: bool = False) -> None:
         """Refuse a player who doesn't qualify (saying why and how to fix it); send what the list
-        can't answer to Pending verification. Players already on the roster aren't re-checked here."""
+        can't answer to Pending verification. Players already on the roster aren't re-checked here.
+        With `hold` (the box on the form), a player who doesn't qualify yet keeps the team's spot while the league
+        office reviews: a review request is filed for them and the director sees it in Pending verification."""
         rules = eligibility.rules_of(t.settings)
         if not eligibility.any_rules(rules):
             return
@@ -395,6 +397,14 @@ def register_registration(app) -> None:
                                       + pushed_out(g.event.id, t, p.member, said_to_them=False))
             no, review = eligibility.check_player(rec, rules, start, game,
                                                   bool(p.member and pushed_in(g.event.id, t, p.member)))
+            if no and hold and p.member:
+                p.pending = "Not eligible, review requested: " + " ".join(no)
+                try:
+                    eligibility.request_review(t, p.member, p.name, no, "Held a spot when the team registered.")
+                except TournamentError:
+                    pass  # they already have a request open with the league office
+                recs.append(rec)
+                continue
             if no:
                 raise TournamentError(f"{p.name} can't register for {t.settings.name}: " + " ".join(no))
             if review:

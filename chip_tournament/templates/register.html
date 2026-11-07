@@ -45,6 +45,9 @@
     {% include "_login_nudge.html" %}
     {% include "_roster_fields.html" %}
     {% if autofill %}{% include "_member_lookup.html" %}{% endif %}
+
+    {% if elig_describe(elig_rules(t.settings)) %}<label class="checkbox"><input type="checkbox" name="hold_review" value="1" checked>
+      If a player on this team isn't eligible yet, hold our spot while the league office reviews it (we'll email you their answer)</label>{% endif %}
     <button class="button big block">Register</button>
   </form>
   {% endif %}

@@ -118,6 +118,8 @@ def register(app, h) -> dict:
                 session[f"entry_{entry.id}"] = True
                 group = f" You're in the {entry.division} group." if entry.division else ""
                 flash(f"{entry.name} is registered!{group} Your PIN is {entry.pin}. Keep it to enter scores.", "ok")
+                if any(p.pending.startswith("Not eligible") for p in entry.players):
+                    flash("Your spot is held while the league office reviews your eligibility. You'll get an email when they decide.", "ok")
                 return redirect(url_for("b_entry", entry_id=entry.id))
         form = request.form
         if request.method == "GET" and g.get("player"):  # logged in: the first player is them

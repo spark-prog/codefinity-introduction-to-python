@@ -49,6 +49,9 @@
     {% include "_save_contact.html" %}
     <label class="checkbox"><input type="checkbox" name="agree_terms" value="1" required>
       I agree to the <a href="{{ url_for('terms') }}" target="_blank">Terms &amp; Conditions</a> and <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>.</label>
+
+    {% if elig_describe(elig_rules(t.settings)) %}<label class="checkbox"><input type="checkbox" name="hold_review" value="1" checked>
+      If a player on this team isn't eligible yet, hold our spot while the league office reviews it (we'll email you their answer)</label>{% endif %}
     <button class="button big block">Register</button>
     {% if player %}{% include "_member_lookup.html" %}{% endif %}
   </form>

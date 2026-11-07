@@ -4,7 +4,7 @@
 {% if not player %}
   <a class="button big" href="{{ url_for('player_login', next=request.path) }}">Log in to get an alert</a>
 {% elif mine %}
-  <form method="post" action="{{ url_for('open_alert') }}" class="inline">
+  <form method="post" action="{{ url_for('open_alert') }}" class="inline alert-me">
     <input type="hidden" name="cancel" value="1">
     <span class="status-chip status-open">✓ We'll alert you 5 min before{% if mine.texts %} (email &amp; text){% endif %}</span>
     <button class="button small secondary">Cancel alert</button></form>

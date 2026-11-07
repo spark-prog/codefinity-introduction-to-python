@@ -659,6 +659,8 @@ def create_app(data_dir: str | None = None) -> Flask:
                 app.config["ask_partners"](g.event, team.id)
                 session[f"team_{team.id}"] = True
                 flash(f"{team.name} is registered! Your team PIN is {team.pin} — keep it to edit your roster.", "ok")
+                if any(p.pending.startswith("Not eligible") for p in team.players):
+                    flash("Your spot is held while the league office reviews your eligibility. You'll get an email when they decide.", "ok")
                 return redirect(url_for("team_page", team_id=team.id))
         players = [
             Player(name=request.form.get(f"player_name_{i}", ""), phone=request.form.get(f"player_phone_{i}", ""),

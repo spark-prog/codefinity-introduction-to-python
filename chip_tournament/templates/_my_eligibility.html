@@ -14,7 +14,7 @@
     <p class="muted small-note">You asked the league office to review this on {{ asked.at|day }}. You'll get an email when they decide.</p>
   {% else %}
     {% if asked and asked.status == "declined" %}<p class="muted small-note">The league office reviewed this on {{ asked.decided_at|day }}: {{ asked.note }}</p>{% endif %}
-    <p class="small-note" style="margin: 8px 0 6px">Think this is wrong?</p>
+    <p class="small-note" style="margin: 8px 0 6px">Think this is wrong? You can still register below: your team's spot is held while the league office reviews. Or ask them first:</p>
     <details class="inline-details review-ask">
       <summary class="button secondary small">Ask for a review</summary>
       <form method="post" action="{{ url_for('review_request') }}" class="form" data-once>

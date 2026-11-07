@@ -56,7 +56,10 @@ def remove(t, gid: str) -> str:
     g = groups(t).get(gid)
     if g is None:
         raise TournamentError("That registration isn't there any more.")
-    body = (f"{g.name}: the league office couldn't verify a member number on your registration for "
+    held = any(p.pending.startswith(("Not eligible", "Eligibility")) for p in g.players)
+    body = (f"{g.name}: the league office reviewed your eligibility for {t.settings.name} and couldn't approve it, so "
+            "the spot we were holding was released. Questions? Contact the league office." if held else
+            f"{g.name}: the league office couldn't verify a member number on your registration for "
             f"{t.settings.name}, so it was removed. Questions? Contact the league office.")
     if hasattr(t, "teams"):
         t.remove_team(gid)
@@ -64,7 +67,7 @@ def remove(t, gid: str) -> str:
     else:
         t.remove_entry(gid)
         t._text(g, body)
-    t._say(f"Removed {g.name}: member number not verified.")
+    t._say(f"Removed {g.name}: " + ("eligibility not approved." if held else "member number not verified."))
     return g.name
 
 

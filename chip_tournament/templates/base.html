@@ -46,8 +46,8 @@
            title="APA Pool Leagues – First Coast (opens in a new tab)">
           <img src="{{ url_for('static', filename='img/apa-first-coast-logo.png') }}" alt="APA Pool Leagues – First Coast" width="83" height="50"></a>
         {% set director_mode = is_admin or is_viewer %}
-        {% if not event %}<div class="brand"><a class="brand-name" href="{{ url_for('director') if director_mode else url_for('index') }}">Control Table</a></div>
-        {% elif t %}<div class="brand show-sm"><a class="brand-name" href="{{ url_for('admin') if director_mode else url_for('home') }}">{{ t.settings.name }}</a></div>{% endif %}
+        <div class="brand"><a class="ct-wordmark" href="{{ url_for('director') if director_mode else url_for('index') }}" title="Control Table: all tournaments">
+          <img src="{{ url_for('static', filename='img/control-table-wordmark.png') }}" alt="Control Table" width="1100" height="148"></a></div>
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline show-sm logout-icon">
           <button class="link" title="Log out" aria-label="Log out">

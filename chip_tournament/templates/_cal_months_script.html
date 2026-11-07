@@ -1,0 +1,38 @@
+{# Draws the month cards from the tournaments on the page (set date_sel before including) and follows the filters. #}
+<script>
+(function () {
+  var box = document.getElementById("cal-months"); if (!box) return;
+  var today = box.dataset.today, count = +box.dataset.count || 3;
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function render() {
+    var byDate = {};
+    document.querySelectorAll({{ date_sel|tojson }}).forEach(function (r) {
+      if (!r.hidden && r.dataset.date) (byDate[r.dataset.date] = byDate[r.dataset.date] || []).push(r);
+    });
+    var y0 = +today.slice(0, 4), m0 = +today.slice(5, 7) - 1, html = "";
+    for (var k = 0; k < count; k++) {
+      var d0 = new Date(y0, m0 + k, 1), y = d0.getFullYear(), m = d0.getMonth(), first = d0.getDay(), days = new Date(y, m + 1, 0).getDate();
+      var cells = ["SUN","MON","TUE","WED","THU","FRI","SAT"].map(function (d) { return '<div class="cal-dow">' + d + "</div>"; }).join("");
+      for (var i = 0; i < first; i++) cells += '<div class="cal-day out"></div>';
+      for (var d = 1; d <= days; d++) {
+        var key = y + "-" + pad(m + 1) + "-" + pad(d), ev = byDate[key] || [], cls = "cal-day" + (key === today ? " today" : "") + (ev.length ? " has" : "");
+        var dots = ev.slice(0, 3).map(function (r) { return '<i class="t-' + (r.dataset.tone || "open") + '"></i>'; }).join("");
+        cells += ev.length ? '<button type="button" class="' + cls + '" data-date="' + key + '" aria-label="' + ev.length + " tournament" + (ev.length > 1 ? "s" : "") + " on " + MONTHS[m] + " " + d + '">' + d + "<span>" + dots + "</span></button>"
+                           : '<div class="' + cls + '">' + d + "</div>";
+      }
+      html += '<div class="card cal-month-card"><h3>' + MONTHS[m] + " " + y + '</h3><div class="cal-grid">' + cells + "</div></div>";
+    }
+    box.innerHTML = html + '<p class="cal-key"><span>Open</span><span class="k-low">Filling fast</span><span class="k-before">Opens soon</span><span class="k-live">Live now</span><span class="k-closed">Closed or full</span></p>';
+  }
+  box.addEventListener("click", function (e) {
+    var b = e.target.closest(".cal-day.has"); if (!b) return;
+    var row = document.querySelector({{ date_sel|tojson }}.split(",").map(function (s) { return s.trim() + '[data-date="' + b.dataset.date + '"]:not([hidden])'; }).join(","));
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("flash-row"); setTimeout(function () { row.classList.remove("flash-row"); }, 1600);
+  });
+  window.ctFilterAfter = render;
+  render();
+})();
+</script>

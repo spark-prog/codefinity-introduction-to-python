@@ -1578,7 +1578,7 @@ def create_app(data_dir: str | None = None) -> Flask:
             results = app.config["public_results"](g.player["member"])
             mine = {r["id"]: r["status"] for r in results}
             reasons = {r["id"]: r["reasons"][0] for r in results if r["reasons"]}
-        return render_template("hub.html", t=None, rows=rows, mine=mine, reasons=reasons)
+        return render_template("hub.html", t=None, rows=rows, mine=mine, reasons=reasons, today=datetime.now().strftime("%Y-%m-%d"))
 
     @app.get("/calendar")
     def calendar_page():

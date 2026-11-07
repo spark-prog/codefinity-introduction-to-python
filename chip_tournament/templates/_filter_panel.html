@@ -1,5 +1,7 @@
 {# The search box, Filters button, hide switch and the filter panel (sidebar on desktop, sheet on phones). Used by Home and Calendar. #}
     <div class="home-tools">
+      {% if player %}<button type="button" class="button secondary mine-btn" data-token="registered" aria-pressed="false">My Tournaments</button>
+      {% else %}<a class="button secondary mine-btn" href="{{ url_for('player_login', next=request.path) }}">My Tournaments</a>{% endif %}
       <div class="event-search">
         <label for="event-search" class="sr-only">Find a tournament</label>
         <input id="event-search" type="search" placeholder="Find a tournament" autocomplete="off" data-no-dirty>

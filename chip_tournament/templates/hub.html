@@ -12,7 +12,7 @@
 {% macro event_card(r, my) %}
 {% set s = r.t.settings %}{% set es = event_status(r.t) %}{% set photo = event_photo(r.event.id) %}{% set f = event_fill(r.t) %}
 {% set wants = event_can_register(r.t) %}{% set fd = event_filter_data(r.t, my) %}
-<article class="card hc{% if my == 'no' %} hc-dim{% endif %}" data-entry="{{ fd.entry }}" data-game="{{ fd.game }}" data-types="{{ fd.types }}" data-access="{{ fd.access }}" data-me="{{ fd.me }}">
+<article class="card hc{% if my == 'no' %} hc-dim{% endif %}" data-date="{{ s.date }}" data-tone="{{ event_tone(r.t) }}" data-entry="{{ fd.entry }}" data-game="{{ fd.game }}" data-types="{{ fd.types }}" data-access="{{ fd.access }}" data-me="{{ fd.me }}">
   {% if photo %}<img class="hc-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
   <div class="hc-head"><b>{{ short_when(r.t) or "Date to be announced" }}</b><span class="status-chip status-{{ es.key }}">{{ f.note if es.key == "before" and f.note else es.label }}</span></div>
   <div class="hc-body">
@@ -40,12 +40,13 @@
 </article>
 {% endmacro %}
 
-<div class="home-hero"><img src="{{ url_for('static', filename='img/control-table-wordmark.png') }}" alt="Control Table" width="1100" height="148"></div>
-
 <div class="home-layout">
-  <aside class="home-side">
-    <h1>Tournaments</h1>
+  <div class="home-head">
+    <h1 class="col-h">Tournaments</h1><div class="col-bar"></div>
     <p class="lede">Find an event, check what's open, and register.</p>
+  </div>
+  <aside class="home-side">
+    <h2 class="col-h side-h">Filters</h2><div class="col-bar side-h"></div>
     {% include "_filter_panel.html" %}
     <p><a class="button secondary" href="{{ url_for('eligibility_check') }}">Am I eligible?</a></p>
   </aside>
@@ -78,8 +79,16 @@
 </section>
 {% endif %}
 
+    <a class="button secondary cal-link" href="{{ url_for('calendar_page') }}">📅 Open the calendar</a>
   </div>
+  <aside class="home-cal">
+    <h2 class="col-h">Calendar</h2><div class="col-bar"></div>
+    {% include "_cal_months.html" %}
+    <a class="button secondary" href="{{ url_for('calendar_page') }}">Open full calendar</a>
+  </aside>
 </div>
 {% set item_sel = ".hc, .results-row" %}{% set count_sel = ".hc" %}{% set group_sel = ".event-group" %}
 {% include "_filter_script.html" %}
+{% set date_sel = ".hc" %}
+{% include "_cal_months_script.html" %}
 {% endblock %}

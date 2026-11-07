@@ -29,7 +29,7 @@ def admin(app):
 
 
 def create(admin, name, kind, **extra):
-    page = admin.post("/admin/new", data={"name": name, "kind": kind, **extra})
+    page = admin.post("/admin/new", data={"game": "8", "entry": "1", "name": name, "kind": kind, **extra})
     assert page.status_code == 302
     hub = admin.application.config["hub"]
     ev = [ev for ev in hub.events() if ev.load().settings.name == name][-1]  # the newest with that name
@@ -244,7 +244,7 @@ def test_viewer_cannot_change_a_bracket(app, admin):
     assert viewer.get(f"/t/{ev.id}/admin").status_code == 200
     page = viewer.post(f"/t/{ev.id}/admin/entries/add", data={"bulk": "Ann"}, follow_redirects=True)
     assert b"view-only" in page.data and not ev.load().entries
-    assert viewer.post("/admin/new", data={"name": "Nope", "kind": "chip"}).status_code == 302
+    assert viewer.post("/admin/new", data={"game": "8", "entry": "1", "name": "Nope", "kind": "chip"}).status_code == 302
     assert len(app.config["hub"].events()) == 1
 
 

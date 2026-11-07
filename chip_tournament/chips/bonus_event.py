@@ -287,3 +287,11 @@ def apply(t, p: Plan) -> None:
         if hasattr(t.settings, key):
             setattr(t.settings, key, value)
     t.settings.bonus_event_id = p.external_id
+    t.settings.is_bonus = True
+    name = (t.settings.name or "").lower()
+    t.settings.is_qualifier = "qualifier" in name
+    text = f"{name} {p.settings.get('rule_set', '')} {t.settings.skill_game}".lower()
+    guess = "9" if ("9-ball" in text or "9 ball" in text or "9ball" in text or t.settings.skill_game == "9") else \
+            "8" if ("8-ball" in text or "8 ball" in text or "8ball" in text or "straight" in text) else ""
+    if guess:  # sure about the game: done. Otherwise the director picks it (Categorize on the director page).
+        t.settings.game, t.settings.categories_set = guess, True

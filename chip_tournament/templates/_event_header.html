@@ -1,6 +1,7 @@
 {# The top of an event page, chip or bracket: when, name, where, the facts a player needs, and the buttons.
    Needs t and s. #}
 {% set es = event_status(t) %}{% set can_register = event_can_register(t) %}{% set register_label = event_register_label(t) %}
+<p class="tag-line">{{ event_tag_line(t) }}</p>
 <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
 <h1>{{ s.name }}</h1>
 {% if s.venue or s.address %}<p class="lede"><b>{{ s.venue }}</b>{% if s.address %}<br>{{ s.address }}{% endif %}</p>{% endif %}

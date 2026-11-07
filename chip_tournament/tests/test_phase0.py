@@ -36,8 +36,8 @@ def login(app, password="secretpw1"):
 
 def test_a_test_event_never_texts_and_is_hidden_from_the_public(app, monkeypatch):
     admin = login(app)
-    admin.post("/admin/new", data={"name": "Practice Night", "kind": "chip", "test_event": "1"})
-    admin.post("/admin/new", data={"name": "Real Night", "kind": "chip"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Practice Night", "kind": "chip", "test_event": "1"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Real Night", "kind": "chip"})
     hub = app.config["hub"]
     practice, real = hub.get("practice-night"), hub.get("real-night")
     assert practice.load().settings.test_event and not real.load().settings.test_event
@@ -67,8 +67,8 @@ def test_a_test_event_never_texts_and_is_hidden_from_the_public(app, monkeypatch
 
 def test_settings_turn_test_mode_on_and_off(app):
     admin = login(app)
-    admin.post("/admin/new", data={"name": "Chips", "kind": "chip"})
-    admin.post("/admin/new", data={"name": "Bracket", "kind": "single"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Chips", "kind": "chip"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Bracket", "kind": "single"})
     hub = app.config["hub"]
     for ev_id in ("chips", "bracket"):
         page = admin.get(f"/t/{ev_id}/admin").get_data(as_text=True)
@@ -311,9 +311,9 @@ def test_backup_pages_are_for_the_director_only(app):
 
 def test_restore_from_an_uploaded_file(app):
     admin = login(app)
-    admin.post("/admin/new", data={"name": "Keep Me", "kind": "chip"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Keep Me", "kind": "chip"})
     saved = admin.get("/admin/backup.zip").data
-    admin.post("/admin/new", data={"name": "Made Later", "kind": "chip"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Made Later", "kind": "chip"})
     r = admin.post("/admin/backups/restore", data={"confirm": "nope", "file": (io.BytesIO(saved), "b.zip")},
                    content_type="multipart/form-data")
     assert app.config["hub"].get("made-later") is not None  # not confirmed: nothing changed

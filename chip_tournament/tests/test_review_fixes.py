@@ -80,7 +80,7 @@ def test_old_links_find_the_running_or_original_tournament(tmp_path, monkeypatch
     (tmp_path / "tournament.json").write_text('{"settings": {"name": "Halloween Chips"}}')
     app, admin = admin_app(tmp_path, monkeypatch)
     assert app.test_client().get("/board").headers["Location"] == "/t/halloween-chips/board"
-    admin.post("/admin/new", data={"name": "November Bracket", "kind": "single"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "November Bracket", "kind": "single"})
     assert len(app.config["hub"].events()) == 2
     assert app.test_client().get("/board").headers["Location"] == "/t/halloween-chips/board"
     assert app.test_client().get("/register").headers["Location"] == "/t/halloween-chips/register"
@@ -88,7 +88,7 @@ def test_old_links_find_the_running_or_original_tournament(tmp_path, monkeypatch
 
 def test_old_team_link_for_a_bracket_entry_goes_to_its_page(tmp_path, monkeypatch):
     app, admin = admin_app(tmp_path, monkeypatch)
-    admin.post("/admin/new", data={"name": "Bracket", "kind": "single"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Bracket", "kind": "single"})
     ev = app.config["hub"].events()[0]
     admin.post(f"/t/{ev.id}/admin/entries/add", data={"bulk": "Ann\nBob"})
     entry = next(iter(ev.load().entries.values()))
@@ -99,7 +99,7 @@ def test_old_team_link_for_a_bracket_entry_goes_to_its_page(tmp_path, monkeypatc
 
 def test_bracket_table_with_a_slash_can_go_out_of_service(tmp_path, monkeypatch):
     app, admin = admin_app(tmp_path, monkeypatch)
-    admin.post("/admin/new", data={"name": "Bracket", "kind": "single"})
+    admin.post("/admin/new", data={"game": "8", "entry": "1", "name": "Bracket", "kind": "single"})
     ev = app.config["hub"].events()[0]
     with ev.store.change("tables") as t:
         t.settings.tables = ["Bar 1/2", "7"]

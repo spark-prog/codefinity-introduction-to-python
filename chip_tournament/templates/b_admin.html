@@ -457,6 +457,15 @@
       <summary><span class="settings-title">Event details</span><span class="settings-sum">{{ s.date|day if s.date else "No date yet" }}{% if s.start_time %} · {{ s.start_time }}{% endif %}{% if s.venue %} · {{ s.venue }}{% endif %}</span></summary>
       <div class="settings section-fields">
     <label>Tournament name <input name="name" value="{{ s.name }}"></label>
+    <input type="hidden" name="categories_shown" value="1">
+    <label>Game
+      <select name="game">
+        <option value="" {% if not s.game %}selected{% endif %}>Choose…</option>
+        {% for key, label in event_games().items() %}<option value="{{ key }}" {% if s.game == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="checkbox"><input type="checkbox" name="qualifier" value="1" {% if s.is_qualifier %}checked{% endif %}> Qualifier</label>
+    <label class="checkbox"><input type="checkbox" name="bonus" value="1" {% if s.is_bonus %}checked{% endif %}> Bonus Tournament</label>
+    <p class="muted small-note wide">Players see this on the tournament list and can filter by it.{% if not s.categories_set %} <b>Not confirmed yet</b> (shown as {{ event_tag_line(t) }}): choose the game and save to confirm it.{% endif %}</p>
     <label>Date <input name="date" type="date" value="{{ s.date }}"></label>
     <label>Start time <input name="start_time" value="{{ s.start_time }}" placeholder="7:00 PM"></label>
     <label>Check in at the desk by <input name="checkin_by" value="{{ s.checkin_by }}" placeholder="6:30 PM"></label>

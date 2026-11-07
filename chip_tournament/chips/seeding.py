@@ -30,7 +30,7 @@ def game_for(settings) -> str:
     """The game an event is played in ("8" or "9"): a ball count is 9-Ball; else the name, else the skill-level
     setting. The director can change it on the Seed by skill button."""
     name = (settings.name or "").lower().replace("-", " ")
-    if settings.race_method == "ball_count":
+    if getattr(settings, "race_method", "") == "ball_count":
         return "9"
     if "9 ball" in name or "9ball" in name:
         return "9"

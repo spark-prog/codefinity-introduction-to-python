@@ -105,3 +105,23 @@ def test_the_home_page_button_asks_visitors_to_log_in_and_players_dont_see_it(ap
     app.config["players"].apply(*players.parse_rows([COLS, person("32200001", first="Ann", last="Lee")]), "t", "t")
     assert "Log in to see eligibility" in app.test_client().get("/").get_data(as_text=True)
     assert "Log in to see eligibility" not in Clients(app).logged_in("32200001").get("/").get_data(as_text=True)
+
+
+def test_the_phone_bottom_bar_only_on_player_pages_outside_events(app):
+    ev = make(app, "Nov Night", "2026-11-14")
+    c = app.test_client()
+    bar = lambda p: 'class="bottom-bar"' in p
+    home = c.get("/").get_data(as_text=True)
+    assert bar(home) and 'has-bottom-bar' in home
+    assert 'aria-current="page"' in home.split('class="bottom-bar"', 1)[1].split("</nav>", 1)[0]
+    labels = [a.split(">")[-1].strip() for a in home.split('class="bottom-bar"', 1)[1].split("</nav>", 1)[0].split("</a>")[:3]]
+    assert labels == ["Tournaments", "Calendar", "My Entry"]
+    assert bar(c.get("/calendar").get_data(as_text=True)) and bar(c.get("/rules").get_data(as_text=True))
+    for path in (f"/t/{ev.id}/", f"/t/{ev.id}/details", f"/t/{ev.id}/board"):
+        assert not bar(c.get(path).get_data(as_text=True)), path  # not inside an event or on the TV board
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    assert not bar(admin.get("/admin").get_data(as_text=True))
+    assert not bar(admin.get(f"/t/{ev.id}/admin").get_data(as_text=True))
+    nav = home[home.index('<nav class="nav'):home.index("</nav>")]
+    assert nav.count("hide-bottom") == 2  # Tournaments and Calendar leave the phone's top menu when the bar is there

@@ -48,7 +48,7 @@
   <aside class="home-side">
     <h2 class="col-h side-h">Filters</h2><div class="col-bar side-h"></div>
     {% include "_filter_panel.html" %}
-    <p><a class="button secondary" href="{{ url_for('eligibility_check') }}">Am I eligible?</a></p>
+    {% if not player %}<p><a class="button secondary" href="{{ url_for('player_login', next=url_for('index')) }}">Log in to see eligibility</a></p>{% endif %}
   </aside>
   <div class="home-main">
     {% set shown = ns.live|length + ns.open|length + ns.soon|length %}

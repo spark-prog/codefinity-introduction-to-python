@@ -1,0 +1,109 @@
+{# The filter logic (see _filter_panel.html). Set item_sel, count_sel and group_sel before including. #}
+<script>
+(function () {
+  var box = document.getElementById("event-search"), countN = document.getElementById("home-count-n"),
+      countWord = document.getElementById("home-count-word"), empty = document.getElementById("home-empty"),
+      panel = document.getElementById("filters-panel"), btn = document.getElementById("filters-btn"),
+      badge = document.getElementById("filters-n"), active = document.getElementById("active-filters"),
+      backdrop = document.getElementById("fp-backdrop"), hideBox = document.getElementById("hide-no"),
+      resultN = document.getElementById("filters-result");
+  var cards = Array.prototype.slice.call(document.querySelectorAll({{ item_sel|tojson }}));
+  var chips = Array.prototype.slice.call(document.querySelectorAll(".fchip"));
+  var LABEL = {}; chips.forEach(function (c) { LABEL[c.dataset.token] = c.firstChild.textContent.trim(); });
+  var selected = {};  // token -> true
+  var HKEY = "ct-hide-no";
+
+  function values(card, group) {
+    var d = card.dataset;
+    if (group === "entry") return [d.entry];
+    if (group === "game") return [d.game];
+    if (group === "type") return (d.types || "").split(" ").filter(Boolean);
+    if (group === "access") return d.access === "open" ? ["open"] : [];
+    if (group === "me") return [{eligible: "eligible", registered: "registered", no: "noteligible"}[d.me] || ""];
+    return [];
+  }
+  function groupsOf() {
+    var g = {};
+    chips.forEach(function (c) { (g[c.dataset.group] = g[c.dataset.group] || []).push(c.dataset.token); });
+    return g;
+  }
+  var GROUPS = groupsOf();
+  function matches(card, skip) {  // different groups narrow, chips in one group widen
+    for (var g in GROUPS) {
+      if (g === skip) continue;
+      var want = GROUPS[g].filter(function (t) { return selected[t]; });
+      if (!want.length) continue;
+      var have = values(card, g);
+      if (!want.some(function (t) { return have.indexOf(t) >= 0; })) return false;
+    }
+    return true;
+  }
+  function textOk(card, q) { return !q || card.textContent.toLowerCase().indexOf(q) >= 0; }
+  function hidden(card) { return !!(hideBox && hideBox.checked && card.dataset.me === "no"); }
+
+  function update(push) {
+    var q = (box.value || "").trim().toLowerCase(), shown = 0, cardsShown = 0;
+    cards.forEach(function (c) {
+      var ok = matches(c) && textOk(c, q) && !hidden(c);
+      c.hidden = !ok;
+      if (ok) { shown += 1; if (c.matches({{ count_sel|tojson }})) cardsShown += 1; }
+    });
+    document.querySelectorAll({{ group_sel|tojson }}).forEach(function (g) { g.hidden = !g.querySelector({{ (count_sel ~ ":not([hidden])")|tojson }}); });
+    var rs = document.getElementById("results-section");
+    if (rs) rs.hidden = !rs.querySelector(".results-row:not([hidden])");
+    if (countN) countN.textContent = cardsShown;  // the live, open and upcoming events (past results are listed apart)
+    if (countWord) countWord.textContent = cardsShown === 1 ? "tournament" : "tournaments";
+    if (resultN) { resultN.textContent = cardsShown; document.getElementById("filters-word").textContent = cardsShown === 1 ? "tournament" : "tournaments"; }
+    if (empty) empty.hidden = shown > 0 || !cards.length;
+    chips.forEach(function (c) {  // how many each chip would show, given everything else that's on
+      var t = c.dataset.token, g = c.dataset.group, n = 0;
+      cards.forEach(function (card) {
+        if (card.matches({{ count_sel|tojson }}) && matches(card, g) && textOk(card, q) && !hidden(card) && values(card, g).indexOf(t) >= 0) n += 1;
+      });
+      c.querySelector(".n").textContent = "(" + n + ")";
+      c.classList.toggle("off", n === 0 && !selected[t]);
+      c.setAttribute("aria-pressed", selected[t] ? "true" : "false");
+      c.classList.toggle("on", !!selected[t]);
+    });
+    var on = Object.keys(selected).filter(function (t) { return selected[t]; });
+    if (badge) { badge.textContent = on.length; badge.hidden = !on.length; }
+    active.innerHTML = "";
+    on.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "active-chip"; b.dataset.token = t; b.textContent = LABEL[t] + " ×";
+      b.setAttribute("aria-label", "Remove filter " + LABEL[t]);
+      active.appendChild(b);
+    });
+    active.hidden = !on.length;
+    if (window.ctFilterAfter) window.ctFilterAfter();
+    if (push !== false) {
+      var url = location.pathname + (on.length ? "?show=" + on.join(",") : "");
+      try { history.replaceState(null, "", url); } catch (e) {}
+    }
+  }
+  chips.forEach(function (c) { c.addEventListener("click", function () { selected[c.dataset.token] = !selected[c.dataset.token]; update(); }); });
+  active.addEventListener("click", function (e) {
+    var b = e.target.closest(".active-chip"); if (b) { delete selected[b.dataset.token]; update(); }
+  });
+  function clear() { selected = {}; box.value = ""; update(); }
+  document.getElementById("filters-clear").addEventListener("click", clear);
+  var ec = document.getElementById("empty-clear"); if (ec) ec.addEventListener("click", clear);
+  box.addEventListener("input", function () { update(false); });
+  if (hideBox) {
+    try { hideBox.checked = localStorage.getItem(HKEY) === "1"; } catch (e) {}
+    hideBox.addEventListener("change", function () { try { localStorage.setItem(HKEY, hideBox.checked ? "1" : "0"); } catch (e) {} update(false); });
+  }
+  function openSheet(open) {
+    panel.classList.toggle("open", open); backdrop.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false");
+    document.body.classList.toggle("sheet-open", open);
+  }
+  btn.addEventListener("click", function () { openSheet(!panel.classList.contains("open")); });
+  backdrop.addEventListener("click", function () { openSheet(false); });
+  document.getElementById("filters-done").addEventListener("click", function () { openSheet(false); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") openSheet(false); });
+  var m = /[?&]show=([^&]*)/.exec(location.search);  // a shared link comes back filtered
+  if (m) decodeURIComponent(m[1]).split(",").forEach(function (t) { if (LABEL[t]) selected[t] = true; });
+  window.ctFilterUpdate = update;
+  update(false);
+})();
+</script>

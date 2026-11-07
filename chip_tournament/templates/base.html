@@ -78,7 +78,8 @@
         {% if guest_listed %}<a href="{{ url_for('guest_home') }}" class="{{ 'active' if ep.startswith('guest') }}">My events</a>{% endif %}
         <a href="{{ url_for('admin') }}" class="{{ 'active' if ep.startswith('admin') or ep == 'guide' }}">{% if is_admin or is_viewer %}Director{% elif is_guest_td %}Run event{% else %}<span class="hide-sm">TD Login</span><span class="show-sm">TD</span>{% endif %}</a>
         {% else %}
-        <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}">Tournaments</a>
+        <a href="{{ url_for('index') }}" class="nav-home {{ 'active' if ep == 'index' }}"><span class="hide-xs">Tournaments</span><span class="show-xs">Events</span></a>
+        <a href="{{ url_for('calendar_page') }}" class="{{ 'active' if ep == 'calendar_page' }}">Calendar</a>
         <a href="{{ url_for('rules_page') }}" class="{{ 'active' if ep == 'rules_page' }}">Rules</a>
         <a href="{{ url_for('my_account') if player else url_for('player_login') }}" class="{{ 'active' if ep in ('my_account', 'player_login', 'player_code') }}">{{ player.first if player else "Log in" }}</a>
         {% if guest_listed %}<a href="{{ url_for('guest_home') }}" class="nav-cta {{ 'active' if ep.startswith('guest') }}">My events</a>

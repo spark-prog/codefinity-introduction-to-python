@@ -233,7 +233,7 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
                                  event_can_register=event_info.can_register, event_register_label=event_info.register_label,
-                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_filter_data=event_info.filter_data, event_fill=event_info.fill, event_play=event_info.play_phrase,
+                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_tone=event_info.calendar_tone, event_weekday=event_info.weekday, event_filter_data=event_info.filter_data, event_fill=event_info.fill, event_play=event_info.play_phrase,
                                  event_access=event_info.access_phrase, event_skill=event_info.skill_phrase,
                                  event_wants_partner=event_info.partner_link_wanted, event_categories=event_info.categories, event_games=lambda: event_info.GAMES, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
@@ -1579,6 +1579,30 @@ def create_app(data_dir: str | None = None) -> Flask:
             mine = {r["id"]: r["status"] for r in results}
             reasons = {r["id"]: r["reasons"][0] for r in results if r["reasons"]}
         return render_template("hub.html", t=None, rows=rows, mine=mine, reasons=reasons)
+
+    @app.get("/calendar")
+    def calendar_page():
+        """Every tournament by date: a month grid and a list, with the same filters as the home page."""
+        director = bool(session.get("admin") or session.get("viewer"))
+        rows = [r for r in hub.summaries() if r["t"].status != FINISHED and (director or not r["t"].settings.test_event)]
+        mine = {}
+        if g.get("player"):
+            mine = {r["id"]: r["status"] for r in app.config["public_results"](g.player["member"])}
+        today = datetime.now().strftime("%Y-%m-%d")
+        dated = sorted((r for r in rows if r["t"].settings.date), key=lambda r: (r["t"].settings.date, r["t"].settings.start_time or ""))
+        months = []
+        for r in dated:
+            key = r["t"].settings.date[:7]
+            if not months or months[-1]["key"] != key:
+                try:
+                    label = datetime.strptime(key, "%Y-%m").strftime("%B %Y")
+                except ValueError:
+                    label = key
+                months.append({"key": key, "label": label, "rows": []})
+            months[-1]["rows"].append(r)
+        undated = [r for r in rows if not r["t"].settings.date]
+        return render_template("calendar.html", t=None, months=months, undated=undated, mine=mine, today=today,
+                               total_events=len(dated) + len(undated))
 
     @app.get("/admin")
     @director_view

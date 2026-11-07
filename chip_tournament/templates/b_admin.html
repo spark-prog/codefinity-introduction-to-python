@@ -23,9 +23,12 @@
   {% if not is_viewer %}
   <span class="jump-actions">
     {% if setup %}
+    {% set drafting = t.draft_valid() %}
+    {% set review = s.review_draw and not drafting %}
     <form method="post" action="{{ url_for('admin_start') }}" class="inline"
-          data-dialog-title="Draw the bracket?" data-dialog-text="{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Registration closes, the bracket is drawn and the first matches are called to tables (and texted)." data-dialog-ok="Draw it">
-      <button class="button small" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first (Entries)"{% endif %}>Draw the bracket &amp; start</button></form>
+          data-dialog-title="{{ 'Draft the draw?' if review else 'Start the event?' if drafting else 'Draw the bracket?' }}"
+          data-dialog-text="{% if review %}This only drafts the draw so you can look it over and swap players. Nothing is called or texted until you start.{% else %}{% if waiting %}{{ waiting }} player(s) are still waiting in Pending verification. {% endif %}Registration closes, the bracket is {{ 'built from the draft' if drafting else 'drawn' }} and the first matches are called to tables (and texted).{% endif %}" data-dialog-ok="{{ 'Draft it' if review else 'Start it' if drafting else 'Draw it' }}">
+      <button class="button small" {% if s.require_checkin and unchecked %}disabled title="Check everyone in, or mark no-shows, first (Entries)"{% endif %}>{{ "Draft the draw" if review else "Start the event" if drafting else "Draw the bracket & start" }}</button></form>
     {% endif %}
     <form method="post" action="{{ url_for('admin_undo') }}" class="inline"
           data-dialog-title="Undo: {{ undo_label }}?" data-dialog-text="Undo takes back the most recent action, for everyone. Texts already sent can't be recalled." data-dialog-ok="Undo">
@@ -232,6 +235,46 @@
     </div>
   </div>
 </section>
+{% endif %}
+
+{% if setup and not is_viewer and t.draft_valid() %}
+{% set view = t.draft_view() %}
+<section id="draft" class="card jump-target pending-card">
+  <div class="section-head"><h2>Draft draw</h2><span class="muted">Only you can see this</span></div>
+  <p class="muted">Tap one player, then another in the same group, to swap them. Players see nothing until you press <b>Start the event</b> at the top.</p>
+  <form method="post" action="{{ url_for('b_draft_swap') }}" id="draft-swap" class="inline"><input type="hidden" name="a"><input type="hidden" name="b"></form>
+  {% for d in view %}
+  <div class="draft-division" data-division="{{ loop.index }}">
+    {% if d.label %}<h3 class="division-title">{{ d.label }}</h3>{% endif %}
+    {% if d.groups %}
+    <div class="group-grid">{% for g, members in d.groups.items() %}<div class="card group-card"><h3>Group {{ g }}</h3>
+      {% for id in members %}<button type="button" class="draft-player" data-id="{{ id }}">{{ t.entries[id].name }}</button>{% endfor %}</div>{% endfor %}</div>
+    {% else %}
+    <ol class="draft-pairs">{% for a, b in d.pairs %}<li>
+      <button type="button" class="draft-player" data-id="{{ a }}">{{ t.entries[a].name }}</button>
+      <span class="muted">vs</span>
+      {% if b == "bye" %}<span class="muted">bye</span>{% else %}<button type="button" class="draft-player" data-id="{{ b }}">{{ t.entries[b].name }}</button>{% endif %}
+    </li>{% endfor %}</ol>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <div class="button-row">
+    {% if s.seeding == "random" %}<form method="post" action="{{ url_for('b_draft_redraw') }}" class="inline"><button class="button small secondary">Redraw (shuffle everyone)</button></form>{% endif %}
+    <form method="post" action="{{ url_for('b_draft_cancel') }}" class="inline"><button class="button small secondary">Cancel the draft</button></form>
+  </div>
+</section>
+<script>
+(function () {
+  var picked = null, form = document.getElementById("draft-swap");
+  document.querySelectorAll(".draft-player").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (picked === b) { b.classList.remove("picked"); picked = null; return; }
+      if (!picked) { picked = b; b.classList.add("picked"); return; }
+      form.elements.a.value = picked.dataset.id; form.elements.b.value = b.dataset.id; form.submit();
+    });
+  });
+})();
+</script>
 {% endif %}
 
 <section id="entries" class="card jump-target">
@@ -487,6 +530,8 @@
         <option value="random" {% if s.seeding == "random" %}selected{% endif %}>Random draw at the start</option>
         <option value="manual" {% if s.seeding == "manual" %}selected{% endif %}>Manual (the order under Entries)</option>
       </select></label>
+    <label class="checkbox"><input type="checkbox" name="review_draw" value="1" {% if s.review_draw %}checked{% endif %} {% if not setup %}disabled{% endif %}>
+      Review the draw before starting: the draw is drafted first (only you see it), you can swap players, then you start the event</label>
     <label>Modified single: single elimination from the final
       <select name="final_cut" {% if not setup %}disabled{% endif %}>{% for n in final_cuts %}<option {% if s.final_cut == n %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
     <label class="checkbox"><input type="checkbox" name="true_double" value="1" {% if s.true_double %}checked{% endif %} {% if not setup %}disabled{% endif %}>

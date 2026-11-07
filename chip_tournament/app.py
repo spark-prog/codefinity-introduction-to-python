@@ -229,6 +229,10 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.filters["day"] = day
     app.jinja_env.filters["last4"] = last4
     app.jinja_env.globals["event_when"] = event_when
+    try:  # a new address for the stylesheet whenever it changes, so a browser or Cloudflare can't keep serving an old copy
+        app.jinja_env.globals["asset_v"] = int(os.path.getmtime(os.path.join(app.static_folder, "style.css")))
+    except OSError:
+        app.jinja_env.globals["asset_v"] = 0
     app.jinja_env.globals["reg_window"] = schedule.reg_window
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,

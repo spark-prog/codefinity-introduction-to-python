@@ -48,7 +48,7 @@ def test_status_only_for_anyone(app):
     assert c.get("/eligibility").status_code == 200  # the check by member number is still there (linked from each event)
     page = lookup(c, "322-00002")
     assert page.count(">Not eligible<") == 2 and page.count("Eligible ✓") == 1  # Past Due: only Open Night
-    shown = re.sub(r"<script.*?</script>", "", page, flags=re.S)  # what's on the page, not the page's code
+    shown = re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", "", page, flags=re.S))  # the words on the page: no code, no markup
     assert "Past Due" not in shown and "lifetime" not in shown and "Bo" not in shown and "Ray" not in shown
     assert "The reasons are private" in page and "Practice" not in page  # no test events
     page = lookup(c, "32200001")

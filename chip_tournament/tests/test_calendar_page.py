@@ -96,3 +96,12 @@ def test_my_tournaments_button_for_a_logged_in_player(app):
         page = ann.get(path).get_data(as_text=True)
         assert '<button type="button" class="button secondary mine-btn" data-token="registered"' in page, path
         assert 'button.mine-btn[data-token]' in page  # the script that makes it filter to registered events
+
+
+def test_the_home_page_button_asks_visitors_to_log_in_and_players_dont_see_it(app):
+    from chips import players
+    from tests.test_eligibility import COLS, person
+    from tests.test_register_members import Clients
+    app.config["players"].apply(*players.parse_rows([COLS, person("32200001", first="Ann", last="Lee")]), "t", "t")
+    assert "Log in to see eligibility" in app.test_client().get("/").get_data(as_text=True)
+    assert "Log in to see eligibility" not in Clients(app).logged_in("32200001").get("/").get_data(as_text=True)

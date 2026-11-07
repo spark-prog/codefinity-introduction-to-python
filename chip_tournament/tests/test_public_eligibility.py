@@ -43,7 +43,9 @@ def lookup(c, member):
 
 def test_status_only_for_anyone(app):
     c = app.test_client()
-    assert "Am I eligible?" in c.get("/").get_data(as_text=True)
+    home = c.get("/").get_data(as_text=True)
+    assert "Log in to see eligibility" in home and "Am I eligible?" not in home  # the home page asks you to log in instead
+    assert c.get("/eligibility").status_code == 200  # the check by member number is still there (linked from each event)
     page = lookup(c, "322-00002")
     assert page.count(">Not eligible<") == 2 and page.count("Eligible ✓") == 1  # Past Due: only Open Night
     shown = re.sub(r"<script.*?</script>", "", page, flags=re.S)  # what's on the page, not the page's code

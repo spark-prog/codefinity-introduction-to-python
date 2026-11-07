@@ -1238,3 +1238,12 @@ body.event-tabbed .topbar { position: relative; }
 .event-tab.active { background: var(--accent-grad); border-color: var(--accent-2); color: #04122b; box-shadow: 0 0 16px rgba(var(--accent-rgb), .55); }
 .event-tab.active .tab-count { background: rgba(4, 18, 43, .18); color: #04122b; }
 @media (max-width: 480px) { .event-tab { padding: 11px 6px; font-size: .72rem; letter-spacing: .03em; } .event-tabs { gap: 4px; padding: 5px; } }
+
+/* Event header buttons (Register, Alert me, Push, Share, Map): about half their old size, side by side. */
+.event-head .actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.event-head .actions-row .button, .event-head .actions-row .button.big { min-height: 30px; padding: 0 14px; font-size: .74rem; letter-spacing: .05em; border-radius: 7px; }
+.event-head .actions-row .alert-me { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.event-find input { min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: rgba(var(--bg-rgb), .7); color: var(--ink); font: inherit; font-size: .95rem; }
+.event-find input::placeholder { color: var(--muted); }
+.event-find input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .3); }
+.event-tab.active { text-shadow: none; }

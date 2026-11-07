@@ -157,7 +157,7 @@ def test_reloads_and_tab_switches_keep_the_scroll_place(app):
     page = get(app, f"/t/{ev.id}/")
     swap = page.split("function swapIn", 1)[1].split("function check", 1)[0]
     assert "ctKeepPlace(true)" in swap  # a live refresh notes the spot just before it swaps the page
-    assert 'sessionStorage.setItem(KEY, location.pathname' in page and 'a.event-tab' in page  # tabs keep the bar's place
+    assert 'sessionStorage.setItem(KEY, JSON.stringify' in page and 'a.event-tab' in page  # tabs keep the bar's place
 
 
 def test_partners_and_waitlist_tab_only_when_it_applies(app):

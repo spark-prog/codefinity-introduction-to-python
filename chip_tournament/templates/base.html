@@ -279,21 +279,21 @@ window.ctSafeReload = (function () {
   }
 })();
 (function () {
-  // Switching tabs keeps your place: if the tab bar has stuck to the top (you scrolled past the header), the next
-  // tab opens with its bar at the same spot, so you see the start of that tab, not the header again.
+  // Switching tabs keeps your place: the next tab opens with its bar at the same spot on screen, so you see the
+  // start of that tab, not the header again.
   var KEY = "ct-tab", nav = document.querySelector(".event-tabs");
   if (!nav) return;
   function stick() { return parseInt(getComputedStyle(nav).top, 10) || 0; }
   nav.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest("a.event-tab");
     if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    try { if (nav.getBoundingClientRect().top <= stick() + 1) sessionStorage.setItem(KEY, location.pathname.replace(/[^/]*$/, "")); } catch (x) {}
+    try { if (window.scrollY > 0) sessionStorage.setItem(KEY, JSON.stringify([location.pathname.replace(/[^/]*$/, ""), Math.max(stick(), nav.getBoundingClientRect().top)])); } catch (x) {}
   });
-  var base = null;
-  try { base = sessionStorage.getItem(KEY); sessionStorage.removeItem(KEY); } catch (x) {}
-  if (base === null || base !== location.pathname.replace(/[^/]*$/, "")) return;
+  var kept = null;
+  try { kept = JSON.parse(sessionStorage.getItem(KEY) || "null"); sessionStorage.removeItem(KEY); } catch (x) {}
+  if (!kept || kept[0] !== location.pathname.replace(/[^/]*$/, "")) return;
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-  function go() { window.scrollTo(0, Math.max(0, Math.round(window.scrollY + nav.getBoundingClientRect().top - stick()))); }
+  function go() { window.scrollTo(0, Math.max(0, Math.round(window.scrollY + nav.getBoundingClientRect().top - kept[1]))); }
   go();
   window.addEventListener("load", function () { go(); setTimeout(go, 50); });
 })();

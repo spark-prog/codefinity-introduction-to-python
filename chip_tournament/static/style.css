@@ -1227,3 +1227,23 @@ body.event-tabbed .topbar { position: relative; }
 .event-find input { flex: 1 1 200px; min-width: 0; }
 .bm.find-hit, .tcell.find-hit, tr.find-hit { outline: 2px solid var(--accent, #3aa0ff); outline-offset: 2px; border-radius: 8px; }
 .find-dim { opacity: .35; }
+
+/* The tab bar stands out: a lit bar with button-style tabs, the current one filled. */
+.event-tabs { gap: 6px; padding: 6px; margin: var(--space-3) 0; border: 1px solid rgba(var(--accent-rgb), .55); border-radius: 14px;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), .22), rgba(var(--accent-rgb), .08)), rgba(var(--bg-rgb), .96);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), .15), 0 6px 22px rgba(0, 0, 0, .35), var(--glow); }
+.event-tab { flex: 1 1 auto; text-align: center; padding: 12px 14px; margin: 0; border: 1px solid rgba(var(--accent-rgb), .35); border-radius: 10px;
+  background: rgba(var(--bg-rgb), .55); color: var(--ink); font-size: .85rem; }
+.event-tab:hover { background: rgba(var(--accent-rgb), .22); border-color: var(--accent); }
+.event-tab.active { background: var(--accent-grad); border-color: var(--accent-2); color: #04122b; box-shadow: 0 0 16px rgba(var(--accent-rgb), .55); }
+.event-tab.active .tab-count { background: rgba(4, 18, 43, .18); color: #04122b; }
+@media (max-width: 480px) { .event-tab { padding: 11px 6px; font-size: .72rem; letter-spacing: .03em; } .event-tabs { gap: 4px; padding: 5px; } }
+
+/* Event header buttons (Register, Alert me, Push, Share, Map): about half their old size, side by side. */
+.event-head .actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.event-head .actions-row .button, .event-head .actions-row .button.big { min-height: 30px; padding: 0 14px; font-size: .74rem; letter-spacing: .05em; border-radius: 7px; }
+.event-head .actions-row .alert-me { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.event-find input { min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: rgba(var(--bg-rgb), .7); color: var(--ink); font: inherit; font-size: .95rem; }
+.event-find input::placeholder { color: var(--muted); }
+.event-find input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .3); }
+.event-tab.active { text-shadow: none; }

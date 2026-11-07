@@ -34,7 +34,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_v) }}">
   {% block head %}{% endblock %}
 </head>
 {# The bottom bar (phones) belongs to the player pages outside events: not events, director pages or the TV boards. #}
@@ -50,7 +50,7 @@
           <img src="{{ url_for('static', filename='img/apa-first-coast-logo.png') }}" alt="APA Pool Leagues – First Coast" width="83" height="50"></a>
         {% set director_mode = is_admin or is_viewer %}
         <div class="brand"><a class="ct-wordmark" href="{{ url_for('director') if director_mode else url_for('index') }}" title="Control Table: all tournaments">
-          <img src="{{ url_for('static', filename='img/control-table-wordmark.png') }}" alt="Control Table" width="1100" height="148"></a></div>
+          <img src="{{ url_for('static', filename='img/control-table-wordmark.png') }}" alt="Control Table" width="237" height="32" style="height: 32px; width: auto"></a></div>
         {% if is_admin or is_viewer %}
         <form method="post" action="{{ url_for('admin_logout') }}" class="inline show-sm logout-icon">
           <button class="link" title="Log out" aria-label="Log out">

@@ -1497,3 +1497,4 @@ body.event-tabbed .topbar { position: relative; }
     box-shadow: 0 0 0 1px rgba(255, 255, 255, .5), 0 0 18px rgba(220, 228, 245, .75), 0 0 34px rgba(190, 205, 235, .45); }
   .nav .hide-bottom { display: none; }
 }
+.ct-wordmark img { height: 32px; } @media (max-width: 480px) { .ct-wordmark img { height: 26px; } }

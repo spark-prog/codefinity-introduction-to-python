@@ -125,3 +125,17 @@ def test_the_phone_bottom_bar_only_on_player_pages_outside_events(app):
     assert not bar(admin.get(f"/t/{ev.id}/admin").get_data(as_text=True))
     nav = home[home.index('<nav class="nav'):home.index("</nav>")]
     assert nav.count("hide-bottom") == 2  # Tournaments and Calendar leave the phone's top menu when the bar is there
+
+
+def test_the_stylesheet_address_changes_with_the_file_and_the_wordmark_has_its_own_size(app):
+    page = app.test_client().get("/").get_data(as_text=True)
+    import re
+    assert re.search(r'href="/static/style\.css\?v=\d+"', page)  # a new address when the stylesheet changes
+    assert 'style="height: 32px; width: auto"' in page  # right even if an old stylesheet is cached
+
+
+def test_the_director_page_heading(app):
+    admin = app.test_client()
+    admin.post("/admin/login", data={"password": "secretpw1"})
+    page = admin.get("/admin").get_data(as_text=True)
+    assert "<h1>Directors Page</h1>" in page and "<h1>Control Table</h1>" not in page

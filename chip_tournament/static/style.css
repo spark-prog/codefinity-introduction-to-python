@@ -1265,3 +1265,8 @@ body.event-tabbed .topbar { position: relative; }
 .event-head details.inline-details.cal-menu[open] { display: inline-block; margin-top: 0; }
 .event-head { position: relative; z-index: 9; }  /* so the calendar choices drop down over the tab bar */
 .event-head details.inline-details.cal-menu { overflow: visible; }
+
+/* The alert confirmation can be long: let it and its Cancel button wrap instead of running off a phone screen. */
+.event-head .actions-row form.inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+.event-head .actions-row .status-chip { white-space: normal; max-width: 100%; }
+.key-facts .status-chip { white-space: normal; max-width: 100%; }

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Control Table — calendar{% endblock %}
+{% block content %}
+{% macro row(r) %}
+{% set s = r.t.settings %}{% set es = event_status(r.t) %}{% set f = event_fill(r.t) %}{% set my = mine.get(r.event.id, "") %}{% set fd = event_filter_data(r.t, my) %}
+{% set day = s.date[8:10]|int if s.date else 0 %}
+<article class="card cal-row{% if my == 'no' %} hc-dim{% endif %}" data-date="{{ s.date }}" data-tone="{{ event_tone(r.t) }}" data-id="{{ r.event.id }}"
+         data-entry="{{ fd.entry }}" data-game="{{ fd.game }}" data-types="{{ fd.types }}" data-access="{{ fd.access }}" data-me="{{ fd.me }}">
+  <div class="cal-date">{% if s.date %}<small>{{ event_weekday(s.date) }}</small><b>{{ day }}</b>{% else %}<small>Date</small><b>TBA</b>{% endif %}</div>
+  <div class="cal-info">
+    <p class="hc-tag">{{ event_tag_line(r.t) }}</p>
+    <h3><a class="hc-link" href="{{ url_for('home', event=r.event.id) }}">{{ s.name }}</a></h3>
+    <p class="cal-where">{% if s.venue %}📍 {{ s.venue }}{% endif %}{% if s.start_time %}{% if s.venue %} · {% endif %}{{ s.start_time }}{% endif %}</p>
+    {% if f.capped %}<div class="hc-bar {{ f.tone }}"><i style="width: {{ f.pct }}%"></i></div>{% endif %}
+    <div class="hc-sub"><span>{{ f.left if f.capped else f.filled }}</span><span>{% if es.key != "before" %}{{ f.note }}{% else %}{{ f.note }}{% endif %}</span></div>
+    <div class="cal-foot"><span class="status-chip status-{{ es.key }}">{{ es.label if es.key != "before" else "Not open yet" }}</span>
+      {% if my == "registered" %}<span class="hc-me ok">✓ Registered</span>{% elif my == "no" %}<span class="hc-me no">Not eligible</span>{% endif %}</div>
+  </div>
+</article>
+{% endmacro %}
+
+<div class="home-layout">
+  <aside class="home-side">
+    <h1>Calendar</h1>
+    <p class="lede">Every tournament by date. Tap one to open it.</p>
+    {% include "_filter_panel.html" %}
+    <p><a class="button secondary" href="{{ url_for('index') }}">All tournaments</a></p>
+  </aside>
+  <div class="home-main">
+    {% set total = total_events %}
+    <p class="home-count"><span id="home-count-n">{{ total }}</span> <span id="home-count-word">tournament{{ "s" if total != 1 }}</span> shown</p>
+    <p class="card home-empty" id="home-empty" hidden>No tournaments match. <button type="button" class="link" id="empty-clear">Clear filters</button></p>
+    <div class="cal-main">
+      <div class="card cal-grid-card" id="cal-grid-card" data-today="{{ today }}">
+        <div class="cal-month"><h2 id="cal-title"></h2><div class="cal-nav"><button type="button" id="cal-prev" aria-label="Previous month">‹</button><button type="button" id="cal-next" aria-label="Next month">›</button></div></div>
+        <div class="cal-grid" id="cal-grid" role="grid"></div>
+        <p class="cal-key"><span class="k-open">Open</span><span class="k-low">Filling fast</span><span class="k-before">Opens soon</span><span class="k-live">Live now</span><span class="k-closed">Closed or full</span></p>
+      </div>
+      <div class="cal-list">
+        {% if not months and not undated %}<div class="card"><p class="lede" style="margin: 0">No tournaments on the calendar yet. Check back soon.</p></div>{% endif %}
+        {% for m in months %}
+        <section class="cal-group" data-month="{{ m.key }}" id="month-{{ m.key }}">
+          <div class="section-head"><h2>{{ m.label }}</h2><span class="muted">{{ m.rows|length }}</span></div>
+          {% for r in m.rows %}{{ row(r) }}{% endfor %}
+        </section>
+        {% endfor %}
+        {% if undated %}<section class="cal-group"><div class="section-head"><h2>Date to be announced</h2><span class="muted">{{ undated|length }}</span></div>
+          {% for r in undated %}{{ row(r) }}{% endfor %}</section>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% set item_sel = ".cal-row" %}{% set count_sel = ".cal-row" %}{% set group_sel = ".cal-group" %}
+{% include "_filter_script.html" %}
+<script>
+(function () {
+  var card = document.getElementById("cal-grid-card"), grid = document.getElementById("cal-grid"), title = document.getElementById("cal-title");
+  var today = card.dataset.today, cur = today.slice(0, 7);
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function render() {
+    var y = +cur.slice(0, 4), m = +cur.slice(5, 7) - 1, first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+    title.textContent = MONTHS[m] + " " + y;
+    var byDate = {};
+    document.querySelectorAll(".cal-row:not([hidden])").forEach(function (r) { (byDate[r.dataset.date] = byDate[r.dataset.date] || []).push(r); });
+    var html = ["SUN","MON","TUE","WED","THU","FRI","SAT"].map(function (d) { return '<div class="cal-dow">' + d + "</div>"; }).join("");
+    for (var i = 0; i < first; i++) html += '<div class="cal-day out"></div>';
+    for (var d = 1; d <= days; d++) {
+      var key = cur + "-" + pad(d), ev = byDate[key] || [], cls = "cal-day" + (key === today ? " today" : "") + (ev.length ? " has" : "");
+      var dots = ev.slice(0, 3).map(function (r) { return '<i class="t-' + r.dataset.tone + '"></i>'; }).join("");
+      html += ev.length ? '<button type="button" class="' + cls + '" data-date="' + key + '" aria-label="' + ev.length + ' tournament' + (ev.length > 1 ? "s" : "") + ' on ' + MONTHS[m] + " " + d + '">' + d + "<span>" + dots + "</span></button>"
+                        : '<div class="' + cls + '">' + d + "</div>";
+    }
+    grid.innerHTML = html;
+  }
+  function shift(by) { var y = +cur.slice(0, 4), m = +cur.slice(5, 7) - 1 + by; var d = new Date(y, m, 1); cur = d.getFullYear() + "-" + pad(d.getMonth() + 1); render(); }
+  document.getElementById("cal-prev").addEventListener("click", function () { shift(-1); });
+  document.getElementById("cal-next").addEventListener("click", function () { shift(1); });
+  grid.addEventListener("click", function (e) {
+    var b = e.target.closest(".cal-day.has"); if (!b) return;
+    var row = document.querySelector('.cal-row[data-date="' + b.dataset.date + '"]:not([hidden])'); if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("flash-row"); setTimeout(function () { row.classList.remove("flash-row"); }, 1600);
+  });
+  window.ctFilterAfter = render;
+  render();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{# The search box, Filters button, hide switch and the filter panel (sidebar on desktop, sheet on phones). Used by Home and Calendar. #}
+    <div class="home-tools">
+      <div class="event-search">
+        <label for="event-search" class="sr-only">Find a tournament</label>
+        <input id="event-search" type="search" placeholder="Find a tournament" autocomplete="off" data-no-dirty>
+      </div>
+      <button type="button" class="filters-btn" id="filters-btn" aria-expanded="false" aria-controls="filters-panel">☰ Filters <b id="filters-n" hidden>0</b></button>
+    </div>
+    {% if player %}<label class="hide-row"><span>Hide events I can't enter</span><input type="checkbox" id="hide-no" role="switch"><span class="hide-sw" aria-hidden="true"></span></label>{% endif %}
+    <div class="active-filters" id="active-filters" hidden></div>
+    <div class="fp-backdrop" id="fp-backdrop" hidden></div>
+    <div class="filters-panel" id="filters-panel" role="group" aria-label="Filters">
+      <div class="fp-head"><h2>Filters</h2><button type="button" class="link" id="filters-clear">Clear all</button></div>
+      {% macro group(title, key, options) %}<div class="fp-group"><p class="fp-title">{{ title }}</p><div class="fp-chips">
+        {% for token, label in options %}<button type="button" class="fchip" data-group="{{ key }}" data-token="{{ token }}" aria-pressed="false">{{ label }} <span class="n"></span></button>{% endfor %}</div></div>{% endmacro %}
+      {{ group("Players per entry", "entry", (("singles", "Singles"), ("doubles", "Doubles"), ("teams", "Teams"))) }}
+      {{ group("Game", "game", (("8ball", "8-Ball"), ("9ball", "9-Ball"), ("other", "Other"))) }}
+      {{ group("Event type", "type", (("qualifier", "Qualifier"), ("bonus", "Bonus Tournament"))) }}
+      {{ group("Who can play", "access", (("open", "Open to anyone"),)) }}
+      {% if player %}{{ group("For me", "me", (("eligible", "Can register"), ("registered", "Registered"), ("noteligible", "Not eligible"))) }}{% else %}
+      <p class="muted small-note"><a href="{{ url_for('player_login', next=url_for('index')) }}">Log in</a> to filter by what you can enter.</p>{% endif %}
+      <div class="fp-foot"><button type="button" class="button" id="filters-done">Show <span id="filters-result">0</span> <span id="filters-word">tournaments</span></button></div>
+    </div>

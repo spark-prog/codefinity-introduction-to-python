@@ -253,6 +253,27 @@ def filter_data(t, my: str = "") -> dict:
             "access": "rules" if access_phrase(t) == "Eligibility required" else "open", "me": my or ""}
 
 
+def calendar_tone(t) -> str:
+    """The color of an event on the calendar: live, open, low (filling up), before (not open yet) or closed (shut or full)."""
+    es = status(t)
+    if es["key"] == "live":
+        return "live"
+    if es["key"] == "before":
+        return "before"
+    if es["key"] != "open":
+        return "closed"
+    tone = fill(t)["tone"]
+    return "closed" if tone == "full" else "low" if tone == "low" else "open"
+
+
+def weekday(date: str) -> str:
+    """'SAT' for '2026-11-14' ('' if it isn't a date)."""
+    try:
+        return datetime.strptime(date, "%Y-%m-%d").strftime("%a").upper()
+    except ValueError:
+        return ""
+
+
 def partners_label(t) -> str:
     """The Partners & waitlist tab's name, or '' when it has nothing to say: only while people can still sign up,
     and only for team events (partner finding) or when somebody is on the waiting list."""

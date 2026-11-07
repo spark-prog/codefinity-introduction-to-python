@@ -48,7 +48,7 @@ def test_hub_lists_and_creates_tournaments(app, admin):
     assert (chips.kind, double.kind, rr.kind) == ("chip", "bracket", "bracket")
     assert double.load().settings.format == "double" and double.load().settings.venue == "Corner Pocket"
     page = app.test_client().get("/").data.decode()
-    for name in ("Friday Chips", "Saturday 9-Ball", "League Round Robin", "Double elimination", "Round robin"):
+    for name in ("Friday Chips", "Saturday 9-Ball", "League Round Robin"):
         assert name in page
     assert f"/t/{double.id}/" in page
     page = admin.get("/admin").data.decode()

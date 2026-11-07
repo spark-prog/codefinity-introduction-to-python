@@ -1279,3 +1279,57 @@ body.event-tabbed .topbar { position: relative; }
 .cat-form select { width: auto; min-width: 110px; }
 .cat-form .cat-check { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 .cat-form .cat-check input { width: 20px; height: 20px; margin: 0; }
+
+/* ---------- Home page: wordmark, side column, and event cards ---------- */
+.home-hero { text-align: center; padding: var(--space-3) 0 var(--space-2); }
+.home-hero img { width: min(100%, 560px); height: auto; filter: drop-shadow(0 0 28px rgba(var(--accent-rgb), .45)); }
+.home-layout { display: grid; gap: var(--space-4); align-items: start; }
+.home-side h1 { margin: 0 0 4px; }
+.home-side .lede { margin: 0 0 var(--space-3); }
+.home-side .event-search { margin-bottom: var(--space-3); }
+.home-side input[type="search"] { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-strong);
+  background: rgba(var(--bg-rgb), .7); color: var(--ink); font: inherit; }
+.home-side input[type="search"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .3); }
+.home-count { margin: 0 0 var(--space-3); color: var(--muted); font-size: .9rem; }
+@media (min-width: 900px) {
+  .home-layout { grid-template-columns: 270px 1fr; gap: 28px; }
+  .home-side { position: sticky; top: 16px; }
+}
+.hc-grid { display: grid; gap: var(--space-3); grid-template-columns: 1fr; }
+@media (min-width: 700px) { .hc-grid { grid-template-columns: 1fr 1fr; } }
+.hc { position: relative; padding: 0; overflow: hidden; display: flex; flex-direction: column; margin: 0; transition: border-color .15s, transform .15s; }
+.hc:hover { border-color: var(--accent); transform: translateY(-2px); }
+.hc-dim { opacity: .66; }
+.hc-img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; }
+.hc-img.contain { object-fit: contain; background: rgba(0, 0, 0, .35); }
+.hc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(var(--accent-rgb), .16); border-bottom: 1px solid var(--line); }
+.hc-head b { font-size: .95rem; }
+.hc-body { padding: 12px 14px 14px; display: flex; flex-direction: column; flex: 1; }
+.hc-tag { margin: 0; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: var(--accent-2); }
+.hc h2 { margin: 2px 0 2px; font-size: 1.3rem; line-height: 1.15; }
+.hc-link { color: inherit; text-decoration: none; }
+.hc-link::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.hc-where { margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
+.hc-me { align-self: flex-start; display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: .78rem; font-weight: 800; margin: 0 0 10px; }
+.hc-me.ok { background: var(--green-tint); color: #8ff5d2; border: 1px solid rgba(46, 230, 166, .4); }
+.hc-me.no { background: rgba(255, 255, 255, .08); color: #c9d0de; border: 1px solid rgba(255, 255, 255, .2); }
+.hc-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 8px; }
+.hc-facts .right { text-align: right; }
+.hc-facts small, .hc-rows dt { display: block; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+.hc-facts b { font-size: 1.15rem; }
+.hc-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; margin: 2px 0 4px; }
+.hc-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent-grad); }
+.hc-bar.low i { background: linear-gradient(90deg, #ffb020, #ff7a1a); }
+.hc-bar.full i { background: linear-gradient(90deg, #ff6b6b, #e0303a); }
+.hc-sub { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; color: var(--muted); margin-bottom: 8px; }
+.hc-rows { margin: 2px 0 14px; display: grid; gap: 7px; }
+.hc-rows div { display: flex; gap: 10px; align-items: baseline; }
+.hc-rows dt { flex: 0 0 96px; }
+.hc-rows dd { margin: 0; font-weight: 700; font-size: .92rem; }
+.hc-cta { position: relative; z-index: 2; width: 100%; min-height: 44px; margin-top: auto; }
+.hc-partner { position: relative; z-index: 2; display: block; text-align: center; margin-top: 10px; font-weight: 700; font-size: .9rem; color: var(--accent-2); text-decoration: none; }
+
+.home-side h1 { font-size: clamp(1.7rem, 3vw, 2rem); }
+.hc-rows dt { flex: 0 0 104px; white-space: nowrap; }
+.hc-head b { white-space: nowrap; }
+.hc-head .status-chip { white-space: nowrap; }

@@ -233,7 +233,9 @@ def create_app(data_dir: str | None = None) -> Flask:
     app.jinja_env.globals.update(event_status=event_info.status, event_fee=event_info.fee, event_spots=event_info.spots,
                                  skill_rule=event_info.skill_rule, skill_short=event_info.skill_short,
                                  event_can_register=event_info.can_register, event_register_label=event_info.register_label,
-                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_categories=event_info.categories, event_games=lambda: event_info.GAMES, short_when=lambda t: event_info.short_when(t.settings))
+                                 event_tabs=event_info.tabs, event_alertable=event_info.can_alert, event_tag_line=event_info.tag_line, event_fill=event_info.fill, event_play=event_info.play_phrase,
+                                 event_access=event_info.access_phrase, event_skill=event_info.skill_phrase,
+                                 event_wants_partner=event_info.partner_link_wanted, event_categories=event_info.categories, event_games=lambda: event_info.GAMES, short_when=lambda t: event_info.short_when(t.settings))
     app.jinja_env.globals["reg_when"] = schedule.when_text
     app.jinja_env.globals["reg_shut_message"] = schedule.shut_message
     app.jinja_env.globals["now"] = datetime.now
@@ -1571,10 +1573,12 @@ def create_app(data_dir: str | None = None) -> Flask:
         rows = hub.summaries()
         if not (session.get("admin") or session.get("viewer")):  # practice events stay off the public list
             rows = [r for r in rows if not r["t"].settings.test_event]
-        mine = {}
+        mine, reasons = {}, {}
         if g.get("player"):  # what each event means for the logged-in player: registered, can register, not eligible yet
-            mine = {r["id"]: r["status"] for r in app.config["public_results"](g.player["member"])}
-        return render_template("hub.html", t=None, rows=rows, mine=mine)
+            results = app.config["public_results"](g.player["member"])
+            mine = {r["id"]: r["status"] for r in results}
+            reasons = {r["id"]: r["reasons"][0] for r in results if r["reasons"]}
+        return render_template("hub.html", t=None, rows=rows, mine=mine, reasons=reasons)
 
     @app.get("/admin")
     @director_view

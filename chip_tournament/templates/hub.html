@@ -10,46 +10,56 @@
 {% set mine_labels = {"registered": "✓ You're registered", "eligible": "You can register", "check": "Eligibility check needed", "no": "Not eligible yet"} %}
 
 {% macro event_card(r, my) %}
-{% set s = r.t.settings %}{% set es = event_status(r.t) %}{% set photo = event_photo(r.event.id) %}
-<a class="card event-card{% if photo %} has-photo{% endif %}" href="{{ url_for('home', event=r.event.id) }}">
-  {% if photo %}<img class="event-card-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
-  <div class="event-card-top">
-    <span class="status-chip status-{{ es.key }}">{{ es.label }}</span>
-    {% if my == "registered" or (my in ("eligible", "check", "no") and es.key == "open") %}<span class="mine-chip mine-{{ my }}">{{ mine_labels[my] }}</span>{% endif %}
+{% set s = r.t.settings %}{% set es = event_status(r.t) %}{% set photo = event_photo(r.event.id) %}{% set f = event_fill(r.t) %}
+{% set wants = event_can_register(r.t) %}
+<article class="card hc{% if my == 'no' %} hc-dim{% endif %}">
+  {% if photo %}<img class="hc-img{% if header_is_flyer(r.event.id) %} contain{% endif %}" src="{{ photo }}" alt="" loading="lazy" width="1200" height="630">{% endif %}
+  <div class="hc-head"><b>{{ short_when(r.t) or "Date to be announced" }}</b><span class="status-chip status-{{ es.key }}">{{ f.note if es.key == "before" and f.note else es.label }}</span></div>
+  <div class="hc-body">
+    <p class="hc-tag">{{ event_tag_line(r.t) }}</p>
+    <h2><a class="hc-link" href="{{ url_for('home', event=r.event.id) }}">{{ s.name }}</a></h2>
+    {% if s.venue %}<p class="hc-where">📍 {{ s.venue }}</p>{% endif %}
+    {% if my == "registered" %}<span class="hc-me ok">✓ You're registered</span>
+    {% elif my == "eligible" or my == "check" %}{% if es.key == "open" %}<span class="hc-me ok">{{ "✓ You can register" if my == "eligible" else "Eligibility check needed" }}</span>{% endif %}
+    {% elif my == "no" %}<span class="hc-me no">Not eligible{% if reasons.get(r.event.id) %}: {{ reasons[r.event.id] }}{% else %} yet{% endif %}</span>{% endif %}
+    <div class="hc-facts"><div><small>Entry</small><b>{{ event_fee(r.t, false) }}</b></div>
+      <div class="right"><small>Availability</small><b>{{ f.left }}</b></div></div>
+    {% if f.capped %}<div class="hc-bar {{ f.tone }}"><i style="width: {{ f.pct }}%"></i></div>{% endif %}
+    <div class="hc-sub"><span>{% if f.capped %}{{ f.filled }}{% endif %}</span><span>{% if es.key != "before" %}{{ f.note }}{% endif %}</span></div>
+    <dl class="hc-rows">
+      <div><dt>Play</dt><dd>{{ event_play(r.t) }}</dd></div>
+      <div><dt>Who can play</dt><dd>{{ event_access(r.t) }}</dd></div>
+      <div><dt>Skill level</dt><dd>{{ event_skill(r.t) }}</dd></div>
+    </dl>
+    {% if es.key == "before" %}<a class="button hc-cta" href="{{ url_for('home', event=r.event.id) }}">🔔 Alert me before it opens</a>
+    {% elif es.key == "live" %}<a class="button hc-cta" href="{{ url_for('home', event=r.event.id) }}">Follow it live →</a>
+    {% elif wants and my != "no" and my != "registered" %}<a class="button hc-cta" href="{{ url_for('home', event=r.event.id) }}">View &amp; Register →</a>
+    {% else %}<a class="button secondary hc-cta" href="{{ url_for('home', event=r.event.id) }}">View event →</a>{% endif %}
+    {% if event_wants_partner(r.t) %}{% set looking = partner_count(r.event, r.t) %}<a class="hc-partner" href="{{ url_for('event_partners', event=r.event.id) }}">Need a partner?{% if looking %} {{ looking }} player{{ "s" if looking != 1 }} looking{% endif %} →</a>{% endif %}
   </div>
-  <p class="tag-line">{{ event_tag_line(r.t) }}</p>
-  <h2>{{ s.name }}</h2>
-  <p class="event-when">{{ event_when(s.date, s.start_time) or "Date to be announced" }}</p>
-  {% if s.venue %}<p class="muted">{{ s.venue }}</p>{% endif %}
-  {% if es.detail %}<p class="event-detail">{{ es.detail }}</p>{% endif %}
-  <p class="event-meta"><span class="pill">{{ r.format }}</span>
-    <span class="pill">{{ event_fee(r.t) }}</span>
-    <span class="pill">{{ event_spots(r.t) }}</span></p>
-  <p class="skill-line">{{ skill_rule(r.t) }}</p>
-</a>
+</article>
 {% endmacro %}
 
-<header class="page-head split center">
-  <div class="hero-copy">
-    <p class="eyebrow">Control Table</p>
+<div class="home-hero"><img src="{{ url_for('static', filename='img/control-table-wordmark.png') }}" alt="Control Table" width="1100" height="148"></div>
+
+<div class="home-layout">
+  <aside class="home-side">
     <h1>Tournaments</h1>
-    <p class="lede">Pick a tournament to register, follow the live tables and brackets, or check results.</p>
+    <p class="lede">Find an event, check what's open, and register.</p>
+    <div class="event-search">
+      <label for="event-search" class="sr-only">Find a tournament</label>
+      <input id="event-search" type="search" placeholder="Find a tournament" autocomplete="off" data-no-dirty>
+    </div>
     <p><a class="button secondary" href="{{ url_for('eligibility_check') }}">Am I eligible?</a></p>
-  </div>
-</header>
-
-{% if rows|length > 8 %}
-<div class="event-search card">
-  <label for="event-search" class="eyebrow">Find a tournament</label>
-  <input id="event-search" type="search" placeholder="Name, place or format" autocomplete="off" data-no-dirty>
-</div>
-{% endif %}
-
+  </aside>
+  <div class="home-main">
+    {% set shown = ns.live|length + ns.open|length + ns.soon|length %}
+    {% if shown %}<p class="home-count"><span id="home-count-n">{{ shown }}</span> tournament{{ "s" if shown != 1 }} shown <span class="muted">· soonest first</span></p>{% endif %}
 {% if ns.live or ns.open or ns.soon %}
 {% for title, group in (("Live now", ns.live), ("Open for registration", ns.open), ("Upcoming", ns.soon)) if group %}
 <section class="event-group">
   <div class="section-head"><h2>{{ title }}</h2><span class="muted">{{ group|length }}</span></div>
-  <div class="event-grid">
+  <div class="hc-grid">
     {% for r in group %}{{ event_card(r, mine.get(r.event.id)) }}{% endfor %}
   </div>
 </section>
@@ -70,18 +80,22 @@
 </section>
 {% endif %}
 
-{% if rows|length > 8 %}
+  </div>
+</div>
 <script>
 (function () {
-  var box = document.getElementById("event-search");
+  var box = document.getElementById("event-search"), count = document.getElementById("home-count-n");
   if (!box) return;
   box.addEventListener("input", function () {
-    var q = box.value.trim().toLowerCase();
-    document.querySelectorAll(".event-card").forEach(function (c) { c.hidden = !!q && c.textContent.toLowerCase().indexOf(q) < 0; });
-    document.querySelectorAll(".event-group").forEach(function (g) { g.hidden = !g.querySelector(".event-card:not([hidden])"); });
+    var q = box.value.trim().toLowerCase(), n = 0;
+    document.querySelectorAll(".hc").forEach(function (c) {
+      c.hidden = !!q && c.textContent.toLowerCase().indexOf(q) < 0;
+      if (!c.hidden) n += 1;
+    });
+    document.querySelectorAll(".event-group").forEach(function (g) { g.hidden = !g.querySelector(".hc:not([hidden])"); });
     document.querySelectorAll(".table-wrap tr").forEach(function (r) { if (r.querySelector("td")) r.hidden = !!q && r.textContent.toLowerCase().indexOf(q) < 0; });
+    if (count) count.textContent = n;
   });
 })();
 </script>
-{% endif %}
 {% endblock %}

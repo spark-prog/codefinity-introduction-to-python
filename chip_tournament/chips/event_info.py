@@ -191,6 +191,60 @@ def parse_categories(form, need_entry: bool = False) -> dict:
     return out
 
 
+def play_phrase(t) -> str:
+    """The partner question, answered: 'Play solo', 'Bring a partner' or 'Team of 4'."""
+    kind = entry_kind(t)
+    return "Play solo" if kind == "Singles" else "Bring a partner" if kind == "Doubles" else f"Team of {t.settings.team_size}"
+
+
+def access_phrase(t) -> str:
+    """'Open to anyone' or 'Eligibility required' (the player's own answer is shown separately)."""
+    return "Eligibility required" if eligibility.any_rules(eligibility.rules_of(t.settings)) else "Open to anyone"
+
+
+def skill_phrase(t) -> str:
+    """'Combined SL 10 or less', 'No player above SL 6', 'Skill groups SL 1–3, 4–9', or 'All skill levels'."""
+    bits = _skill_clauses(t, group_detail=True)
+    text = " · ".join(bits) if bits else "all skill levels"
+    return text[:1].upper() + text[1:]
+
+
+def _short_dt(when: datetime) -> str:
+    return f"{when:%a} {when.strftime('%I %p').lstrip('0')}" if when.minute == 0 else \
+        f"{when:%a} {when.strftime('%I:%M %p').lstrip('0')}"
+
+
+def fill(t) -> dict:
+    """How full the field is, for the bar on a card: {'filled', 'left', 'pct', 'tone', 'note'}.
+    tone is '' (plenty of room), 'low' (about a fifth left or less) or 'full'."""
+    s = t.settings
+    bracket = is_bracket(t)
+    count = len(t.field_entries if bracket else t.field_teams)
+    noun = ("player" if bracket and s.team_size == 1 else "team" if not bracket or s.team_size > 1 else "entry")
+    noun = noun if count == 1 else noun + "s"
+    waiting = len(getattr(t, "waitlist", []) or [])
+    state, when = schedule.reg_window(s)
+    note = ""
+    if waiting:
+        note = f"{waiting} on the waiting list"
+    elif t.status == "setup" and state == schedule.OPEN and when:
+        note = f"Closes {_short_dt(when)}"
+    elif state == schedule.BEFORE and when:
+        note = f"Opens {_short_dt(when)}"
+    if not s.field_cap:
+        return {"filled": f"{count} {noun}", "left": f"{count} {noun}", "pct": 0, "tone": "", "note": note, "capped": False}
+    left = max(0, s.field_cap - count)
+    tone = "full" if not left else "low" if left <= max(1, -(-s.field_cap // 5)) else ""
+    return {"filled": f"{count} of {s.field_cap} {noun}", "pct": min(100, round(100 * count / s.field_cap)),
+            "left": "Full" if not left else f"{left} spot{'s' if left != 1 else ''} left", "tone": tone, "note": note,
+            "capped": True}
+
+
+def partner_link_wanted(t) -> bool:
+    """Show 'Need a partner?' on a doubles event while people can still sign up."""
+    return t.status == "setup" and not t.settings.registration_shut and entry_kind(t) == "Doubles"
+
+
 def partners_label(t) -> str:
     """The Partners & waitlist tab's name, or '' when it has nothing to say: only while people can still sign up,
     and only for team events (partner finding) or when somebody is on the waiting list."""

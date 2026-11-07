@@ -465,6 +465,7 @@ def register_registration(app) -> None:
         return sorted(out, key=lambda r: r["date"] or "9999")
 
     app.config["public_results"] = public_results
+    app.jinja_env.globals["partner_count"] = lambda ev, t: len(seekers(ev, t)) if doubles(ev, t) else 0
 
     # ------------------------------------------------ Phase 11: the partner finder
 

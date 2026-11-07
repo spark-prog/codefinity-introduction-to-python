@@ -130,17 +130,17 @@ def test_all_events_groups_and_cards(app):
     done.store.save(t)
     page = app.test_client().get("/").get_data(as_text=True)
     assert page.index("Live now") < page.index("Open for registration") < page.index("Upcoming") < page.index("Results")
-    assert "Registration open" in page and "Registration opens " in page
-    assert "$20.00 per team" in page and "Doubles · combined SL 9 or less" in page
+    assert "Registration open" in page and ">Opens " in page
+    assert "$20.00 per team" in page and "Bring a partner" in page and "Combined SL 9 or less" in page
     assert page.count("Live Night") == 1 and "Done Night" in page.split("Results", 1)[1]
-    assert 'id="event-search"' not in page  # a search box only when there are many events
 
 
-def test_the_search_box_appears_with_many_events(app):
-    for n in range(9):
+def test_the_home_page_has_a_search_box_and_a_count(app):
+    for n in range(3):
         make(app, f"Night {n}", date=f"2026-12-{n + 1:02d}")
     page = app.test_client().get("/").get_data(as_text=True)
-    assert 'id="event-search"' in page and 'placeholder="Name, place or format"' in page
+    assert 'id="event-search"' in page and 'placeholder="Find a tournament"' in page
+    assert '<span id="home-count-n">3</span> tournaments shown' in page and "control-table-wordmark.png" in page
 
 
 def test_what_each_event_means_for_the_logged_in_player(app):
@@ -154,7 +154,7 @@ def test_what_each_event_means_for_the_logged_in_player(app):
     assert "✓ You&#39;re registered" in ann or "✓ You're registered" in ann
     assert "You can register" in ann
     cy = Clients(app).logged_in("32200003").get("/").get_data(as_text=True)
-    assert "Not eligible yet" in cy and "You can register" in cy  # Anyone Night is open to Cy
+    assert "Not eligible" in cy and "You can register" in cy  # Anyone Night is open to Cy
     anon = app.test_client().get("/").get_data(as_text=True)
     assert "You can register" not in anon and "Not eligible yet" not in anon
 
@@ -230,3 +230,19 @@ def test_alert_goes_out_five_minutes_before_and_only_once(app):
     assert [x[0] for x in texts] == ["+19045550100"] and "registration opens at" in texts[0][1]
     assert app.config["send_open_alerts"](ev) == 0
     assert open_alerts.due(ev.load().settings, opens) == []
+
+
+def test_a_card_answers_the_players_questions(app):
+    ev = make(app, "Vegas Night", date="2026-11-14", start_time="11:00 AM", team_size=2, team_skill_cap=10, entry_fee_cents=6000,
+              field_cap=10, game="9", categories_set=True, is_qualifier=True, eligibility=rules(min_matches=6, list_label="Gated"),
+              venue="Hotshots")
+    t = ev.load()
+    for n in range(9):
+        t.register_entry(f"Team {n}", [Player(f"A{n}", skill=4), Player(f"B{n}", skill=4)])
+    ev.store.save(t)
+    page = app.test_client().get("/").get_data(as_text=True)
+    card = page.split('<article class="card hc', 1)[1].split("</article>", 1)[0]
+    for want in ("Sat, Nov 14 · 11:00 AM", "9-Ball · Doubles · Qualifier", "Hotshots", "$60.00 per team", "1 spot left",
+                 "9 of 10 teams", 'class="hc-bar low"', "Bring a partner", "Eligibility required", "Combined SL 10 or less",
+                 "Need a partner?", "View &amp; Register"):
+        assert want in card, want

@@ -59,7 +59,7 @@ def test_register_is_refused_before_it_opens_and_after_it_closes(app, kind):
     assert "Registration opens" in home and 'class="countdown"' in home and 'data-label="Opens in"' in home
     assert f'href="/t/{ev.id}/register" class="nav-cta' not in home  # no Register button yet
     lst = player.get("/").get_data(as_text=True)
-    assert ">Registration opens " in lst and "Registration open<" not in lst
+    assert ">Opens " in lst and "Registration open<" not in lst
     form = {"name": "Sharks", "agree_terms": "1", "player_name_0": "Ann Lee", "player_name_1": "Bob Ray",
             "player_skill_0": "5", "player_skill_1": "5", "player_phone_0": "9045550100"}
     r = player.post(f"/t/{ev.id}/register", data=form, follow_redirects=True)

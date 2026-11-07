@@ -130,7 +130,7 @@ def test_all_events_groups_and_cards(app):
     done.store.save(t)
     page = app.test_client().get("/").get_data(as_text=True)
     assert page.index("Live now") < page.index("Open for registration") < page.index("Upcoming") < page.index("Results")
-    assert "Registration open" in page and "Registration opens " in page
+    assert "Registration open" in page and ">Opens " in page
     assert "$20.00 per team" in page and "Bring a partner" in page and "Combined SL 9 or less" in page
     assert page.count("Live Night") == 1 and "Done Night" in page.split("Results", 1)[1]
 

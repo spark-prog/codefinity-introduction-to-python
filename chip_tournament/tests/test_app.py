@@ -768,7 +768,7 @@ def test_event_menu_order(client):
     assert f'href="/t/{ChipEventClient.event_id}/" class="nav-home nav-title hide-sm active"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/admin"' in nav
     assert f'href="/t/{ChipEventClient.event_id}/board"' not in nav and f'href="/t/{ChipEventClient.event_id}/board"' in other_nav
-    assert f'<div class="brand show-sm"><a class="brand-name" href="/t/{ChipEventClient.event_id}/">' in page  # title by the logo on phones
+    assert 'class="ct-wordmark"' in page and "control-table-wordmark.png" in page  # the wordmark by the logo, on every page
     assert "Open the board" not in page  # only once play starts
     client.post("/admin/login", data={"password": "secret"})
     page = client.get("/").get_data(as_text=True)

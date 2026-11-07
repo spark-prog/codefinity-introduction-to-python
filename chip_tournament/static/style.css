@@ -1424,3 +1424,62 @@ body.event-tabbed .topbar { position: relative; }
 }
 .show-xs { display: none; }
 @media (max-width: 400px) { .show-xs { display: inline; } }
+
+/* The Control Table wordmark sits in the top bar on every page. */
+.ct-wordmark { display: block; line-height: 0; }
+.ct-wordmark img { height: 34px; width: auto; display: block; filter: drop-shadow(0 0 14px rgba(var(--accent-rgb), .5)); }
+@media (max-width: 480px) { .ct-wordmark img { height: 28px; } }
+
+/* ---------- Three columns: filters, the list, and the next three months ---------- */
+.col-h { margin: 0 0 6px; font-size: clamp(1.7rem, 3vw, 2rem); }
+.col-bar { height: 3px; width: 70px; border-radius: 3px; background: var(--accent-line); margin-bottom: 18px; }
+.home-layout { display: grid; gap: var(--space-3) 28px; grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "side" "main"; align-items: start; }
+.home-head { grid-area: head; } .home-side { grid-area: side; } .home-main { grid-area: main; min-width: 0; } .home-cal { grid-area: cal; display: none; }
+.home-head .lede { margin: 0 0 var(--space-2); }
+.home-side .side-h { display: none; }
+.cal-link { display: block; text-align: center; margin: 8px 0 var(--space-4); }
+@media (min-width: 900px) {
+  .home-layout { grid-template-columns: 280px minmax(0, 1fr); grid-template-areas: "side head" "side main"; }
+  .home-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .home-side .side-h { display: block; }
+  .home-head .lede { display: none; }
+}
+@media (min-width: 1100px) {
+  .home-layout { grid-template-columns: 280px minmax(0, 1fr) 340px; grid-template-areas: "side head cal" "side main cal"; }
+  .home-cal { display: block; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .cal-link { display: none; }
+}
+/* the Calendar page keeps its month cards on screen at every size: a row you can swipe on small screens */
+.cal-page .home-cal { display: block; grid-area: cal; position: static; max-height: none; }
+.cal-page .home-cal .col-h, .cal-page .home-cal .col-bar { display: none; }
+.cal-page { grid-template-areas: "head" "cal" "side" "main"; }
+.cal-page .cal-months { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.cal-page .cal-month-card { flex: 0 0 88%; scroll-snap-align: start; }
+.cal-page .cal-key { flex: 0 0 100%; position: sticky; left: 0; }
+@media (min-width: 900px) { .cal-page { grid-template-areas: "side head" "side main"; } .cal-page .home-cal { display: none; } }
+@media (min-width: 1100px) {
+  .cal-page { grid-template-areas: "side head cal" "side main cal"; }
+  .cal-page .home-cal { display: block; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .cal-page .home-cal .col-h, .cal-page .home-cal .col-bar { display: block; }
+  .cal-page .cal-months { display: block; overflow: visible; }
+  .cal-page .cal-month-card { margin-bottom: 14px; }
+}
+@media (min-width: 900px) and (max-width: 1099px) { .cal-page .home-cal { display: none; } }
+.cal-months .cal-month-card { padding: 12px; margin-bottom: 14px; }
+.cal-month-card h3 { margin: 0 0 8px; font-size: 1.25rem; }
+.cal-months .cal-key { margin: 0 2px 14px; }
+.home-cal > .button { display: block; text-align: center; margin-top: 4px; }
+
+/* filter tools: My Tournaments on top on desktop; on phones, search first, then My Tournaments beside Filters */
+.home-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-tools .event-search { order: 1; flex: 1 1 100%; }
+.home-tools .mine-btn { order: 2; flex: 1 1 0; min-height: 44px; display: flex; align-items: center; justify-content: center; margin: 0; }
+.home-tools .filters-btn { order: 3; flex: 1 1 0; justify-content: center; }
+@media (min-width: 900px) {
+  .home-tools { display: block; }
+  .home-tools .mine-btn { display: flex; width: 100%; margin-bottom: 10px; }
+}
+.mine-btn.on { background: var(--accent-grad); color: var(--on-accent); border-color: var(--accent-2); box-shadow: var(--glow); }
+@media (min-width: 900px) { .hc-grid { grid-template-columns: 1fr; } }  /* the middle column is narrow: one card per row */
+@media (max-width: 430px) { .hc-head { padding: 10px 12px; gap: 6px; } .hc-head .status-chip { font-size: .68rem; padding: 3px 8px; letter-spacing: .03em; } .hc-head b { font-size: .9rem; } }

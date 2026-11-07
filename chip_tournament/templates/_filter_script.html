@@ -74,6 +74,9 @@
       b.setAttribute("aria-label", "Remove filter " + LABEL[t]);
       active.appendChild(b);
     });
+    document.querySelectorAll("button.mine-btn[data-token]").forEach(function (b) {
+      b.classList.toggle("on", !!selected[b.dataset.token]); b.setAttribute("aria-pressed", selected[b.dataset.token] ? "true" : "false");
+    });
     active.hidden = !on.length;
     if (window.ctFilterAfter) window.ctFilterAfter();
     if (push !== false) {
@@ -82,6 +85,9 @@
     }
   }
   chips.forEach(function (c) { c.addEventListener("click", function () { selected[c.dataset.token] = !selected[c.dataset.token]; update(); }); });
+  document.querySelectorAll("button.mine-btn[data-token]").forEach(function (b) {
+    b.addEventListener("click", function () { selected[b.dataset.token] = !selected[b.dataset.token]; update(); });
+  });
   active.addEventListener("click", function (e) {
     var b = e.target.closest(".active-chip"); if (b) { delete selected[b.dataset.token]; update(); }
   });

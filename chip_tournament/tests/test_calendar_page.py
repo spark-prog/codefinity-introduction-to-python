@@ -43,7 +43,7 @@ def test_the_calendar_groups_events_by_month_and_leaves_out_finished_and_test_ev
     assert "9-Ball · Doubles" in page and "Hotshots" in page and "11:00 AM" in page
     assert 'data-date="2026-11-14"' in page and 'data-tone="open"' in page
     assert '<span id="home-count-n">3</span>' in page
-    for want in ('id="cal-grid"', 'id="filters-panel"', 'data-token="doubles"', 'id="cal-prev"', "SAT"):
+    for want in ('id="cal-months"', 'data-count="3"', 'id="filters-panel"', 'data-token="doubles"', 'class="button secondary mine-btn"'):
         assert want in page, want
 
 
@@ -70,3 +70,29 @@ def test_the_menu_links_to_the_calendar_outside_events(app):
     nav = lambda p: p[p.index('<nav class="nav'):p.index("</nav>")]
     assert 'href="/calendar"' in nav(c.get("/").get_data(as_text=True))
     assert 'href="/calendar"' not in nav(c.get(f"/t/{ev.id}/").get_data(as_text=True))
+
+
+def test_home_and_calendar_share_the_three_column_layout(app):
+    make(app, "Nov Night", "2026-11-14", team_size=1, game="8", categories_set=True)
+    c = app.test_client()
+    for path in ("/", "/calendar"):
+        page = c.get(path).get_data(as_text=True)
+        for want in ('class="home-head"', 'class="home-side"', 'class="home-main"', 'class="home-cal"', 'id="cal-months"',
+                     'class="ct-wordmark"', 'mine-btn'):
+            assert want in page, (path, want)
+        assert "cal-prev" not in page  # no arrows: the next three months are stacked
+    home = c.get("/").get_data(as_text=True)
+    assert 'data-date="2026-11-14" data-tone="open"' in home
+    assert '<a class="button secondary mine-btn" href=' in home  # logged out: My Tournaments leads to the login
+
+
+def test_my_tournaments_button_for_a_logged_in_player(app):
+    from chips import players
+    from tests.test_eligibility import COLS, person
+    from tests.test_register_members import Clients
+    app.config["players"].apply(*players.parse_rows([COLS, person("32200001", first="Ann", last="Lee")]), "t", "t")
+    ann = Clients(app).logged_in("32200001")
+    for path in ("/", "/calendar"):
+        page = ann.get(path).get_data(as_text=True)
+        assert '<button type="button" class="button secondary mine-btn" data-token="registered"' in page, path
+        assert 'button.mine-btn[data-token]' in page  # the script that makes it filter to registered events
